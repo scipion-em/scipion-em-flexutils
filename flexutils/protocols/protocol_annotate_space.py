@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+
 import os
 import numpy as np
 from sklearn.neighbors import KDTree
@@ -39,6 +40,8 @@ from pwem.objects import SetOfClasses3D, Class3D
 
 import flexutils
 from flexutils.utils import getOutputSuffix
+
+import xmipp3
 
 
 class ProtFlexAnnotateSpace(ProtAnalysis3D):
@@ -153,7 +156,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --dim %d " % (inputFile,
                                                    outFile,
-                                                   64), numberOfMpi=1)
+                                                   64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         # Resize mask
         inputFile = mask.getFileName()
@@ -164,10 +167,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --dim %d " % (inputFile,
                                                    outFile,
-                                                   64), numberOfMpi=1)
+                                                   64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             self.runJob("xmipp_transform_threshold",
                         "-i %s -o %s --select below 0.01 "
-                        "--substitute binarize " % (outFile, outFile), numberOfMpi=1)
+                        "--substitute binarize " % (outFile, outFile), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
 
         # Get image coefficients and scale them to reference size
