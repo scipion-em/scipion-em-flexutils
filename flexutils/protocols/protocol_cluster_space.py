@@ -83,6 +83,12 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         reference = self.reference.get()
         partIds = list(particles.getIdSet())
 
+        L1 = particles.L1
+        L2 = particles.L2
+        Rmax = particles.Rmax
+        reference_file = String(reference.getFileName())
+        mask_file = String(self.mask.get().getFileName())
+
         # Read KMean coefficients
         z_clnm_vw = []
         with open(self._getExtraPath('saved_selections.txt')) as f:
@@ -106,7 +112,13 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
             newClass.setRepresentative(reference)
-            newClass.getRepresentative()._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vw[clInx]]))
+            representative = newClass.getRepresentative()
+            representative._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vw[clInx]]))
+            representative.L1 = L1
+            representative.L2 = L2
+            representative.Rmax = Rmax
+            representative.refMap = reference_file
+            representative.refMask = mask_file
 
             classes3D.append(newClass)
 
