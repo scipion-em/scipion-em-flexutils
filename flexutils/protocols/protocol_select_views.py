@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+
+import math
 import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -41,6 +43,7 @@ from flexutils.viewers.viewer_ij import launchIJForSelection
 from flexutils.utils import getOutputSuffix
 
 from xmipp3.convert import geometryFromMatrix
+
 
 class ProtFlexSelectViews(ProtAnalysis3D):
     """ Compare different (rot,tilt) views of different maps and interactively select regions to filter/score
@@ -86,16 +89,19 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         mode = self.mode.get()
         angSampling = self.angSampling.get()
         outFile = self._getExtraPath("combined_corrImage.txt")
-        rois_border = np.loadtxt(outFile, delimiter=',')
+        self.rois_border = np.loadtxt(outFile, delimiter=',')
 
         # Move maps to tmp path and compute corr image
         self.newAngSampling = 360. / np.round(360. / angSampling)
 
         # Define polygons based on selected borders
         polygons = []
-        for idx in rois_border[:, 3]:
-            roi_border = self.newAngSampling * np.squeeze(rois_border[np.where(rois_border[:, 3] == idx), :2])
-            polygons.append(Polygon(roi_border))
+        for idx in self.rois_border[:, 3]:
+            self.roi_border = self.newAngSampling * \
+                              np.squeeze(self.rois_border[np.where(self.rois_border[:, 3] == idx), :2])
+            self.roi_border = self.roi_border.tolist()
+            self.sortPolygonPoints()
+            polygons.append(Polygon(self.roi_border))
 
         # Create output object
         suffix = getOutputSuffix(self, SetOfParticles)
@@ -158,8 +164,9 @@ class ProtFlexSelectViews(ProtAnalysis3D):
 
         # Move maps to tmp path and compute corr image
         self.newAngSampling = 360. / np.round(360. / angSampling)
-        size = int(360. / self.newAngSampling)
-        combined_corr_image = np.ones([size, size])
+        size_rot = int(360. / self.newAngSampling)
+        size_tlt = int(180. / self.newAngSampling)
+        combined_corr_image = np.ones([size_rot + 1, size_tlt + 1])
 
         if isinstance(compareMaps, SetOfVolumes):
             iterator = compareMaps.iterItems()
@@ -218,6 +225,12 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         newTs = targetResolution / 3.0
         newTs = max(Ts, newTs)
         return newTs
+
+    def sortPolygonPoints(self):
+        cent = (sum([p[0] for p in self.roi_border]) /
+                len(self.roi_border), sum([p[1] for p in self.roi_border]) / len(self.roi_border))
+        # sort by polar angle
+        self.roi_border.sort(key=lambda p: math.atan2(p[1] - cent[1], p[0] - cent[0]))
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
