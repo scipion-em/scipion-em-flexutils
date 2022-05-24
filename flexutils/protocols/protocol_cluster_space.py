@@ -172,16 +172,27 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
 
         # Get image coefficients and scale them to reference size
+        # FIXME: Can we do the for loop with the aggregate? (follow ID order)
         factor = 64 / reference.getDim()[0]
-        z_clnm_part = particles.aggregate(["MAX"], "_xmipp_sphCoefficients", ["_xmipp_sphCoefficients"])
-        z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
+        # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
+        # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
+        z_clnm_part = []
+        for particle in particles.iterItems():
+            z_clnm_part.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+        z_clnm_part = factor * np.asarray(z_clnm_part)
 
         # Get volume coefficients (if exist) and scale them to reference size
+        # FIXME: Can we do the for loop with the aggregate? (follow ID order)
+        # z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
+        # if volumes:
+        #     z_clnm_aux = volumes.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
+        #     z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
+        #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
         z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
         if volumes:
-            z_clnm_aux = volumes.aggregate(["MAX"], "_xmipp_sphCoefficients", ["_xmipp_sphCoefficients"])
-            z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
-            z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
+            for volume in volumes.iterItems():
+                z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
+            z_clnm_vol *= factor
 
         # Get useful parameters
         self.num_vol = z_clnm_vol.shape[0]
@@ -193,7 +204,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 from umap import UMAP
-                umap = UMAP(n_components=3, n_neighbors=15, n_epochs=1000).fit(z_clnm)
+                umap = UMAP(n_components=3, n_neighbors=5, n_epochs=1000).fit(z_clnm)
                 coords = umap.transform(z_clnm)
                 np.savetxt(file_coords, coords)
         elif mode == 1:
