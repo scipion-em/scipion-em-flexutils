@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,10 +24,4 @@
 # *
 # **************************************************************************
 
-from .protocol_select_views import ProtFlexSelectViews
-from .protocol_annotate_space import ProtFlexAnnotateSpace
-from .protocol_cluster_space import ProtFlexClusterSpace
-from .protocol_auto_reference import ProtFlexAutoReference
-
-# Zernike3D Xmipp protocols (offered here due to strong package dependency)
-from .xmipp import *
+from .protocol_reconstruct_zart import XmippProtReconstructZART
