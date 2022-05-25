@@ -232,6 +232,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                % (file_coords, file_z_clnm, file_deformation, path, self._getExtraPath('reference.mrc'),
                   self._getExtraPath('mask.mrc'), particles.L1.get(), particles.L2.get(),
                   2 * particles.Rmax.get(), self.num_vol)
+        program = os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_3d_slicer.py")
+        program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
         if os.path.isfile(self._getExtraPath("saved_selections.txt")):

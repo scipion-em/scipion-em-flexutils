@@ -239,12 +239,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         np.savetxt(file_deformation, deformation)
 
         # Run slicer
-        program = "python " + os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_3d_slicer.py")
         args = "--coords %s --z_clnm %s --deformation %s --path %s --map_file %s " \
                "--mask_file %s --l1 %d --l2 %d --d %d --num_vol %d " \
                % (file_coords, file_z_clnm, file_deformation, path, self._getExtraPath('reference.mrc'),
                   self._getExtraPath('mask.mrc'), particles.L1.get(), particles.L2.get(),
                   2 * particles.Rmax.get(), num_vol)
+        program = os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_3d_slicer.py")
+        program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
         if os.path.isfile(self._getExtraPath("saved_selections.txt")):

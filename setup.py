@@ -37,6 +37,6 @@ setup(
     install_requires=[requirements],
     entry_points={'pyworkflow.plugin': 'flexutils = flexutils'},
     package_data={  # Optional
-       'flexutils': ['icon.png', 'icon_square.png', 'loading.gif', 'protocols.conf'],
+       'flexutils': ['icon.png', 'icon_square.png', 'loading.gif', 'protocols.conf', 'requirements/*'],
     }
 )
