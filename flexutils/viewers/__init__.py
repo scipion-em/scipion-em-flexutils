@@ -26,3 +26,4 @@
 # **************************************************************************
 
 from .viewer_morph_salesman import FlexMorphSalesmanViewer
+from .viewer_show_structures import FlexShowStructuresViewer

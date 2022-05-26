@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from .protocol_reconstruct_zart import XmippProtReconstructZART
+from .protocol_match_and_deform_structure_zernike3d import XmippMatchDeformSructZernike3D
