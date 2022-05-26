@@ -40,6 +40,7 @@ from pwem.objects import SetOfClasses3D, Class3D
 
 import flexutils
 from flexutils.utils import getOutputSuffix
+import flexutils.constants as const
 
 import xmipp3
 
@@ -244,7 +245,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                % (file_coords, file_z_clnm, file_deformation, path, self._getExtraPath('reference.mrc'),
                   self._getExtraPath('mask.mrc'), particles.L1.get(), particles.L2.get(),
                   2 * particles.Rmax.get(), num_vol)
-        program = os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_3d_slicer.py")
+        program = os.path.join(const.VIEWERS, "viewer_3d_slicer.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 

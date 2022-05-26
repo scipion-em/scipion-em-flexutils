@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:  David Herreros Calero (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,15 +25,33 @@
 # **************************************************************************
 
 
-import os
+import numpy as np
+from scipy.ndimage import binary_dilation, binary_fill_holes
+from skimage.morphology import ball
 
-import flexutils
+from pwem.emlib.image import ImageHandler
 
 
-# Conda environment requirements
-CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
+def floodFillMask(infile, outfile):
+    data = ImageHandler().read(infile).getData()
+    ball_kernel = ball(2)
+    for _ in range(10):
+        data = binary_dilation(data, ball_kernel)
+    data = binary_fill_holes(data, ball_kernel)
+    filled_vol = ImageHandler().createImage()
+    filled_vol.setData(data.astype(np.float32))
+    filled_vol.write(outfile)
 
-# Location inside plugin
-VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
-XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
 
+if __name__ == '__main__':
+    import argparse
+
+    # Input parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', type=str, required=True)
+    parser.add_argument('--output', type=str, required=True)
+
+    args = parser.parse_args()
+
+    # Initialize volume slicer
+    floodFillMask(args.input, args.mask_file)

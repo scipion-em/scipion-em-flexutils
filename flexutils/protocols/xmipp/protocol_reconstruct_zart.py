@@ -26,19 +26,18 @@
 
 
 import os
-import numpy as np
-from scipy.ndimage import binary_dilation, binary_fill_holes
-from skimage.morphology import ball
 
 import pyworkflow.protocol.params as params
-import pyworkflow.protocol.constants as cons
+# import pyworkflow.protocol.constants as cons
 
-from pwem.emlib.image import ImageHandler
 from pwem.objects import Volume
 from pwem.protocols import ProtReconstruct3D
 
 from xmipp3.convert import writeSetOfParticles
 # from xmipp3.base import isXmippCudaPresent
+
+import flexutils
+import flexutils.constants as const
 
 
 class XmippProtReconstructZART(ProtReconstruct3D):
@@ -141,15 +140,13 @@ class XmippProtReconstructZART(ProtReconstruct3D):
 
         # Mask preprocessing (if provided)
         if self.mask.get():
-            mask_zart = self._getTmpPath('mask_zart.vol')
-            data = ImageHandler().read(self.mask.get().getFileName()).getData()
-            ball_kernel = ball(2)
-            for _ in range(10):
-                data = binary_dilation(data, ball_kernel)
-            data = binary_fill_holes(data, ball_kernel)
-            filled_vol = ImageHandler().createImage()
-            filled_vol.setData(data.astype(np.float32))
-            filled_vol.write(mask_zart)
+            mask_file = self.mask.get().getFileName()
+            mask_zart_file = self._getTmpPath('mask_zart.vol')
+            args = "--input %s --output %s" \
+                   % (mask_file, mask_zart_file)
+            program = os.path.join(const.XMIPP_SCRIPTS, "flood_fill_mask.py")
+            program = flexutils.Plugin.getProgram(program)
+            self.runJob(program, args)
 
     def createOutputStep(self):
         imgSet = self.inputParticles.get()
