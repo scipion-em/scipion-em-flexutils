@@ -26,6 +26,8 @@
 
 
 ############## Imports ##############
+import os
+from subprocess import call
 import numpy as np
 from numpy import sin, cos, sqrt
 from numpy import arctan2 as atan2
@@ -38,8 +40,8 @@ from skimage.morphology import ball, convex_hull_image, skeletonize
 import pyworkflow.utils as pwutils
 
 from pwem.emlib.image import ImageHandler
-
 from pwem.convert.transformations import superimposition_matrix
+from pwem.viewers import Chimera
 #####################################
 
 
@@ -786,6 +788,40 @@ def coordsInMask(coords, mask):
     logic = mask[coords[:, 2], coords[:, 1], coords[:, 0]]
     return logic.astype(bool)
 
+def alignMapsChimeraX(map_file_1, map_file_2, global_search=None):
+    scriptFile = 'fitmap_transformation.cxc'
+    OPEN_FILE = "open %s\n"
+    VOXEL_SIZE = "volume #%d voxelSize %f\n"
+    FITMAP = "fitmap #1 inMap #2\n"
+    with open(scriptFile, 'w') as fhCmd:
+        fhCmd.write(OPEN_FILE % map_file_1)
+        fhCmd.write(OPEN_FILE % map_file_2)
+        fhCmd.write(VOXEL_SIZE % (1, 1))
+        fhCmd.write(VOXEL_SIZE % (2, 1))
+        if global_search:
+            FITMAP = FITMAP.rstrip("\n") + " search {}".format(global_search) + "\n"
+        fhCmd.write(FITMAP)
+        fhCmd.write("save transformation.positions #1\n")
+        fhCmd.write("volume resample #1 onGrid #2\n")
+        fhCmd.write("save start_aligned.mrc #3\n")
+        fhCmd.write("exit\n")
+
+    # program = Plugin.getProgram()
+    program = Chimera.getProgram()
+    cmd = program + ' --nogui "%s"' % scriptFile
+    call(cmd, shell=True, env=Chimera.getEnviron(), cwd=os.getcwd())
+
+    with open('transformation.positions') as f:
+        line = f.readline()
+        line = line.split(",")[1:]
+        Tr = np.array(line).reshape(3, 4)
+        Tr = Tr.astype(np.float)
+        Tr = np.vstack([Tr, np.array([0, 0, 0, 1])])
+
+    map_1_algn = readMap("start_aligned.mrc")
+
+    return map_1_algn, Tr
+
 
 ############## Functions to handle point clouds ##############
 def icp(coords_1, coords_2):
@@ -806,9 +842,15 @@ def icp(coords_1, coords_2):
 
     return Tr
 
-def applyTransformation(coords, Tr):
-    coords = np.hstack([coords, np.ones([coords.shape[0], 1])])
-    coords_tr = np.transpose(Tr @ coords.T)[:, :3]
+def applyTransformation(coords, Tr, order=None):
+    if order == "xmipp":
+        coords = np.transpose(np.vstack([coords[:, 2], coords[:, 1], coords[:, 0], np.ones([coords.shape[0]])]))
+        coords_tr = np.transpose(Tr @ coords.T)[:, :3]
+        coords = np.transpose(np.vstack([coords[:, 2], coords[:, 1], coords[:, 0], coords[:, 3]]))
+        coords_tr = np.transpose(np.vstack([coords_tr[:, 2], coords_tr[:, 1], coords_tr[:, 0]]))
+    else:
+        coords = np.hstack([coords, np.ones([coords.shape[0], 1])])
+        coords_tr = np.transpose(Tr @ coords.T)[:, :3]
     return coords_tr, coords_tr - coords[:, :3]
 
 def matchCoords(coords_1, coords_2, mutual=True):

@@ -46,12 +46,12 @@ class FlexShowStructuresViewer(ProtocolViewer):
     def _defineParams(self, form):
         form.addSection(label='Show deformation')
         form.addParam('doShowStructures', params.LabelParam,
-                      label="Display the strcutures")
+                      label="Display the strucutures")
 
     def _getVisualizeDict(self):
-        return {'doShowStructures': self._doShowMorph}
+        return {'doShowStructures': self._doShowStructures}
 
-    def _doShowMorph(self, param=None):
+    def _doShowStructures(self, param=None):
         # Get shortest path
         input = os.path.abspath(self.protocol.input.get().getFileName())
         reference = os.path.abspath(self.protocol.reference.get().getFileName())

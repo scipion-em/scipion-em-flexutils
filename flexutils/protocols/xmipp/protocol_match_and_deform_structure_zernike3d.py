@@ -103,12 +103,3 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         self._defineSourceRelation(self.reference, pdb)
 
     # --------------------------- UTILS functions ------------------------------
-    def writeZernikeFile(self, file):
-        volume = self.volume.get()
-        L1 = volume.L1.get()
-        L2 = volume.L2.get()
-        Rmax = volume.getSamplingRate() * volume.Rmax.get() if self.applyPDB.get() else volume.Rmax.get()
-        z_clnm = volume._xmipp_sphCoefficients.get()
-        with open(file, 'w') as fid:
-            fid.write(' '.join(map(str, [L1, L2, Rmax])) + "\n")
-            fid.write(z_clnm.replace(",", " ") + "\n")
