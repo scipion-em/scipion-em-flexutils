@@ -54,4 +54,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Initialize volume slicer
-    floodFillMask(args.input, args.mask_file)
+    floodFillMask(args.input, args.output)
