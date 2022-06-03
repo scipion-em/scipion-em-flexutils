@@ -41,6 +41,8 @@ from pwem.objects import SetOfVolumes, Volume, SetOfParticles
 
 from flexutils.viewers.viewer_ij import launchIJForSelection
 from flexutils.utils import getOutputSuffix
+import flexutils.constants as const
+import flexutils
 
 from xmipp3.convert import geometryFromMatrix
 
@@ -89,45 +91,53 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         mode = self.mode.get()
         angSampling = self.angSampling.get()
         outFile = self._getExtraPath("combined_corrImage.txt")
-        self.rois_border = np.loadtxt(outFile, delimiter=',')
 
         # Move maps to tmp path and compute corr image
         self.newAngSampling = 360. / np.round(360. / angSampling)
 
         # Define polygons based on selected borders
-        polygons = []
-        for idx in self.rois_border[:, 3]:
-            self.roi_border = self.newAngSampling * \
-                              np.squeeze(self.rois_border[np.where(self.rois_border[:, 3] == idx), :2])
-            self.roi_border = self.roi_border.tolist()
-            self.sortPolygonPoints()
-            polygons.append(Polygon(self.roi_border))
+        polygons_file = self._getExtraPath("polygons.dat")
+        args = "--input %s --angs %f --output %s" % (outFile, self.newAngSampling, polygons_file)
+        program = os.path.join(const.XMIPP_SCRIPTS, "polygon_from_vertexes.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
 
         # Create output object
         suffix = getOutputSuffix(self, SetOfParticles)
         output_particles = self._createSetOfParticles(suffix)
         output_particles.copyInfo(particles)
 
-        # Loop particles and filter/score them according to polygon delimited areas
-        for particle in particles.iterItems():
-            in_area = False
+        # Loop particles and determine if the lie within the polygon delimited areas
+        points_file = self._getExtraPath("point.txt")
+        decision_file = self._getExtraPath("decision.txt")
+        angles_vec = []
+        for particle in particles.iterItems(iterate=False):
             _, angles = geometryFromMatrix(particle.getTransform().getMatrix(), True)
             rot = angles[0]
             tilt = angles[1]
             # Make sure angles are positive
             rot = rot if rot >= 0. else rot + 360.
             tilt = tilt if tilt >= 0. else tilt + 360.
-            point = Point(tilt, rot)
-            for polygon in polygons:
-                if polygon.contains(point):
-                    in_area = True
-                    break
+            angles_vec.append([tilt, rot])
+        np.savetxt(points_file, np.asarray(angles_vec))
+
+        args = "--input %s --polygons %s --output %s" % (points_file, polygons_file, decision_file)
+        program = os.path.join(const.XMIPP_SCRIPTS, "check_inside_roi.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
+
+        # Loop particles and filter/score them according to polygon delimited areas
+        in_area_vec = np.loadtxt(decision_file)
+        idx = 0
+        for particle in particles.iterItems(iterate=False):
+            in_area = in_area_vec[idx]
             aux_particle = particle.clone()
-            if in_area:
+            if in_area == 1:
                 output_particles.append(aux_particle)
-            elif not in_area and mode == 0:
+            elif in_area == 0 and mode == 0:
                 aux_particle.setEnabled(False)
                 output_particles.append(aux_particle)
+            idx += 1
 
         # Save new output
         name = self.OUTPUT_PREFIX + suffix
@@ -225,12 +235,6 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         newTs = targetResolution / 3.0
         newTs = max(Ts, newTs)
         return newTs
-
-    def sortPolygonPoints(self):
-        cent = (sum([p[0] for p in self.roi_border]) /
-                len(self.roi_border), sum([p[1] for p in self.roi_border]) / len(self.roi_border))
-        # sort by polar angle
-        self.roi_border.sort(key=lambda p: math.atan2(p[1] - cent[1], p[0] - cent[0]))
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
