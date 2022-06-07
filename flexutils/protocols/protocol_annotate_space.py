@@ -213,31 +213,32 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         num_vol = z_clnm_vol.shape[0]
         z_clnm = np.vstack([z_clnm_part, z_clnm_vol])
 
+        # Generate files to call command line
+        file_z_clnm = self._getExtraPath("z_clnm.txt")
+        file_deformation = self._getExtraPath("deformation.txt")
+        np.savetxt(file_z_clnm, z_clnm)
+
         # Compute/Read UMAP or PCA
         mode = self.mode.get()
         if mode == 0:
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
-                from umap import UMAP
-                umap = UMAP(n_components=3, n_neighbors=5, n_epochs=1000).fit(z_clnm)
-                coords = umap.transform(z_clnm)
-                np.savetxt(file_coords, coords)
+                args = "--input %s --umap --output %s" % (file_z_clnm, file_coords)
+                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                program = flexutils.Plugin.getProgram(program)
+                self.runJob(program, args)
         elif mode == 1:
             file_coords = self._getExtraPath("pca_coords.txt")
             if not os.path.isfile(file_coords):
-                from sklearn.decomposition import PCA
-                pca = PCA(n_components=3).fit(z_clnm)
-                coords = pca.transform(z_clnm)
-                np.savetxt(file_coords, coords)
+                args = "--input %s --pca --output %s" % (file_z_clnm, file_coords)
+                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                program = flexutils.Plugin.getProgram(program)
+                self.runJob(program, args)
         deformation = self.computeNormRows(z_clnm)
 
-        path = self._getExtraPath()
-
         # Generate files to call command line
-        file_z_clnm = self._getExtraPath("z_clnm.txt")
-        file_deformation = self._getExtraPath("deformation.txt")
-        np.savetxt(file_z_clnm, z_clnm)
         np.savetxt(file_deformation, deformation)
+        path = self._getExtraPath()
 
         # Run slicer
         args = "--coords %s --z_clnm %s --deformation %s --path %s --map_file %s " \
