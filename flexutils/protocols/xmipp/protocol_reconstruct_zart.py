@@ -26,14 +26,16 @@
 
 
 import os
+import numpy as np
 
 import pyworkflow.protocol.params as params
 # import pyworkflow.protocol.constants as cons
 
+from pwem import emlib
 from pwem.objects import Volume
 from pwem.protocols import ProtReconstruct3D
 
-from xmipp3.convert import writeSetOfParticles
+from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 # from xmipp3.base import isXmippCudaPresent
 
 import flexutils
@@ -106,6 +108,9 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params += ' --niter %d' % self.niter.get()
         params += ' --save_iter %d' % self.save_iter.get()
 
+        if self.useZernike.get():
+            params += " --useZernike"
+
         if self.mask.get():
             mask_zart = self._getTmpPath('mask_zart.vol')
             params += ' --mask %s' % mask_zart
@@ -127,7 +132,20 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     def convertInputStep(self):
         particlesMd = self._getTmpPath('corrected_particles.xmd')
         imgSet = self.inputParticles.get()
-        writeSetOfParticles(imgSet, particlesMd)
+
+        def zernikeRow(part, partRow, **kwargs):
+            imageToRow(part, partRow, emlib.MDL_IMAGE, **kwargs)
+            coord = part.getCoordinate()
+            if coord is not None:
+                coordinateToRow(coord, partRow, copyId=False)
+            if part.hasMicId():
+                partRow.setValue(emlib.MDL_MICROGRAPH_ID, int(part.getMicId()))
+                partRow.setValue(emlib.MDL_MICROGRAPH, str(part.getMicId()))
+            if hasattr(part, '_xmipp_sphCoefficients') and self.useZernike.get():
+                z_clnm = np.fromstring(part._xmipp_sphCoefficients.get(), sep=",")
+                partRow.setValue(emlib.MDL_SPH_COEFFICIENTS, z_clnm.tolist())
+
+        writeSetOfImages(imgSet, particlesMd, zernikeRow)
 
         # Correct CTF of particles if needed
         if not self.ctfCorrected.get():
