@@ -25,23 +25,48 @@
 # **************************************************************************
 
 
+import os
+
 import numpy as np
+from scipy.ndimage import gaussian_filter
+
+import pyworkflow.utils as pwutils
+
+import flexutils.protocols.xmipp.utils.utils as utl
+
+import xmipp3
 
 
-def reduceDimensions(coords_ld, outFile, mode, **kwargs):
-    if mode == "pca":
-        from sklearn.decomposition import PCA
-        pca = PCA(n_components=3).fit(coords_ld)
-        coords = pca.transform(coords_ld)
-    elif mode == "umap":
-        from umap import UMAP
-        n_neighbors = kwargs.pop("n_neighbors", 5)
-        n_epochs = kwargs.pop("n_epochs", 5)
-        densmap = kwargs.pop("densmap", 5)
-        umap = UMAP(n_components=3, n_neighbors=n_neighbors,
-                    n_epochs=n_epochs, densmap=densmap).fit(coords_ld)
-        coords = umap.transform(coords_ld)
-    np.savetxt(outFile, coords)
+def computeZernikeDeformation(file_input, file_z_clnm, file_output):
+
+    # Read data
+    start_map = utl.readMap(file_input)
+    coords = utl.getCoordsAtLevel(start_map, 1)
+
+    # Get Xmipp origin
+    xmipp_origin = utl.getXmippOrigin(start_map)
+
+    # Get Zernike3D parameters
+    basis_params, z_clnm_vec = utl.readZernikeFile(file_z_clnm)
+
+    #### Zernike3D coefficient computation ####
+
+    # Apply Xmipp origin
+    zernike_coords = coords - xmipp_origin
+
+    # Compute basis
+    Z = utl.computeBasis(L1=int(basis_params[0]), L2=int(basis_params[1]),
+                         pos=zernike_coords, r=basis_params[2])
+
+    # Get Zernike3D coeffcients and compute deformation
+    deformation = []
+    for z_clnm in z_clnm_vec:
+        A = utl.resizeZernikeCoefficients(z_clnm)
+        df = Z @ A.T
+        deformation.append(np.sqrt(np.mean(np.sum(df ** 2, axis=1))))
+
+    # Save deformation
+    np.savetxt(file_output, deformation)
 
 
 if __name__ == '__main__':
@@ -49,21 +74,11 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, required=True)
-    parser.add_argument('--pca', action='store_true')
-    parser.add_argument('--umap', action='store_true')
-    parser.add_argument('--n_neighbors', type=int, required=False)
-    parser.add_argument('--n_epochs', type=int, required=False)
-    parser.add_argument('--densmap', action='store_true')
-    parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--i', type=str, required=True)
+    parser.add_argument('--z_clnm', type=str, required=True)
+    parser.add_argument('--o', type=str, required=True)
 
     args = parser.parse_args()
 
-    coords = np.loadtxt(args.input)
-
     # Initialize volume slicer
-    if args.pca:
-        reduceDimensions(coords, args.output, "pca")
-    elif args.umap:
-        reduceDimensions(coords, args.output, "umap", n_neighbors=args.n_neighbors,
-                         n_epochs=args.n_epochs, densmap=args.densmap)
+    computeZernikeDeformation(args.i, args.z_clnm, args.o)

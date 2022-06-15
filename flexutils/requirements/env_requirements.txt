@@ -1,5 +1,6 @@
 scipion-pyworkflow
 scipion-em >= 3.0.8
+numpy==1.18.4
 scipion-em-xmipp
 pyvista==0.27.4
 pyvistaqt==0.3.0

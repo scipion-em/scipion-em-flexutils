@@ -611,7 +611,12 @@ def readZernikeFile(filename):
     with open(filename, 'r') as fid:
         lines = fid.readlines()
     basis_params = np.fromstring(lines[0].strip('\n'), sep=' ')
-    z_clnm = np.fromstring(lines[1].strip('\n'), sep=' ')
+
+    z_clnm = []
+    for line in lines[1:]:
+        z_clnm.append(np.fromstring(line.strip('\n'), sep=' '))
+    z_clnm = np.asarray(z_clnm)
+
     return basis_params, z_clnm
 
 def writeZernikeFile(file, z_clnm, L1, L2, Rmax):

@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,9 +24,4 @@
 # *
 # **************************************************************************
 
-from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
-
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+from .viewer_angular_alignment_zernike3d import XmippAngularAlignmentZernike3DViewer
