@@ -31,7 +31,7 @@ import numpy as np
 import os
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList, List
+from pyworkflow.object import Integer, Float, String
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
