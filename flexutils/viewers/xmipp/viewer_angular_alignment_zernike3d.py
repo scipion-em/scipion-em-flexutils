@@ -32,7 +32,7 @@ from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.process import runJob
 
-from xmipp3.protocols.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
+from flexutils.protocols.xmipp.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
 
 import flexutils.constants as const
 from flexutils.utils import computeNormRows
