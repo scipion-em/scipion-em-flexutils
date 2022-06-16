@@ -115,7 +115,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             mask_zart = self._getTmpPath('mask_zart.vol')
             params += ' --mask %s' % mask_zart
 
-        self.runJob('xmipp_forward_art_zernike3d', params)
+        self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1)
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
@@ -164,7 +164,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                    % (mask_file, mask_zart_file)
             program = os.path.join(const.XMIPP_SCRIPTS, "flood_fill_mask.py")
             program = flexutils.Plugin.getProgram(program)
-            self.runJob(program, args)
+            self.runJob(program, args, numberOfMpi=1)
 
     def createOutputStep(self):
         imgSet = self.inputParticles.get()
