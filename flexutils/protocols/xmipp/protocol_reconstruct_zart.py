@@ -104,7 +104,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params =  ' -i %s' % particlesMd
         params += ' -o final_reconstruction.mrc'
         params += ' --odir %s' % self._getExtraPath()
-        params += ' --step 1 --sigma 1 --regularization 0.0001'
+        params += ' --step 2 --sigma 2 --regularization 0.0001'
         params += ' --niter %d' % self.niter.get()
         params += ' --save_iter %d' % self.save_iter.get()
 
