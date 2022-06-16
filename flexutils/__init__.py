@@ -66,7 +66,6 @@ class Plugin(pwplugin.Plugin):
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd
 
-        # For Eman-CB
         commands = []
         installationEnv = getCondaInstallation()
         commands.append((installationEnv, []))

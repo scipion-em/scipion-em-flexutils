@@ -25,10 +25,7 @@
 # **************************************************************************
 
 
-import math
 import numpy as np
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
