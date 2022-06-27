@@ -61,7 +61,10 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallation():
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
+            if 'CONDA_DEFAULT_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
+            elif 'VIRTUAL_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
             installationCmd += "conda activate flexutils && pip install -r " + CONDA_REQ + " && "
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd

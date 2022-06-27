@@ -90,7 +90,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         form.addParam('save_iter', params.IntParam, default=1000,
                       label="Save partial reconstruction every # images")
 
-        form.addParallelSection(threads=4, mpi=1)
+        form.addParallelSection(threads=4, mpi=4)
 
     #--------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -115,7 +115,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             mask_zart = self._getTmpPath('mask_zart.vol')
             params += ' --mask %s' % mask_zart
 
-        self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1)
+        if self.numberOfThreads.get() == 1:
+            self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1)
+        else:
+            params += " --thr %d" % self.numberOfThreads.get()
+            self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1)
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
