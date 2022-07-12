@@ -26,12 +26,16 @@
 
 
 import os
+import glob
 import numpy as np
+from scipy import stats
 
 import pyworkflow.protocol.params as params
+import pyworkflow.utils as pwutils
 # import pyworkflow.protocol.constants as cons
 
 from pwem import emlib
+from pwem.emlib.image import ImageHandler
 from pwem.objects import Volume
 from pwem.protocols import ProtReconstruct3D
 
@@ -47,7 +51,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     Reconstruct a volume using ZART algorithm from a given SetOfParticles.
     """
     _label = 'reconstruct ZART'
-    
+
+    def __init__(self, **args):
+        ProtReconstruct3D.__init__(self, **args)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
+
     #--------------------------- DEFINE param functions --------------------------------------------   
     def _defineParams(self, form):
 
@@ -67,12 +75,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       pointerCondition='hasAlignmentProj',
                       label="Input particles",  
                       help='Select the input images from the project.')
-        form.addParam('mask', params.PointerParam, pointerClass='VolumeMask',
-                      allowsNull=True,
-                      label="Reconstruction mask",
-                      help="Mask used to restrict the reconstruction space to increase performance. "
-                           "Note that here the mask can be tight, as internally the protocol will process "
-                           "it to make it wider")
         form.addParam('ctfCorrected', params.BooleanParam, default=False,
                       label="Are particles CTF corrected?",
                       help="If particles are not CTF corrected, set to 'No' to perform "
@@ -83,43 +85,117 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
                            "option requires that the particles have a set of Zernike3D coefficients associated. "
                            "Otherwise, the parameter should be set to 'No'")
+        form.addParam('mask', params.PointerParam, pointerClass='VolumeMask',
+                      allowsNull=True,
+                      condition="useZernike and not hasattr(inputParticles,'refMask')",
+                      label="Reconstruction mask",
+                      help="Mask used to restrict the reconstruction space to increase performance. "
+                           "Note that here the mask can be tight, as internally the protocol will process "
+                           "it to make it wider")
         form.addParam('niter', params.IntParam, default=13,
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
                            "to run at least 8 iteration for better results")
-        form.addParam('save_iter', params.IntParam, default=1000,
-                      label="Save partial reconstruction every # images")
+        form.addParam('reg', params.FloatParam, default=0.0001, expertLevel=params.LEVEL_ADVANCED,
+                      label='ART lambda',
+                      help="This parameter determines how fast ZART will converge to the reconstruction. "
+                           "Note that larger values may lead to divergence.")
+        form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                      label="Save partial reconstructions for every ZART iteration?")
+        form.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
+                      default=0, display=params.EnumParam.DISPLAY_HLIST,
+                      label="Reconstruction mode",
+                      help="\t * Reconstruct: usual reconstruction of a single volume using all the images "
+                           "in the dataset\n"
+                           "\t * Gold standard: volumes halves reconstruction for FSC and local resolution "
+                           "computations\n"
+                           "\t * Multiresolution: local resolution analysis during reconstruction to determine "
+                           "which areas of the map can be improved further with the ZART algorithm")
+        form.addParam('levels', params.IntParam, default=3, condition="mode==2",
+                      label="Number of multiresolution levels")
 
         form.addParallelSection(threads=4, mpi=4)
 
     #--------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.reconstructStep)
-        self._insertFunctionStep(self.createOutputStep)
+        depsConvert = []
+        depsReconstruct = []
+        convert = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
+        depsConvert.append(convert)
+        if self.mode.get() == 0:
+            particlesMd = self._getTmpPath('corrected_particles.xmd')
+            reconstruct = self._insertFunctionStep(self.reconstructStep, particlesMd,
+                                                   "final_reconstruction.mrc", None, 2,
+                                                   self.niter.get(), None,
+                                                   prerequisites=depsConvert)
+            depsReconstruct.append(reconstruct)
+        elif self.mode.get() == 1:
+            particlesHalvesMd = [self._getTmpPath('corrected_particles_half_000001.xmd'),
+                                 self._getTmpPath('corrected_particles_half_000002.xmd')]
+            for idx, fileMd in enumerate(particlesHalvesMd):
+                outFile = "final_reconstruction_%d.mrc" % (idx + 1)
+                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, None,
+                                                       2, self.niter.get(), None,
+                                                       prerequisites=depsConvert)
+                depsReconstruct.append(reconstruct)
+        elif self.mode.get() == 2:
+            depsMask = []
+            current_iter = 0
+            niter = self.niter.get()
+            level = 1
+            particlesHalvesMd = [self._getTmpPath('corrected_particles_half_000001.xmd'),
+                                 self._getTmpPath('corrected_particles_half_000002.xmd')]
+
+            for idx, fileMd in enumerate(particlesHalvesMd):
+                outFile = "final_reconstruction_%d_level_%d.mrc" % (idx + 1, level)
+                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, None,
+                                                       2, 2, None,
+                                                       prerequisites=depsConvert)
+                depsReconstruct.append(reconstruct)
+
+            resMask = self._insertFunctionStep(self.resolutionMaskStep, level,
+                                               prerequisites=depsReconstruct)
+            depsMask.append(resMask)
+
+            resMaskFile = self._getTmpPath("resMask.mrc")
+            while current_iter < niter:
+                depsReconstruct = []
+                level += 1
+                current_iter += 2
+                for idx, fileMd in enumerate(particlesHalvesMd):
+                    outFile = "final_reconstruction_%d_level_%d.mrc" % (idx + 1, level)
+                    refFile = self._getExtraPath("final_reconstruction_%d_level_%d.mrc" % (idx + 1, level - 1))
+                    reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, refFile,
+                                                           1, 2, resMaskFile,
+                                                           prerequisites=depsMask)
+                    depsReconstruct.append(reconstruct)
+
+                depsMask = []
+                resMask = self._insertFunctionStep(self.resolutionMaskStep, level,
+                                                   prerequisites=depsReconstruct)
+                depsMask.append(resMask)
+
+        self._insertFunctionStep(self.createOutputStep, prerequisites=depsReconstruct)
+
+        if not self.save_pr.get():
+            pwutils.cleanPattern(self._getExtraPath("*_iter_*.mrc"))
+            pwutils.cleanPattern(self._getExtraPath("meanMap.mrc"))
+            pwutils.cleanPattern(self._getExtraPath("monoresResolutionChimera.mrc"))
+            pwutils.cleanPattern(self._getExtraPath("monoresResolutionMap.mrc"))
+            pwutils.cleanPattern(self._getExtraPath("refinedMask.mrc"))
         
-    def reconstructStep(self):
-        particlesMd = self._getTmpPath('corrected_particles.xmd')
+    def reconstructStep(self, inputMd, outFile, refFile, step, niter, mask):
+        params = self.defineZARTArgs(inputMd, outFile, niter, step, mask)
 
-        params =  ' -i %s' % particlesMd
-        params += ' -o final_reconstruction.mrc'
-        params += ' --odir %s' % self._getExtraPath()
-        params += ' --step 2 --sigma 2 --regularization 0.0001'
-        params += ' --niter %d' % self.niter.get()
-        params += ' --save_iter %d' % self.save_iter.get()
-
-        if self.useZernike.get():
-            params += " --useZernike"
-
-        if self.mask.get():
-            mask_zart = self._getTmpPath('mask_zart.vol')
-            params += ' --mask %s' % mask_zart
+        if refFile:
+            params += " --ref %s" % refFile
 
         if self.numberOfThreads.get() == 1:
             self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1)
         else:
             params += " --thr %d" % self.numberOfThreads.get()
             self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1)
+
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
@@ -131,6 +207,68 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         #         self.runJob('xmipp_reconstruct_fourier', params)
         #     else:
         #         self.runJob('xmipp_reconstruct_fourier_accel', params)
+
+    def resolutionMaskStep(self, level):
+        half_1 = self._getExtraPath("final_reconstruction_1_level_%d.mrc" % level)
+        half_2 = self._getExtraPath("final_reconstruction_2_level_%d.mrc" % level)
+        sr = self.inputParticles.get().getSamplingRate()
+        low = 2*sr
+        high = 2*sr*(self.levels.get() + 1)
+
+        params = "--vol %s --vol2 %s --sampling_rate %f --noiseonlyinhalves " \
+                 "--minRes %f --maxRes %f --step 0.5 -o %s --significance 0.95 --threads %d" % \
+                 (half_1, half_2, sr, low, high, self._getExtraPath(), self.numberOfThreads.get())
+
+        # if mask:
+        #     params += ' --mask %s' % mask
+        # else:
+        dim = self.inputParticles.get().getXDim()
+        mask = self._getTmpPath("sphere_mask.mrc")
+        r = int(0.5 * dim)
+        image = ImageHandler().createImage()
+        image.setData(np.zeros([dim, dim, dim]).astype(np.float32))
+        image.write(mask)
+        mask_params = "-i %s --mask circular -%d --create_mask %s" % (mask, r, mask)
+        self.runJob('xmipp_transform_mask', mask_params, numberOfMpi=1)
+        params += ' --mask %s' % mask
+
+        self.runJob('xmipp_resolution_monogenic_signal', params, numberOfMpi=1)
+
+        resMap = ImageHandler().read(self._getExtraPath("monoresResolutionMap.mrc")).getData()
+        oriMask = ImageHandler().read(mask).getData()
+
+        # _, edges = np.histogram(resMap, bins=3, range=[2*sr, 12.0])
+
+        levels = self.levels.get()
+        values = resMap.flatten()
+        edges = stats.mstats.mquantiles(values[values != 0.0], np.linspace(0.0, 1.0, num=levels+1))
+        mid_points = 0.5 * (edges[1:] + edges[:-1])
+        sigmas = mid_points / (2*sr)
+        # sigmas *= np.sqrt(1 / (2 * np.log(2)))
+        # sigmas *= np.sqrt(np.log(2) / (2 * np.pi * np.pi))
+        sigmas = np.floor(sigmas).astype(int)
+        # sigmas[sigmas > 1] -= 1
+        print(mid_points)
+        print(sigmas)
+
+        resMask = np.zeros(resMap.shape)
+        # sigmas = [1, 2, 3]
+        for idx in range(0, edges.size - 1):
+            sigma = sigmas[idx]
+            mask = ((resMap >= edges[idx]) * (resMap < edges[idx + 1])).astype(int)
+            aux = np.zeros(resMap.shape)
+            aux[::sigma, ::sigma, ::sigma] = mask[::sigma, ::sigma, ::sigma]
+            mask = sigma * aux
+            # mask *= sigma
+            resMask += mask
+        resMask *= oriMask
+
+        image = ImageHandler().createImage()
+        image.setData(resMask.astype(np.float32))
+        image.write(self._getTmpPath("resMask.mrc"))
+
+        self.sigmas = ' '.join(map(str, np.unique(sigmas)))
+        print(self.sigmas)
 
     #--------------------------- STEPS functions --------------------------------------------
     def convertInputStep(self):
@@ -161,20 +299,30 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             self.runJob(program, args, numberOfMpi=self.numberOfMpi.get())
 
         # Mask preprocessing (if provided)
-        if self.mask.get():
-            mask_file = self.mask.get().getFileName()
-            mask_zart_file = self._getTmpPath('mask_zart.vol')
-            args = "--input %s --output %s" \
-                   % (mask_file, mask_zart_file)
-            program = os.path.join(const.XMIPP_SCRIPTS, "flood_fill_mask.py")
-            program = flexutils.Plugin.getProgram(program)
-            self.runJob(program, args, numberOfMpi=1)
+        # if self.mask.get():
+        #     mask_file = self.mask.get().getFileName()
+        #     mask_zart_file = self._getTmpPath('mask_zart.vol')
+        #     args = "--input %s --output %s" \
+        #            % (mask_file, mask_zart_file)
+        #     program = os.path.join(const.XMIPP_SCRIPTS, "flood_fill_mask.py")
+        #     program = flexutils.Plugin.getProgram(program)
+        #     self.runJob(program, args, numberOfMpi=1)
+
+        # Prepare data (reconstruction mode)
+        if self.mode.get() != 0:
+            halvesMd = self._getTmpPath("corrected_particles_half_")
+            self.runJob("xmipp_metadata_split",
+                        "-i %s --oroot %s" % (particlesMd, halvesMd))
 
     def createOutputStep(self):
         imgSet = self.inputParticles.get()
         volume = Volume()
         volume.setFileName(self._getExtraPath("final_reconstruction.mrc"))
         volume.setSamplingRate(imgSet.getSamplingRate())
+
+        if self.mode.get() != 0:
+            halves = self.volumeRestoration()
+            volume.setHalfMaps(halves)
         
         self._defineOutputs(outputVolume=volume)
         self._defineSourceRelation(self.inputParticles, volume)
@@ -187,3 +335,39 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         return []
     
     #--------------------------- UTILS functions --------------------------------------------
+    def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
+        params = ' -i %s' % inputMd
+        params += ' -o %s' % outFile
+        params += ' --odir %s' % self._getExtraPath()
+        params += ' --step %d --regularization %f' % (step, self.reg.get())
+        if hasattr(self, 'sigmas'):
+            params += ' --sigma "' + self.sigmas + '"'
+        else:
+            params += ' --sigma "1.5"'
+        params += ' --niter %d' % niter
+
+        if self.useZernike.get():
+            particles = self.inputParticles.get()
+            params += " --useZernike --l1 %d --l2 %d" % (particles.L1.get(), particles.L2.get())
+            zernikeMask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get()
+            if zernikeMask:
+                params += " --mask %s" % zernikeMask
+
+        if mask:
+            params += ' --recmask %s' % mask
+
+        return params
+
+    def volumeRestoration(self):
+        half_1 = glob.glob(self._getExtraPath("final_reconstruction_1*"))
+        half_2 = glob.glob(self._getExtraPath("final_reconstruction_2*"))
+        half_1 = max(half_1, key=os.path.getctime)
+        half_2 = max(half_2, key=os.path.getctime)
+
+        params = "--i1 %s --i2 %s --oroot %s" % (half_1, half_2, self._getExtraPath("volume"))
+        self.runJob('xmipp_volume_halves_restoration', params, numberOfMpi=1)
+
+        ih = ImageHandler()
+        ih.convert(self._getExtraPath("volume_restored1.vol"), self._getExtraPath("final_reconstruction.mrc"))
+
+        return [half_1, half_2]
