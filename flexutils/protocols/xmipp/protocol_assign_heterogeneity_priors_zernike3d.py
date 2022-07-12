@@ -70,9 +70,12 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
                       condition="inputPriors and not hasattr(inputPriors,'refMap')")
         form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask',
                       condition="inputPriors and not hasattr(inputPriors,'refMask')")
-        form.addParam('targetResolution', params.FloatParam, label="Target resolution (A)", default=8.0,
-                      help="In Angstroms, the images and the volume are rescaled so that this resolution is at "
-                           "2/3 of the Fourier spectrum.")
+        form.addParam('boxSize', params.IntParam, default=128,
+                      label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
+                      help='In general, downsampling the particles will increase performance without compromising '
+                           'the estimation the deformation field for each particle. Note that output particles will '
+                           'have the original box size, and Zernike3D coefficients will be modified to work with the '
+                           'original size images')
         # form.addParam('maxShift', params.FloatParam, default=-1,
         #               label='Maximum shift (px)', expertLevel=params.LEVEL_ADVANCED,
         #               help='Maximum shift allowed in pixels')
@@ -121,10 +124,13 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         inputPriors = self.inputPriors.get()
         writeSetOfParticles(inputParticles, imgsFn)
         Xdim = inputParticles.getXDim()
-        self.Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 1.0 / 3.0
-        self.newTs = max(self.Ts, newTs)
-        self.newXdim = int(Xdim * self.Ts / newTs)
+        # self.Ts = inputParticles.getSamplingRate()
+        # newTs = self.targetResolution.get() * 1.0 / 3.0
+        # self.newTs = max(self.Ts, newTs)
+        # self.newXdim = int(Xdim * self.Ts / newTs)
+        self.newXdim = self.boxSize.get()
+        correctionFactor = self.newXdim / Xdim
+        newTs = inputParticles.getSamplingRate() / correctionFactor
         writeInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE, newTs)
         writeInfoField(self._getExtraPath(), "size", md.MDL_XSIZE, self.newXdim)
         if self.newXdim != Xdim:
@@ -162,10 +168,10 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
 
         Xdim = inputParticles.getXDim()
-        self.Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 1.0 / 3.0
-        self.newTs = max(self.Ts, newTs)
-        self.newXdim = int(Xdim * self.Ts / newTs)
+        # self.Ts = inputParticles.getSamplingRate()
+        # newTs = self.targetResolution.get() * 1.0 / 3.0
+        # self.newTs = max(self.Ts, newTs)
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.newXdim / Xdim
 
         # Zernike3D parameters
@@ -222,10 +228,11 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
 
     def createOutputStep(self):
         Xdim = self.inputParticles.get().getXDim()
-        self.Ts = self.inputParticles.get().getSamplingRate()
-        newTs = self.targetResolution.get() * 1.0 /3.0
-        self.newTs = max(self.Ts, newTs)
-        self.newXdim = int(Xdim * self.Ts / newTs)
+        # self.Ts = inputParticles.getSamplingRate()
+        # newTs = self.targetResolution.get() * 1.0 / 3.0
+        # self.newTs = max(self.Ts, newTs)
+        # self.newXdim = int(Xdim * self.Ts / newTs)
+        self.newXdim = self.boxSize.get()
         fnOut = self._getFileName('fnOut')
         mdOut = md.MetaData(fnOut)
 
@@ -241,7 +248,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         i = 0
         for row in md.iterRows(mdOut):
             newRow = row
-            if self.newTs != self.Ts:
+            if self.newXdim != Xdim:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
                 deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
                 correctionFactor = self.inputVolume.get().getDim()[0] / self.newXdim
