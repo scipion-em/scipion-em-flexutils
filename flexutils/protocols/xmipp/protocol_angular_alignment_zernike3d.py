@@ -68,9 +68,12 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                       condition="inputParticles and not hasattr(inputParticles,'refMap')")
         form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask',
                       condition="inputParticles and not hasattr(inputParticles,'refMask')")
-        form.addParam('targetResolution', params.FloatParam, label="Target resolution (A)", default=8.0,
-                      help="In Angstroms, the images and the volume are rescaled so that this resolution is at "
-                           "2/3 of the Fourier spectrum.")
+        form.addParam('boxSize', params.IntParam, default=128,
+                      label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
+                      help='In general, downsampling the particles will increase performance without compromising '
+                           'the estimation the deformation field for each particle. Note that output particles will '
+                           'have the original box size, and Zernike3D coefficients will be modified to work with the '
+                           'original size images')
         form.addParam('l1', params.IntParam, default=3,
                       label='Zernike Degree',
                       expertLevel=params.LEVEL_ADVANCED,
@@ -128,11 +131,13 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
-        self.Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 1.0 / 3.0
-        self.newTs = max(self.Ts, newTs)
-        self.newXdim = int(Xdim * self.Ts / newTs)
+        # self.Ts = inputParticles.getSamplingRate()
+        # newTs = self.targetResolution.get() * 1.0 / 3.0
+        # self.newTs = max(self.Ts, newTs)
+        # self.newXdim = int(Xdim * self.Ts / newTs)
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.newXdim / Xdim
+        newTs = inputParticles.getSamplingRate() / correctionFactor
 
         ih = ImageHandler()
         inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
@@ -211,7 +216,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                  ' --max_resolution %f --odir %s --resume --regularization %f --mask %s' \
                  ' --step 2 --blobr 2 --image_mode 1' %\
                  (imgsFn, fnVol, fnOut, L1, L2,
-                  Ts, self.maxResolution, fnOutDir, self.regularization.get(), fnVolMask)
+                  Ts, self.maxResolution.get(), fnOutDir, self.regularization.get(), fnVolMask)
         if not self.ignoreCTF.get():
             params += ' --useCTF'
         if self.inputParticles.get().isPhaseFlipped():
@@ -227,11 +232,12 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
 
 
     def createOutputStep(self):
-        Xdim = self.inputParticles.get().getXDim()
-        self.Ts = self.inputParticles.get().getSamplingRate()
-        newTs = self.targetResolution.get() * 1.0 /3.0
-        self.newTs = max(self.Ts, newTs)
-        self.newXdim = int(Xdim * self.Ts / newTs)
+        # Xdim = self.inputParticles.get().getXDim()
+        # self.Ts = inputParticles.getSamplingRate()
+        # newTs = self.targetResolution.get() * 1.0 / 3.0
+        # self.newTs = max(self.Ts, newTs)
+        # self.newXdim = int(Xdim * self.Ts / newTs)
+        self.newXdim = self.boxSize.get()
         fnOut = self._getFileName('fnOut')
         mdOut = md.MetaData(fnOut)
 
@@ -241,9 +247,11 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
             newRow = row
             if self.newTs != self.Ts:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
+                deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
                 correctionFactor = self.inputVolume.get().getDim()[0] / self.newXdim
                 coeffs = [correctionFactor * coeff for coeff in coeffs]
                 newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
+                newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
                 shiftX = correctionFactor * mdOut.getValue(md.MDL_SHIFT_X, row.getObjId())
                 shiftY = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Y, row.getObjId())
                 shiftZ = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Z, row.getObjId())
