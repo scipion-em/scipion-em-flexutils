@@ -101,7 +101,6 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
         L1 = Integer(self.l1.get())
         L2 = Integer(self.l2.get())
         Rmax = Float(basis_params[2])
-        rmsd = Float(rmsd_def[1])
         deformation = Float(rmsd_def[2])
         # mask = String(self._getExtraPath("mask.mrc"))
 
@@ -112,8 +111,8 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
         vol.L1 = L1
         vol.L2 = L2
         vol.Rmax = Rmax
-        vol.rmsd = rmsd
-        vol.deformation = deformation
+        vol._xmipp_sphDeformation = deformation
+        vol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm]))
         # vol.refMask = mask
         self._defineOutputs(deformedMap=vol)
         self._defineSourceRelation(self.input, vol)

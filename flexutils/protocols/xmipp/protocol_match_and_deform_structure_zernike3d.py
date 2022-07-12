@@ -33,7 +33,7 @@ from pwem.objects import AtomStruct
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-from pyworkflow.object import Float, Integer
+from pyworkflow.object import Float, Integer, String
 
 import flexutils
 from flexutils.utils import readZernikeFile
@@ -88,7 +88,6 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         L1 = Integer(self.l1.get())
         L2 = Integer(self.l2.get())
         Rmax = Float(basis_params[2])
-        rmsd = Float(rmsd_def[1])
         deformation = Float(rmsd_def[2])
 
         outFile = self._getExtraPath("structure_deformed.pdb")
@@ -96,8 +95,8 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         pdb.L1 = L1
         pdb.L2 = L2
         pdb.Rmax = Rmax
-        pdb.rmsd = rmsd
-        pdb.deformation = deformation
+        pdb._xmipp_sphDeformation = deformation
+        pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm]))
         self._defineOutputs(deformedStructure=pdb)
         self._defineSourceRelation(self.input, pdb)
         self._defineSourceRelation(self.reference, pdb)
