@@ -661,7 +661,7 @@ def basisDegreeVectors(L1, L2):
 
 def reassociateCoefficients(Z, Zpp, Ap, A=None):
     # If A is None, invert the coefficients
-    A = A if A else np.zeros(Ap.shape)
+    A = A if A is not None else np.zeros(Ap.shape)
     return np.transpose(computeInverse(Zpp.T @ Zpp) @ Zpp.T @ Z @ (A.T - Ap.T))
 
 
@@ -812,7 +812,10 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None):
         fhCmd.write("exit\n")
 
     # program = Plugin.getProgram()
-    program = Chimera.getProgram()
+    # program = Chimera.getProgram()
+    from pwem import Config as emConfig
+    home = os.path.join(emConfig.EM_ROOT, 'chimerax-1.3')
+    program = os.path.join(home, 'bin', os.path.basename("ChimeraX"))
     cmd = program + ' --nogui "%s"' % scriptFile
     call(cmd, shell=True, env=Chimera.getEnviron(), cwd=os.getcwd())
 
