@@ -29,6 +29,7 @@ import os
 import glob
 import numpy as np
 from scipy import stats
+import re
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
@@ -79,6 +80,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       label="Are particles CTF corrected?",
                       help="If particles are not CTF corrected, set to 'No' to perform "
                            "a Weiner filter based corerction")
+        form.addParam('initialMap', params.PointerParam, pointerClass='Volume',
+                      label="Initial map",
+                      allowsNull=True,
+                      help='If provided, this map will be used as the initialization of the reconstruction '
+                           'process. Otherwise, an empty volume will be used')
         form.addParam('useZernike', params.BooleanParam, default=False,
                       label="Correct motion blurred artifacts?",
                       help="Correct the conformation of the particles during the reconstruct process "
@@ -122,10 +128,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         depsReconstruct = []
         convert = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
         depsConvert.append(convert)
+        refFile = self.initialMap.get()
         if self.mode.get() == 0:
             particlesMd = self._getTmpPath('corrected_particles.xmd')
             reconstruct = self._insertFunctionStep(self.reconstructStep, particlesMd,
-                                                   "final_reconstruction.mrc", None, 2,
+                                                   "final_reconstruction.mrc", refFile, 2,
                                                    self.niter.get(), None,
                                                    prerequisites=depsConvert)
             depsReconstruct.append(reconstruct)
@@ -134,7 +141,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                                  self._getTmpPath('corrected_particles_half_000002.xmd')]
             for idx, fileMd in enumerate(particlesHalvesMd):
                 outFile = "final_reconstruction_%d.mrc" % (idx + 1)
-                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, None,
+                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, refFile,
                                                        2, self.niter.get(), None,
                                                        prerequisites=depsConvert)
                 depsReconstruct.append(reconstruct)
@@ -148,7 +155,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
 
             for idx, fileMd in enumerate(particlesHalvesMd):
                 outFile = "final_reconstruction_%d_level_%d.mrc" % (idx + 1, level)
-                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, None,
+                reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, refFile,
                                                        2, 2, None,
                                                        prerequisites=depsConvert)
                 depsReconstruct.append(reconstruct)
@@ -195,7 +202,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         else:
             params += " --thr %d" % self.numberOfThreads.get()
             self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1)
-
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
@@ -339,7 +345,16 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params = ' -i %s' % inputMd
         params += ' -o %s' % outFile
         params += ' --odir %s' % self._getExtraPath()
-        params += ' --step %d --regularization %f' % (step, self.reg.get())
+        params += ' --step %d' % step
+        if "_level_" in outFile:
+            reg = self.reg.get()
+            level = float(re.findall(r'\d+', outFile)[1]) - 2
+            if level > 0:
+                params += " --regularization %f" % (reg * 0.9**level)
+            else:
+                params += " --regularization %f" % (reg)
+        else:
+            params += " --regularization %f" % self.reg.get()
         if hasattr(self, 'sigmas'):
             params += ' --sigma "' + self.sigmas + '"'
         else:
@@ -349,9 +364,9 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if self.useZernike.get():
             particles = self.inputParticles.get()
             params += " --useZernike --l1 %d --l2 %d" % (particles.L1.get(), particles.L2.get())
-            zernikeMask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get()
-            if zernikeMask:
-                params += " --mask %s" % zernikeMask
+            # zernikeMask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get()
+            # if zernikeMask:
+            #     params += " --mask %s" % zernikeMask
 
         if mask:
             params += ' --recmask %s' % mask
