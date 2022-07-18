@@ -36,6 +36,13 @@ import pwem.emlib.metadata as md
 from joblib import Parallel, delayed
 
 
+def iterRowsAndClone(metadata):
+    row = md.Row()
+    for objId in metadata:
+        row.readFromMd(metadata, objId)
+        yield row.clone()
+
+
 def computeNewDeformationField(row, Z, Zpp, Ap):
     outRow = row
     z_clnm = np.asarray(row.getValue(md.MDL_SPH_COEFFICIENTS))
@@ -77,7 +84,8 @@ def reassignReference(md_file, maski, maskr, file_z_clnm_r, prevL1, prevL2, L1, 
     # Metadata
     metadata = md.MetaData(md_file)
     metadata.sort()
-    rows = [row.clone() for row in md.iterRows(metadata)]
+    # rows = [row.clone() for row in md.iterRows(metadata)]
+    rows = Parallel(n_jobs=thr, verbose=100)(delayed(lambda x: x.clone())(row) for row in iterRowsAndClone(metadata))
 
     # Compute basis
     _, z_clnm_vec = utl.readZernikeFile(file_z_clnm_r)

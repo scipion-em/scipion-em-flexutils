@@ -36,6 +36,13 @@ import pwem.emlib.metadata as md
 from joblib import Parallel, delayed
 
 
+def iterRowsAndClone(metadata):
+    row = md.Row()
+    for objId in metadata:
+        row.readFromMd(metadata, objId)
+        yield row.clone()
+
+
 def computeNewDeformationField(row, Z, start_coords, mask_DF, Z_new):
     outRow = row
     z_clnm = np.asarray(row.getValue(md.MDL_SPH_COEFFICIENTS))
@@ -73,7 +80,8 @@ def maskDeformationField(md_file, maski, maskdf, prevL1, prevL2, L1, L2, Rmax, t
     # Metadata
     metadata = md.MetaData(md_file)
     metadata.sort()
-    rows = [row.clone() for row in md.iterRows(metadata)]
+    # rows = [row.clone() for row in md.iterRows(metadata)]
+    rows = Parallel(n_jobs=thr, verbose=100)(delayed(lambda x: x.clone())(row) for row in iterRowsAndClone(metadata))
 
     # Compute original deformation field
     Z = utl.computeBasis(L1=prevL1, L2=prevL2, pos=start_coords_xo, r=Rmax)
