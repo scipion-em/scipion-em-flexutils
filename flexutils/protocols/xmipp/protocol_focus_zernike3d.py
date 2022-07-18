@@ -68,7 +68,7 @@ class XmippProtFocusZernike3D(ProtAnalysis3D):
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
                       default=7,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
-        # form.addParallelSection(threads=1, mpi=8)
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -109,8 +109,8 @@ class XmippProtFocusZernike3D(ProtAnalysis3D):
 
         writeSetOfImages(particles, imgsFn, zernikeRow)
 
-        args = "--i %s --maski %s --maskdf %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f" \
-               % (imgsFn, refMask, roiMask, prevL1, prevL2, L1, L2, Rmax)
+        args = "--i %s --maski %s --maskdf %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
+               % (imgsFn, refMask, roiMask, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
         program = os.path.join(const.XMIPP_SCRIPTS, "mask_deformation_field.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)

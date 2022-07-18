@@ -33,8 +33,32 @@ import flexutils.protocols.xmipp.utils.utils as utl
 
 import pwem.emlib.metadata as md
 
+from joblib import Parallel, delayed
 
-def maskDeformationField(md_file, maski, maskdf, prevL1, prevL2, L1, L2, Rmax):
+
+def computeNewDeformationField(row, Z, start_coords, mask_DF, Z_new):
+    outRow = row
+    z_clnm = np.asarray(row.getValue(md.MDL_SPH_COEFFICIENTS))
+    A = utl.resizeZernikeCoefficients(z_clnm)
+
+    # Get Masked deformation field
+    A_masked = utl.maskDeformationField(A, Z, start_coords, mask_DF, Z_new=Z_new)
+
+    # Write Zernike3D coefficients to file
+    z_clnm = utl.resizeZernikeCoefficients(A_masked)
+    outRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm.tolist())
+
+    # For evaluation (debuggin purposes)
+    d = Z_new @ A_masked.T
+
+    # Compute mean deformation
+    deformation = np.sqrt(np.mean(np.sum(d ** 2, axis=1)))
+    outRow.setValue(md.MDL_SPH_DEFORMATION, deformation)
+
+    return outRow
+
+
+def maskDeformationField(md_file, maski, maskdf, prevL1, prevL2, L1, L2, Rmax, thr):
     # Read data
     start_mask = utl.readMap(maski)
     mask_DF = utl.readMap(maskdf)
@@ -49,32 +73,20 @@ def maskDeformationField(md_file, maski, maskdf, prevL1, prevL2, L1, L2, Rmax):
     # Metadata
     metadata = md.MetaData(md_file)
     metadata.sort()
-    metadata_out = md.MetaData()
+    rows = [row.clone() for row in md.iterRows(metadata)]
 
     # Compute original deformation field
     Z = utl.computeBasis(L1=prevL1, L2=prevL2, pos=start_coords_xo, r=Rmax)
     Z_new = utl.computeBasis(L1=L1, L2=L2, pos=start_coords_xo, r=Rmax)
 
-    for row in md.iterRows(metadata):
-        outRow = row
-        z_clnm = np.asarray(row.getValue(md.MDL_SPH_COEFFICIENTS))
-        A = utl.resizeZernikeCoefficients(z_clnm)
+    # Compute new deformation field
+    outRows = Parallel(n_jobs=thr, verbose=100) \
+              (delayed(lambda x: computeNewDeformationField(x, Z, start_coords, mask_DF, Z_new))(row)
+              for row in rows)
 
-        # Get Masked deformation field
-        A_masked = utl.maskDeformationField(A, Z, start_coords, mask_DF, Z_new=Z_new)
-
-        # Write Zernike3D coefficients to file
-        z_clnm = utl.resizeZernikeCoefficients(A_masked)
-        outRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm.tolist())
-
-        # For evaluation (debuggin purposes)
-        d = Z_new @ A_masked.T
-
-        # Compute mean deformation
-        deformation = np.sqrt(np.mean(np.sum(d ** 2, axis=1)))
-        outRow.setValue(md.MDL_SPH_DEFORMATION, deformation)
-
-        outRow.addToMd(metadata_out)
+    # Fill output metadata
+    metadata_out = md.MetaData()
+    [outRow.addToMd(metadata_out) for outRow in outRows]
 
     dir = os.path.dirname(md_file)
     metadata_out.write(os.path.join(dir, "inputParticles_focused.xmd"))
@@ -93,9 +105,10 @@ if __name__ == '__main__':
     parser.add_argument('--l1', type=int, required=True)
     parser.add_argument('--l2', type=int, required=True)
     parser.add_argument('--rmax', type=float, required=True)
+    parser.add_argument('--thr', type=int, required=True)
 
     args = parser.parse_args()
 
     # Initialize volume slicer
     maskDeformationField(args.i, args.maski, args.maskdf, args.prevl1, args.prevl2,
-                         args.l1, args.l2, args.rmax)
+                         args.l1, args.l2, args.rmax, args.thr)

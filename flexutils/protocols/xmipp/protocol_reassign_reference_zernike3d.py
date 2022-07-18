@@ -70,7 +70,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
                       default=2,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
-        # form.addParallelSection(threads=1, mpi=8)
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -119,8 +119,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
             z_clnm = np.fromstring(newRefMap._xmipp_sphCoefficients.get(), sep=",")
             f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
-        args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f" \
-               % (imgsFn, refMask, newRefMask, file_zclnm_r, prevL1, prevL2, L1, L2, Rmax)
+        args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
+               % (imgsFn, refMask, newRefMask, file_zclnm_r, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
         program = os.path.join(const.XMIPP_SCRIPTS, "reassign_reference.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
