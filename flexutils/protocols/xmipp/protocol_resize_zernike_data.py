@@ -82,8 +82,11 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
         """ We need to update the sampling rate of the
         particles if the Resize option was used.
         """
-        self.inputHasAlign = self.inputParticles.get().hasAlignment()
+        inputParticles = self.inputParticles.get()
+        self.inputHasAlign = inputParticles.hasAlignment()
 
+        output.L1 = inputParticles.L1
+        output.L2 = inputParticles.L2
         if self.doResize:
             output.setSamplingRate(self.samplingRate)
             output.Rmax = Float(self.factor * self.inputParticles.get().Rmax.get())
