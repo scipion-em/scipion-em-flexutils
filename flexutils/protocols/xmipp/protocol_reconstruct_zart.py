@@ -128,7 +128,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         depsReconstruct = []
         convert = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
         depsConvert.append(convert)
-        refFile = self.initialMap.get()
+        refFile = self.initialMap.get().getFileName() if self.initialMap.get() else None
         if self.mode.get() == 0:
             particlesMd = self._getTmpPath('corrected_particles.xmd')
             reconstruct = self._insertFunctionStep(self.reconstructStep, particlesMd,
