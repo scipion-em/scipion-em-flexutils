@@ -84,7 +84,7 @@ class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
                       label="Display the Zernike3D coefficient space")
 
     def _getVisualizeDict(self):
-        self.protocol._createFilenameTemplates()
+        # self.protocol._createFilenameTemplates()
         return {'doShowSpace': self._doShowSpace}
 
     def _doShowSpace(self, param=None):
