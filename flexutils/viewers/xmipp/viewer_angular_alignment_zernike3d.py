@@ -33,6 +33,8 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils.process import runJob
 
 from flexutils.protocols.xmipp.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
+from flexutils.protocols.xmipp.protocol_focus_zernike3d import XmippProtFocusZernike3D
+from flexutils.protocols.xmipp.protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D
 
 import flexutils.constants as const
 from flexutils.utils import computeNormRows
@@ -42,7 +44,7 @@ import flexutils
 class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
     """ Visualize Zernike3D coefficient space """
     _label = 'viewer angular align - Zernike3D'
-    _targets = [XmippProtAngularAlignmentZernike3D]
+    _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D, XmippProtReassignReferenceZernike3D]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
