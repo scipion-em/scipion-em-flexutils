@@ -120,7 +120,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         form.addParam('levels', params.IntParam, default=3, condition="mode==2",
                       label="Number of multiresolution levels")
 
-        form.addParallelSection(threads=4, mpi=4)
+        form.addParallelSection(threads=4, mpi=1)
 
     #--------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -302,7 +302,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             args = "-i %s -o %s --save_metadata_stack --keep_input_columns --sampling_rate %f --correct_envelope" \
                    % (particlesMd, corrected_stk, sr)
             program = 'xmipp_ctf_correct_wiener2d'
-            self.runJob(program, args, numberOfMpi=self.numberOfMpi.get())
+            self.runJob(program, args, numberOfMpi=self.numberOfThreads.get())
 
         # Mask preprocessing (if provided)
         # if self.mask.get():
