@@ -198,7 +198,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                         (imgsFn,
                          self._getExtraPath('scaled_particles.stk'),
                          self._getExtraPath('scaled_particles.xmd'),
-                         self.newXdim), numberOfMpi=1)
+                         self.newXdim), numberOfMpi=self.numberOfMpi.get())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
     def alignmentStep(self):
