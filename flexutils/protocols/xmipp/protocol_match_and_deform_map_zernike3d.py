@@ -112,7 +112,7 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
         vol.L2 = L2
         vol.Rmax = Rmax
         vol._xmipp_sphDeformation = deformation
-        vol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm]))
+        vol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
         # vol.refMask = mask
         self._defineOutputs(deformedMap=vol)
         self._defineSourceRelation(self.input, vol)
