@@ -61,6 +61,12 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
                       label='Harmonical Degree',
                       expertLevel=params.LEVEL_ADVANCED,
                       help='Degree Spherical Harmonics of the deformation=1,2,3,...')
+        form.addParam('volume', params.PointerParam, label="Reference structure map",
+                      pointerClass='Volume',
+                      allowsNull=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Computed coefficients will be associated to this map instead to the "
+                           "structure")
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
@@ -90,15 +96,28 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         Rmax = Float(basis_params[2])
         deformation = Float(rmsd_def[2])
 
-        outFile = self._getExtraPath("structure_deformed.pdb")
-        pdb = AtomStruct(outFile)
-        pdb.L1 = L1
-        pdb.L2 = L2
-        pdb.Rmax = Rmax
-        pdb._xmipp_sphDeformation = deformation
-        pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
-        self._defineOutputs(deformedStructure=pdb)
-        self._defineSourceRelation(self.input, pdb)
-        self._defineSourceRelation(self.reference, pdb)
+        print("Deformation = %f" % rmsd_def[2])
+
+        if self.volume.get():
+            outVol = self.volume.get().copy()
+            outVol.L1 = L1
+            outVol.L2 = L2
+            outVol.Rmax = Rmax
+            outVol._xmipp_sphDeformation = deformation
+            outVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
+            self._defineOutputs(deformedStructure=outVol)
+            self._defineSourceRelation(self.input, outVol)
+            self._defineSourceRelation(self.reference, outVol)
+        else:
+            outFile = self._getExtraPath("structure_deformed.pdb")
+            pdb = AtomStruct(outFile)
+            pdb.L1 = L1
+            pdb.L2 = L2
+            pdb.Rmax = Rmax
+            pdb._xmipp_sphDeformation = deformation
+            pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
+            self._defineOutputs(deformedStructure=pdb)
+            self._defineSourceRelation(self.input, pdb)
+            self._defineSourceRelation(self.reference, pdb)
 
     # --------------------------- UTILS functions ------------------------------
