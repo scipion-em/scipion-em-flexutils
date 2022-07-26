@@ -133,6 +133,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         classes3D = self._createSetOfClasses3D(particles, suffix)
 
         # Popoulate SetOfClasses3D with KMean particles
+        factor = particles.getXDim() / 64
         for clInx in range(z_clnm_vw.shape[0]):
             _, currIds = kdtree.query(z_clnm_vw[clInx].reshape(1, -1), k=neighbors+10)
             currIds = currIds[0]
@@ -145,7 +146,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             representative.setSamplingRate(sr)
             csv_z_clnm = CsvList()
             for c in z_clnm_vw[clInx]:
-                csv_z_clnm.append(c)
+                csv_z_clnm.append(factor * c)
             representative._xmipp_sphCoefficients = csv_z_clnm
             representative.L1 = L1
             representative.L2 = L2
