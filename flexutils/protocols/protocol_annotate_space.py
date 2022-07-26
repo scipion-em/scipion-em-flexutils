@@ -32,11 +32,11 @@ from sklearn.neighbors import KDTree
 from pyworkflow import BETA
 from pyworkflow.object import String, CsvList
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, MultiPointerParam
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import ProtAnalysis3D
-from pwem.objects import SetOfClasses3D, Class3D, Volume
+from pwem.objects import SetOfClasses3D, Class3D, Volume, SetOfVolumes
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
@@ -66,8 +66,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                       condition="particles and not hasattr(particles,'refMap')",
                       pointerClass='VolumeMask', important=True,
                       help="Mask determining where to compute the Zernike3D deformation field")
-        form.addParam('volumes', PointerParam, label="Priors", allowsNull=True, pointerClass="SetOfVolumes",
-                      help='A set of volumes with Zernike3D coefficients associated (computed using '
+        form.addParam('volumes', MultiPointerParam, label="Priors", allowsNull=True,
+                      pointerClass="SetOfVolumes, Volumes",
+                      help='Volumes with Zernike3D coefficients associated (computed using '
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
@@ -229,8 +230,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
         z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
         if volumes:
-            for volume in volumes.iterItems():
-                z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
+            for obj in volumes:
+                if isinstance(obj, Volume):
+                    z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(obj._xmipp_sphCoefficients.get(), sep=",")])
+                elif isinstance(obj, SetOfVolumes):
+                    for volume in obj.iterItems():
+                        z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
             z_clnm_vol *= factor
 
         # Get useful parameters
