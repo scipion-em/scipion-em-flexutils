@@ -67,6 +67,11 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
                       expertLevel=params.LEVEL_ADVANCED,
                       help="Computed coefficients will be associated to this map instead to the "
                            "structure")
+        form.addParam('mask', params.PointerParam, label="Reference map mask",
+                      pointerClass='VolumeMask',
+                      allowsNull=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Mask to associate to reference volume")
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
@@ -100,11 +105,14 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
 
         if self.volume.get():
             outVol = self.volume.get().copy()
+            z_clnm_vol = z_clnm[0] / outVol.getSamplingRate()
             outVol.L1 = L1
             outVol.L2 = L2
             outVol.Rmax = Rmax
             outVol._xmipp_sphDeformation = deformation
-            outVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
+            outVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vol]))
+            if self.mask.get():
+                outVol.refMask = String(self.mask.get().getFileName())
             self._defineOutputs(deformedStructure=outVol)
             self._defineSourceRelation(self.input, outVol)
             self._defineSourceRelation(self.reference, outVol)
