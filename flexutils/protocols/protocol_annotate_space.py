@@ -67,7 +67,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                       pointerClass='VolumeMask', important=True,
                       help="Mask determining where to compute the Zernike3D deformation field")
         form.addParam('volumes', MultiPointerParam, label="Priors", allowsNull=True,
-                      pointerClass="SetOfVolumes, Volumes",
+                      pointerClass="SetOfVolumes, Volume",
                       help='Volumes with Zernike3D coefficients associated (computed using '
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
