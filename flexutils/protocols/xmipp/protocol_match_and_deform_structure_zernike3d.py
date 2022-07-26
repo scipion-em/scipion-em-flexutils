@@ -104,7 +104,7 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         print("Deformation = %f" % rmsd_def[2])
 
         if self.volume.get():
-            outVol = self.volume.get().copy()
+            outVol = self.volume.get().clone()
             z_clnm_vol = z_clnm[0] / outVol.getSamplingRate()
             outVol.L1 = L1
             outVol.L2 = L2
