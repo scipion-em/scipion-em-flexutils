@@ -111,6 +111,7 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
             outVol.Rmax = Rmax
             outVol._xmipp_sphDeformation = deformation
             outVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vol]))
+            outVol.refMap = String(outVol.getFileName())
             if self.mask.get():
                 outVol.refMask = String(self.mask.get().getFileName())
             self._defineOutputs(deformedStructure=outVol)
