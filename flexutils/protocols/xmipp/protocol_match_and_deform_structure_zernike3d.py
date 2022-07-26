@@ -96,7 +96,7 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
         pdb.L2 = L2
         pdb.Rmax = Rmax
         pdb._xmipp_sphDeformation = deformation
-        pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm]))
+        pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
         self._defineOutputs(deformedStructure=pdb)
         self._defineSourceRelation(self.input, pdb)
         self._defineSourceRelation(self.reference, pdb)
