@@ -196,13 +196,13 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
         # Get image coefficients and scale them to reference size
         # FIXME: Can we do the for loop with the aggregate? (follow ID order)
-        factor = 64 / particles.getXDim()
+        # factor = 64 / particles.getXDim()
         # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
         # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
         z_clnm_part = []
         for particle in particles.iterItems():
             z_clnm_part.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-        z_clnm_part = factor * np.asarray(z_clnm_part)
+        z_clnm_part = np.asarray(z_clnm_part)
 
         # Get volume coefficients (if exist) and scale them to reference size
         # FIXME: Can we do the for loop with the aggregate? (follow ID order)
@@ -215,7 +215,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         if volumes:
             for volume in volumes.iterItems():
                 z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
-            z_clnm_vol *= factor
+            # z_clnm_vol *= factor
 
         # Get useful parameters
         self.num_vol = z_clnm_vol.shape[0]
