@@ -42,6 +42,7 @@ from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfImages, imageToRow, coordinateToRow
 from xmipp3.base import writeInfoField, readInfoField
+import xmipp3
 
 import flexutils
 import flexutils.constants as const
@@ -90,9 +91,11 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         # form.addParam('maxAngular', params.FloatParam, default=5,
         #               label='Maximum angular change (degrees)', expertLevel=params.LEVEL_ADVANCED,
         #               help='Maximum angular change allowed (in degrees)')
-        form.addParam('maxResolution', params.FloatParam, default=4.0,
+        form.addParam('maxResolution', params.FloatParam,
                       label='Maximum resolution (A)', expertLevel=params.LEVEL_ADVANCED,
-                      help='Maximum resolution (A)')
+                      allowsNull=True,
+                      help='Filter the particles to this sampling rate. By default, no filter is '
+                           'applied')
         form.addParam('regularization', params.FloatParam, default=0.005, label='Regularization',
                       expertLevel=params.LEVEL_ADVANCED,
                       help='Penalization to deformations (higher values penalize more the deformation).')
@@ -145,13 +148,14 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         # Xdim = self.inputVolume.get().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
-                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1)
+                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get()
         if inputMask:
             ih.convert(inputMask, fnVolMask)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1)
+                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
 
         if hasattr(inputParticles.getFirstItem(), '_xmipp_sphCoefficients'):
             L1 = inputParticles.L1.get()
@@ -198,7 +202,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                         (imgsFn,
                          self._getExtraPath('scaled_particles.stk'),
                          self._getExtraPath('scaled_particles.xmd'),
-                         self.newXdim), numberOfMpi=self.numberOfMpi.get())
+                         self.newXdim), numberOfMpi=self.numberOfMpi.get(),
+                        env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
     def alignmentStep(self):
@@ -211,12 +216,13 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
         L1 = inputParticles.L1.get() if hasattr(inputParticles, 'L1') else self.l1.get()
         L2 = inputParticles.L2.get() if hasattr(inputParticles, 'L2') else self.l2.get()
+        maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts
         params = ' -i %s --ref %s -o %s --optimizeDeformation ' \
                  '--l1 %d --l2 %d --sampling %f ' \
                  ' --max_resolution %f --odir %s --resume --regularization %f --mask %s' \
                  ' --step 2 --blobr 2 --image_mode 1' %\
                  (imgsFn, fnVol, fnOut, L1, L2,
-                  Ts, self.maxResolution.get(), fnOutDir, self.regularization.get(), fnVolMask)
+                  Ts, maxResolution, fnOutDir, self.regularization.get(), fnVolMask)
         if not self.ignoreCTF.get():
             params += ' --useCTF'
         if self.inputParticles.get().isPhaseFlipped():
@@ -228,7 +234,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         #     self.runJob(program, params)
         # else:
         program = 'xmipp_forward_zernike_images'
-        self.runJob(program, params, numberOfMpi=self.numberOfMpi.get())
+        self.runJob(program, params, numberOfMpi=self.numberOfMpi.get(),
+                    env=xmipp3.Plugin.getEnviron())
 
 
     def createOutputStep(self):
@@ -248,7 +255,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
             if self.newXdim != Xdim:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
                 correctionFactor = self.inputVolume.get().getDim()[0] / self.newXdim
-                deformation = correctionFactor * mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
+                deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
                 coeffs = [correctionFactor * coeff for coeff in coeffs]
                 newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
                 newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
