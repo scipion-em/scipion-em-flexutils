@@ -42,6 +42,7 @@ from pwem.protocols import ProtReconstruct3D
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 # from xmipp3.base import isXmippCudaPresent
+import xmipp3
 
 import flexutils
 import flexutils.constants as const
@@ -91,13 +92,13 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
                            "option requires that the particles have a set of Zernike3D coefficients associated. "
                            "Otherwise, the parameter should be set to 'No'")
-        form.addParam('mask', params.PointerParam, pointerClass='VolumeMask',
-                      allowsNull=True,
-                      condition="useZernike and not hasattr(inputParticles,'refMask')",
-                      label="Reconstruction mask",
-                      help="Mask used to restrict the reconstruction space to increase performance. "
-                           "Note that here the mask can be tight, as internally the protocol will process "
-                           "it to make it wider")
+        # form.addParam('mask', params.PointerParam, pointerClass='VolumeMask',
+        #               allowsNull=True,
+        #               condition="useZernike and not hasattr(inputParticles,'refMask')",
+        #               label="Reconstruction mask",
+        #               help="Mask used to restrict the reconstruction space to increase performance. "
+        #                    "Note that here the mask can be tight, as internally the protocol will process "
+        #                    "it to make it wider")
         form.addParam('niter', params.IntParam, default=13,
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
@@ -198,10 +199,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             params += " --ref %s" % refFile
 
         if self.numberOfThreads.get() == 1:
-            self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1)
+            self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         else:
             params += " --thr %d" % self.numberOfThreads.get()
-            self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1)
+            self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
@@ -235,10 +236,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         image.setData(np.zeros([dim, dim, dim]).astype(np.float32))
         image.write(mask)
         mask_params = "-i %s --mask circular -%d --create_mask %s" % (mask, r, mask)
-        self.runJob('xmipp_transform_mask', mask_params, numberOfMpi=1)
+        self.runJob('xmipp_transform_mask', mask_params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         params += ' --mask %s' % mask
 
-        self.runJob('xmipp_resolution_monogenic_signal', params, numberOfMpi=1)
+        self.runJob('xmipp_resolution_monogenic_signal', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         resMap = ImageHandler().read(self._getExtraPath("monoresResolutionMap.mrc")).getData()
         oriMask = ImageHandler().read(mask).getData()
@@ -302,7 +303,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             args = "-i %s -o %s --save_metadata_stack --keep_input_columns --sampling_rate %f --correct_envelope" \
                    % (particlesMd, corrected_stk, sr)
             program = 'xmipp_ctf_correct_wiener2d'
-            self.runJob(program, args, numberOfMpi=self.numberOfThreads.get())
+            self.runJob(program, args, numberOfMpi=self.numberOfThreads.get(), env=xmipp3.Plugin.getEnviron())
 
         # Mask preprocessing (if provided)
         # if self.mask.get():
@@ -318,7 +319,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if self.mode.get() != 0:
             halvesMd = self._getTmpPath("corrected_particles_half_")
             self.runJob("xmipp_metadata_split",
-                        "-i %s --oroot %s" % (particlesMd, halvesMd))
+                        "-i %s --oroot %s" % (particlesMd, halvesMd), env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         imgSet = self.inputParticles.get()
@@ -369,7 +370,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             #     params += " --mask %s" % zernikeMask
 
         if mask:
-            params += ' --recmask %s' % mask
+            params += ' --maskf %s' % mask
 
         return params
 
@@ -380,7 +381,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         half_2 = max(half_2, key=os.path.getctime)
 
         params = "--i1 %s --i2 %s --oroot %s" % (half_1, half_2, self._getExtraPath("volume"))
-        self.runJob('xmipp_volume_halves_restoration', params, numberOfMpi=1)
+        self.runJob('xmipp_volume_halves_restoration', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         ih = ImageHandler()
         ih.convert(self._getExtraPath("volume_restored1.vol"), self._getExtraPath("final_reconstruction.mrc"))

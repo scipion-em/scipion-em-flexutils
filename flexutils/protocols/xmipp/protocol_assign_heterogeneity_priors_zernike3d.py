@@ -42,9 +42,11 @@ from pwem.constants import ALIGN_PROJ
 from xmipp3.convert import (writeSetOfParticles, createItemMatrix,
                             setXmippAttributes)
 from xmipp3.base import writeInfoField, readInfoField
+import xmipp3
 
 import flexutils.constants as const
 import flexutils
+
 
 class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
     """ Assignation of heterogeneity priors based on the Zernike3D basis. """
@@ -82,9 +84,11 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         # form.addParam('maxAngular', params.FloatParam, default=5,
         #               label='Maximum angular change (degrees)', expertLevel=params.LEVEL_ADVANCED,
         #               help='Maximum angular change allowed (in degrees)')
-        form.addParam('maxResolution', params.FloatParam, default=4.0,
+        form.addParam('maxResolution', params.FloatParam,
                       label='Maximum resolution (A)', expertLevel=params.LEVEL_ADVANCED,
-                      help='Maximum resolution (A)')
+                      allowsNull=True,
+                      help='Filter the particles to this sampling rate. By default, no filter is '
+                           'applied')
         # form.addParam('regularization', params.FloatParam, default=0.005, label='Regularization',
         #               expertLevel=params.LEVEL_ADVANCED,
         #               help='Penalization to deformations (higher values penalize more the deformation).')
@@ -139,7 +143,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
                         (imgsFn,
                          self._getExtraPath('scaled_particles.stk'),
                          self._getExtraPath('scaled_particles.xmd'),
-                         self.newXdim), numberOfMpi=1)
+                         self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         ih = ImageHandler()
@@ -148,13 +152,15 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         # Xdim = self.inputParticles.get().getFirstItem().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
-                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1)
+                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1,
+                        env=xmipp3.Plugin.getEnviron())
         inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolumeMask.get()
         if inputMask:
             ih.convert(inputMask, fnVolMask)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1)
+                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
 
     def alignmentStep(self):
         inputPriors = self.inputPriors.get()
@@ -166,6 +172,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         fnOutDir = self._getFileName('fnOutDir')
         fnPriors = self._getFileName('fnPriors')
         Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
+        maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts
 
         Xdim = inputParticles.getXDim()
         # self.Ts = inputParticles.getSamplingRate()
@@ -211,7 +218,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
                  ' --max_resolution %f --odir %s --resume --regularization 0.0 --mask %s' \
                  ' --step 2 --blobr 2 --image_mode 1 --priors %s' %\
                  (imgsFn, fnVol, fnOut, L1, L2,
-                  Ts, self.maxResolution, fnOutDir, fnVolMask, fnPriors)
+                  Ts, maxResolution, fnOutDir, fnVolMask, fnPriors)
         if not self.ignoreCTF.get():
             params += ' --useCTF'
         if self.inputParticles.get().isPhaseFlipped():
@@ -223,7 +230,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         #     self.runJob(program, params)
         # else:
         program = 'xmipp_forward_zernike_images_priors'
-        self.runJob(program, params, numberOfMpi=self.numberOfMpi.get())
+        self.runJob(program, params, numberOfMpi=self.numberOfMpi.get(), env=xmipp3.Plugin.getEnviron())
 
 
     def createOutputStep(self):

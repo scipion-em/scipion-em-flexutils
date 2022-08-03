@@ -42,6 +42,7 @@ import flexutils.constants as const
 import flexutils
 
 from xmipp3.convert import geometryFromMatrix
+import xmipp3
 
 
 class ProtFlexSelectViews(ProtAnalysis3D):
@@ -165,7 +166,8 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --dim %d " % (inputFile,
                                                    refFile,
-                                                   newXDim), numberOfMpi=1)
+                                                   newXDim),
+                        numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         else:
             ih.convert(inputFile, refFile)
 
@@ -190,7 +192,8 @@ class ProtFlexSelectViews(ProtAnalysis3D):
                 self.runJob("xmipp_image_resize",
                             "-i %s -o %s --dim %d " % (inputFile,
                                                        mapFile,
-                                                       newXDim), numberOfMpi=1)
+                                                       newXDim),
+                            numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             else:
                 ih = ImageHandler()
                 ih.convert(inputFile, mapFile)
@@ -198,7 +201,8 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             # Compute corr image
             self.runJob("xmipp_compare_views",
                         "-v1 %s -v2 %s -o %s --degstep %f --thr %d "
-                        % (refFile, mapFile, corrImageFile, self.newAngSampling, self.numberOfThreads.get()))
+                        % (refFile, mapFile, corrImageFile, self.newAngSampling, self.numberOfThreads.get()),
+                        env=xmipp3.Plugin.getEnviron())
 
             # Combine all corr images
             corr_image = ih.read(corrImageFile).getData()
