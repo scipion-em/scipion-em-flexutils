@@ -197,12 +197,14 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         writeInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE, newTs)
         writeInfoField(self._getExtraPath(), "size", md.MDL_XSIZE, self.newXdim)
         if self.newXdim != Xdim:
-            self.runJob("xmipp_image_resize",
-                        "-i %s -o %s --save_metadata_stack %s --fourier %d" %
-                        (imgsFn,
-                         self._getExtraPath('scaled_particles.stk'),
-                         self._getExtraPath('scaled_particles.xmd'),
-                         self.newXdim), numberOfMpi=self.numberOfMpi.get(),
+            params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
+                     (imgsFn,
+                     self._getExtraPath('scaled_particles.stk'),
+                     self._getExtraPath('scaled_particles.xmd'),
+                     self.newXdim)
+            if self.numberOfMpi.get() > 1:
+                params += " --mpi_job_size 1"
+            self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
                         env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
