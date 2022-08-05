@@ -258,7 +258,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             if self.newXdim != Xdim:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
                 deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
-                correctionFactor = inputVolume.getDim()[0] / self.newXdim
+                correctionFactor = Xdim / self.newXdim
                 coeffs = [correctionFactor * coeff for coeff in coeffs]
                 newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
                 newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
