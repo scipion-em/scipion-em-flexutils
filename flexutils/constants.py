@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
@@ -25,9 +24,16 @@
 # *
 # **************************************************************************
 
-from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
 
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+import os
+
+import flexutils
+
+
+# Conda environment requirements
+CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
+
+# Location inside plugin
+VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
+XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
+

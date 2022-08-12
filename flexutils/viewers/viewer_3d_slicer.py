@@ -108,8 +108,8 @@ class VolumeSlicer(HasTraits):
     z_clnm = Array()
     l1 = Int()
     l2 = Int()
-    d = Float()
     zernike_file = String('z_clnm_vw.txt')
+    d = Float()
 
     # Volume coefficients
     n_vol = Int()
@@ -560,9 +560,11 @@ class VolumeSlicer(HasTraits):
             line3d.mlab_source.reset(x=x, y=y, z=z)
 
         # Update real time conformation
-        pos = np.asarray([position[2], position[1], position[0]]).reshape(1, -1)
+        pos = np.asarray([position[0], position[1], position[2]]).reshape(1, -1)
         _, ind = self.kdtree_data.query(pos, k=1)
-        self.writeZernikeFile((self.map.shape[0] / self.d) * self.z_clnm[ind[0], :])
+        # mean_z_clnm = np.mean(self.z_clnm[ind[0], :], axis=0)
+        mean_z_clnm = self.z_clnm[ind[0], :]
+        self.writeZernikeFile((self.map.shape[0] / self.d) * mean_z_clnm)
         pathFile = os.path.join(self.path, self.zernike_file)
         deformedFile = os.path.join(self.path, self.deformed_file)
         params = '-i %s --mask %s --step 1 --blobr 2 -o %s --clnm %s' % \

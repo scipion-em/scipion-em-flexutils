@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:  David Herreros Calero (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,9 +24,34 @@
 # *
 # **************************************************************************
 
-from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
 
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+import numpy as np
+from scipy.ndimage import binary_dilation, binary_fill_holes
+from skimage.morphology import ball
+
+from pwem.emlib.image import ImageHandler
+
+
+def floodFillMask(infile, outfile):
+    data = ImageHandler().read(infile).getData()
+    ball_kernel = ball(2)
+    for _ in range(10):
+        data = binary_dilation(data, ball_kernel)
+    data = binary_fill_holes(data, ball_kernel)
+    filled_vol = ImageHandler().createImage()
+    filled_vol.setData(data.astype(np.float32))
+    filled_vol.write(outfile)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Input parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', type=str, required=True)
+    parser.add_argument('--output', type=str, required=True)
+
+    args = parser.parse_args()
+
+    # Initialize volume slicer
+    floodFillMask(args.input, args.output)

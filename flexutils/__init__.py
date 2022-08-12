@@ -25,7 +25,14 @@
 # *
 # **************************************************************************
 
+
+import os
+
 import pyworkflow.plugin as pwplugin
+
+import flexutils
+from flexutils.constants import CONDA_REQ
+
 
 __version__ = "3.0.1"
 _logo = "icon.png"
@@ -33,4 +40,40 @@ _references = []
 
 
 class Plugin(pwplugin.Plugin):
-    pass
+
+    @classmethod
+    def getEnvActivation(cls):
+        return "conda activate flexutils"
+
+    @classmethod
+    def getProgram(cls, program, python=True):
+        """ Return the program binary that will be used. """
+        cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+        if python:
+            cmd += 'python '
+        return cmd + '%(program)s ' % locals()
+
+    @classmethod
+    def getCommand(cls, program, args, python=True):
+        return cls.getProgram(program, python) + args
+
+    @classmethod
+    def defineBinaries(cls, env):
+        def getCondaInstallation():
+            installationCmd = cls.getCondaActivationCmd()
+            if 'CONDA_DEFAULT_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
+            elif 'VIRTUAL_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
+            installationCmd += "conda activate flexutils && pip install -r " + CONDA_REQ + " && "
+            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+            return installationCmd
+
+        commands = []
+        installationEnv = getCondaInstallation()
+        commands.append((installationEnv, []))
+
+        env.addPackage('flexutils', version=__version__,
+                       commands=commands,
+                       tar="void.tgz",
+                       default=True)

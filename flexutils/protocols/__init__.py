@@ -29,3 +29,6 @@ from .protocol_select_views import ProtFlexSelectViews
 from .protocol_annotate_space import ProtFlexAnnotateSpace
 from .protocol_cluster_space import ProtFlexClusterSpace
 from .protocol_auto_reference import ProtFlexAutoReference
+
+# Zernike3D Xmipp protocols (offered here due to strong package dependency)
+from .xmipp import *

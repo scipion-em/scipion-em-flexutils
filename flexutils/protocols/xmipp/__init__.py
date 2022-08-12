@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,9 +24,11 @@
 # *
 # **************************************************************************
 
-from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
-
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+from .protocol_reconstruct_zart import XmippProtReconstructZART
+from .protocol_match_and_deform_structure_zernike3d import XmippMatchDeformSructZernike3D
+from .protocol_match_and_deform_map_zernike3d import XmippMatchDeformMapZernike3D
+from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
+from .protocol_assign_heterogeneity_priors_zernike3d import XmippProtHeterogeneityPriorsZernike3D
+from .protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
+from .protocol_focus_zernike3d import XmippProtFocusZernike3D
+from .protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D

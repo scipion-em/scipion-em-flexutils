@@ -26,6 +26,9 @@
 # **************************************************************************
 
 
+import numpy as np
+
+
 def getOutputSuffix(protocol, cls):
     """ Get the name to be used for a new output.
     For example: output3DCoordinates7.
@@ -42,3 +45,23 @@ def getOutputSuffix(protocol, cls):
         maxCounter = max(counter, maxCounter)
 
     return str(maxCounter + 1) if maxCounter > 0 else ''  # empty if not output
+
+def readZernikeFile(filename):
+    with open(filename, 'r') as fid:
+        lines = fid.readlines()
+    basis_params = np.fromstring(lines[0].strip('\n'), sep=' ')
+
+    z_clnm = []
+    for line in lines[1:]:
+        z_clnm.append(np.fromstring(line.strip('\n'), sep=' '))
+    z_clnm = np.asarray(z_clnm)
+
+    return basis_params, z_clnm
+
+def computeNormRows(array):
+    norm = []
+    size = int(array.shape[1] / 3)
+    for vec in array:
+        c_3d = np.vstack([vec[:size], vec[size:2 * size], vec[2 * size:]])
+        norm.append(np.linalg.norm(np.linalg.norm(c_3d, axis=1)))
+    return np.vstack(norm).flatten()

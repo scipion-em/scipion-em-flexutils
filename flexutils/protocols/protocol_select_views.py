@@ -24,9 +24,8 @@
 # *
 # **************************************************************************
 
+
 import numpy as np
-from shapely.geometry import Point
-from shapely.geometry.polygon import Polygon
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
@@ -39,8 +38,12 @@ from pwem.objects import SetOfVolumes, Volume, SetOfParticles
 
 from flexutils.viewers.viewer_ij import launchIJForSelection
 from flexutils.utils import getOutputSuffix
+import flexutils.constants as const
+import flexutils
 
 from xmipp3.convert import geometryFromMatrix
+import xmipp3
+
 
 class ProtFlexSelectViews(ProtAnalysis3D):
     """ Compare different (rot,tilt) views of different maps and interactively select regions to filter/score
@@ -86,42 +89,53 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         mode = self.mode.get()
         angSampling = self.angSampling.get()
         outFile = self._getExtraPath("combined_corrImage.txt")
-        rois_border = np.loadtxt(outFile, delimiter=',')
 
         # Move maps to tmp path and compute corr image
         self.newAngSampling = 360. / np.round(360. / angSampling)
 
         # Define polygons based on selected borders
-        polygons = []
-        for idx in rois_border[:, 3]:
-            roi_border = self.newAngSampling * np.squeeze(rois_border[np.where(rois_border[:, 3] == idx), :2])
-            polygons.append(Polygon(roi_border))
+        polygons_file = self._getExtraPath("polygons.dat")
+        args = "--input %s --angs %f --output %s" % (outFile, self.newAngSampling, polygons_file)
+        program = os.path.join(const.XMIPP_SCRIPTS, "polygon_from_vertexes.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
 
         # Create output object
         suffix = getOutputSuffix(self, SetOfParticles)
         output_particles = self._createSetOfParticles(suffix)
         output_particles.copyInfo(particles)
 
-        # Loop particles and filter/score them according to polygon delimited areas
-        for particle in particles.iterItems():
-            in_area = False
+        # Loop particles and determine if the lie within the polygon delimited areas
+        points_file = self._getExtraPath("point.txt")
+        decision_file = self._getExtraPath("decision.txt")
+        angles_vec = []
+        for particle in particles.iterItems(iterate=False):
             _, angles = geometryFromMatrix(particle.getTransform().getMatrix(), True)
             rot = angles[0]
             tilt = angles[1]
             # Make sure angles are positive
             rot = rot if rot >= 0. else rot + 360.
             tilt = tilt if tilt >= 0. else tilt + 360.
-            point = Point(tilt, rot)
-            for polygon in polygons:
-                if polygon.contains(point):
-                    in_area = True
-                    break
+            angles_vec.append([tilt, rot])
+        np.savetxt(points_file, np.asarray(angles_vec))
+
+        args = "--input %s --polygons %s --output %s" % (points_file, polygons_file, decision_file)
+        program = os.path.join(const.XMIPP_SCRIPTS, "check_inside_roi.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
+
+        # Loop particles and filter/score them according to polygon delimited areas
+        in_area_vec = np.loadtxt(decision_file)
+        idx = 0
+        for particle in particles.iterItems(iterate=False):
+            in_area = in_area_vec[idx]
             aux_particle = particle.clone()
-            if in_area:
+            if in_area == 1:
                 output_particles.append(aux_particle)
-            elif not in_area and mode == 0:
+            elif in_area == 0 and mode == 0:
                 aux_particle.setEnabled(False)
                 output_particles.append(aux_particle)
+            idx += 1
 
         # Save new output
         name = self.OUTPUT_PREFIX + suffix
@@ -152,14 +166,16 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --dim %d " % (inputFile,
                                                    refFile,
-                                                   newXDim), numberOfMpi=1)
+                                                   newXDim),
+                        numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         else:
             ih.convert(inputFile, refFile)
 
         # Move maps to tmp path and compute corr image
         self.newAngSampling = 360. / np.round(360. / angSampling)
-        size = int(360. / self.newAngSampling)
-        combined_corr_image = np.ones([size, size])
+        size_rot = int(360. / self.newAngSampling)
+        size_tlt = int(180. / self.newAngSampling)
+        combined_corr_image = np.ones([size_rot + 1, size_tlt + 1])
 
         if isinstance(compareMaps, SetOfVolumes):
             iterator = compareMaps.iterItems()
@@ -176,7 +192,8 @@ class ProtFlexSelectViews(ProtAnalysis3D):
                 self.runJob("xmipp_image_resize",
                             "-i %s -o %s --dim %d " % (inputFile,
                                                        mapFile,
-                                                       newXDim), numberOfMpi=1)
+                                                       newXDim),
+                            numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             else:
                 ih = ImageHandler()
                 ih.convert(inputFile, mapFile)
@@ -184,7 +201,8 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             # Compute corr image
             self.runJob("xmipp_compare_views",
                         "-v1 %s -v2 %s -o %s --degstep %f --thr %d "
-                        % (refFile, mapFile, corrImageFile, self.newAngSampling, self.numberOfThreads.get()))
+                        % (refFile, mapFile, corrImageFile, self.newAngSampling, self.numberOfThreads.get()),
+                        env=xmipp3.Plugin.getEnviron())
 
             # Combine all corr images
             corr_image = ih.read(corrImageFile).getData()

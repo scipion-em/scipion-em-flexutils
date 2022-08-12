@@ -35,6 +35,7 @@ import pyworkflow.utils as pwutils
 from pwem.protocols import ProtAnalysis3D
 from pwem.emlib.image import ImageHandler
 
+import xmipp3
 
 class ProtFlexAutoReference(ProtAnalysis3D):
     """ Automatic selection of best reference volume for Zernike3D analysis """
@@ -112,7 +113,8 @@ class ProtFlexAutoReference(ProtAnalysis3D):
                 self.runJob("xmipp_image_resize",
                             "-i %s -o %s --dim %d " % (inputFile,
                                                        mapFile,
-                                                       newXDim), numberOfMpi=1)
+                                                       newXDim),
+                            numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             else:
                 ih.convert(inputFile, mapFile)
 
@@ -126,7 +128,8 @@ class ProtFlexAutoReference(ProtAnalysis3D):
             outFile = self._getExtraPath("Matrix_entry_image_%d_%d.xmp" % (idx, idx + 1))
             self.runJob("xmipp_compare_density",
                         "-v1 %s -v2 %s -o %s --degstep %f --thr %d "
-                        % (file_1, file_2, outFile, self.newAngSampling, self.numberOfThreads.get()))
+                        % (file_1, file_2, outFile, self.newAngSampling, self.numberOfThreads.get()),
+                        env=xmipp3.Plugin.getEnviron())
 
             # Fill matrix entry
             density_cmp_image = ih.read(outFile).getData()

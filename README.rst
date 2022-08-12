@@ -12,7 +12,7 @@ This plugin is currently under initial development and it is not ready for produ
 
 In the meantime, it can be used for development, base on Scipion v3.x with plugins. 
  
-This tomography plugin can be enabled by cloning this repository and execute the command: 
+This plugin can be enabled by cloning this repository and execute the command:
 
 .. code-block::
 
@@ -38,3 +38,9 @@ Thee following libraries are also needed by PyQt.
     sudo apt install libxcb-image0
 
 The viewers associated to this plugin require OpenGL 3.2 or later and Mesa 11.2 or later.
+
+The installation of the Plugin also requires Conda to be installed in the system. In addition, Scipion needs to know where Conda has been installed. This can be done by adding to your scipion.conf file the following variable:
+
+.. code-block::
+
+    CONDA_ACTIVATION_CMD = eval "$(/path/to/your/conda/installation/condabin/conda shell.bash hook)"
