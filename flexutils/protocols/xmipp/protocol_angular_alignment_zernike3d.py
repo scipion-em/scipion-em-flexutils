@@ -203,7 +203,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                      self._getExtraPath('scaled_particles.xmd'),
                      self.newXdim)
             if self.numberOfMpi.get() > 1:
-                params += " --mpi_job_size 1"
+                params += " --mpi_job_size %d" % int(inputParticles.getSize() / self.numberOfMpi.get())
             self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
                         env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
@@ -241,7 +241,9 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
 
 
     def createOutputStep(self):
-        Xdim = self.inputParticles.get().getXDim()
+        inputParticles = self.inputParticles.get()
+        Xdim = inputParticles.getXDim()
+        inputParticles = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
         # self.Ts = inputParticles.getSamplingRate()
         # newTs = self.targetResolution.get() * 1.0 / 3.0
         # self.newTs = max(self.Ts, newTs)
@@ -256,7 +258,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
             newRow = row
             if self.newXdim != Xdim:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
-                correctionFactor = self.inputVolume.get().getDim()[0] / self.newXdim
+                correctionFactor = inputParticles.getDim()[0] / self.newXdim
                 deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
                 coeffs = [correctionFactor * coeff for coeff in coeffs]
                 newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
