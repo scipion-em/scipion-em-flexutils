@@ -243,7 +243,6 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
-        inputParticles = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
         # self.Ts = inputParticles.getSamplingRate()
         # newTs = self.targetResolution.get() * 1.0 / 3.0
         # self.newTs = max(self.Ts, newTs)
@@ -258,7 +257,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
             newRow = row
             if self.newXdim != Xdim:
                 coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
-                correctionFactor = inputParticles.getDim()[0] / self.newXdim
+                correctionFactor = Xdim / self.newXdim
                 deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
                 coeffs = [correctionFactor * coeff for coeff in coeffs]
                 newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
