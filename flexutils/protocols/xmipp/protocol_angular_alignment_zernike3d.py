@@ -282,7 +282,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                           itemDataIterator=md.iterRows(fnOut, sortByLabel=md.MDL_ITEM_ID))
         partSet.L1 = Integer(self.l1.get())
         partSet.L2 = Integer(self.l2.get())
-        partSet.Rmax = Float(self.inputVolume.get().getDim()[0] / 2)
+        partSet.Rmax = Float(Xdim / 2)
         partSet.refMask = String(self.inputVolumeMask.get().getFileName())
         partSet.refMap = String(self.inputVolume.get().getFileName())
 
