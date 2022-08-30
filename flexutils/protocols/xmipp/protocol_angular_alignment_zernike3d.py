@@ -274,6 +274,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
+        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get()
+        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -283,8 +285,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         partSet.L1 = Integer(self.l1.get())
         partSet.L2 = Integer(self.l2.get())
         partSet.Rmax = Float(Xdim / 2)
-        partSet.refMask = String(self.inputVolumeMask.get().getFileName())
-        partSet.refMap = String(self.inputVolume.get().getFileName())
+        partSet.refMask = String(inputMask)
+        partSet.refMap = String(inputVolume)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
