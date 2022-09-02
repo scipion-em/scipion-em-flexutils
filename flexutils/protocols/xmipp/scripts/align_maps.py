@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros (dherreros@cnb.csic.es)
+# * Authors:  David Herreros Calero (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,12 +24,32 @@
 # *
 # **************************************************************************
 
-from .protocol_reconstruct_zart import XmippProtReconstructZART
-from .protocol_match_and_deform_structure_zernike3d import XmippMatchDeformSructZernike3D
-from .protocol_match_and_deform_map_zernike3d import XmippMatchDeformMapZernike3D
-from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
-from .protocol_assign_heterogeneity_priors_zernike3d import XmippProtHeterogeneityPriorsZernike3D
-from .protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
-from .protocol_focus_zernike3d import XmippProtFocusZernike3D
-from .protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D
-from .protocol_compute_priors_zernike3d import XmippProtComputeHeterogeneityPriorsZernike3D
+
+import flexutils.protocols.xmipp.utils.utils as utl
+
+
+def alignMaps(file_input, file_target, file_output, global_search=None):
+    # Align maps in ChimeraX using fitmap
+    _ = utl.alignMapsChimeraX(file_input, file_target, global_search=global_search,
+                              output_map=file_output)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Input parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--i', type=str, required=True)
+    parser.add_argument('--r', type=str, required=True)
+    parser.add_argument('--o', type=str, required=True)
+    parser.add_argument('--gs', type=int)
+
+    args = parser.parse_args()
+
+    if args.gs is None:
+        gs = None
+    else:
+        gs = args.gs
+
+    # Initialize volume slicer
+    alignMaps(args.i, args.r, args.o, gs)
