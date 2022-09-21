@@ -26,10 +26,11 @@
 
 
 import os
+import glob
 
 import numpy as np
 from pwem.protocols import ProtAnalysis3D
-from pwem.objects import AtomStruct
+from pwem.objects import AtomStruct, SetOfAtomStructs, Volume
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
@@ -47,17 +48,17 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('input', params.PointerParam, label="Input structure",
-                      pointerClass='AtomStruct',
-                      help="Structure to be deformed")
+        form.addParam('inputs', params.MultiPointerParam, label="Input structures",
+                      pointerClass='AtomStruct, SetOfAtomStructs',
+                      help="Target structures")
         form.addParam('reference', params.PointerParam, label="Reference structure",
                       pointerClass='AtomStruct',
-                      help="Target structure")
-        form.addParam('l1', params.IntParam, default=7,
+                      help="Structure to be deformed")
+        form.addParam('l1', params.IntParam, default=3,
                       label='Zernike Degree',
                       expertLevel=params.LEVEL_ADVANCED,
                       help='Degree Zernike Polynomials of the deformation=1,2,3,...')
-        form.addParam('l2', params.IntParam, default=7,
+        form.addParam('l2', params.IntParam, default=2,
                       label='Harmonical Degree',
                       expertLevel=params.LEVEL_ADVANCED,
                       help='Degree Spherical Harmonics of the deformation=1,2,3,...')
@@ -72,6 +73,10 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
                       allowsNull=True,
                       expertLevel=params.LEVEL_ADVANCED,
                       help="Mask to associate to reference volume")
+        form.addParam('moveBoxOrigin', params.BooleanParam, default=False, condition="volume",
+                      label="Move structure to box origin?",
+                      help="If PDB has been aligned inside Scipion, set to False. Otherwise, this option will "
+                           "correctly place the PDB in the origin of the volume.")
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
@@ -80,53 +85,99 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
 
     # --------------------------- STEPS functions ------------------------------
     def deformStep(self):
-        input = self.input.get().getFileName()
         reference = self.reference.get().getFileName()
-        output = self._getExtraPath("structure_deformed.pdb")
         l1 = self.l1.get()
         l2 = self.l2.get()
-        args = "--i %s --r %s --o %s --l1 %d --l2 %d " \
-               % (input, reference, output, l1, l2)
-        program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_structure.py")
-        program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args)
+        if self.volume.get():
+            volume = self.volume.get()
+            rmax = int(0.5 * volume.getSamplingRate() * volume.getXDim())
+        else:
+            rmax = None
+
+        input_files = []
+        for pointer in self.inputs:
+            obj = pointer.get()
+            if isinstance(obj, AtomStruct):
+                input_files.append(obj.getFileName())
+            elif isinstance(obj, SetOfAtomStructs):
+                for struct in obj:
+                    input_files.append(struct.getFileName())
+
+        for idp, input in enumerate(input_files):
+            output = self._getExtraPath("structure_deformed_%d.pdb" % (idp + 1))
+            args = "--i %s --r %s --o %s --l1 %d --l2 %d" \
+                   % (reference, input, output, l1, l2)
+            if rmax:
+                args += " --rmax %d" % rmax
+            if self.moveBoxOrigin.get() and rmax:
+                args += " --d %d" % rmax
+            elif not self.moveBoxOrigin.get() and rmax:
+                args += " --d 0"
+            program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_structure.py")
+            program = flexutils.Plugin.getProgram(program)
+            self.runJob(program, args)
+            pwutils.moveFile(self._getExtraPath("z_clnm.txt"),
+                             self._getExtraPath("z_clnm_%d.txt" % (idp + 1)))
+            pwutils.moveFile(self._getExtraPath("rmsd_def.txt"),
+                             self._getExtraPath("rmsd_def_%d.txt" % (idp + 1)))
 
     def createOutputStep(self):
-        z_clnm_file = self._getExtraPath("z_clnm.txt")
-        basis_params, z_clnm = readZernikeFile(z_clnm_file)
-        rmsd_def = np.loadtxt(self._getExtraPath("rmsd_def.txt"))
+        if self.volume.get():
+            outputs = self._createSetOfVolumes()
+            outputs.setSamplingRate(self.volume.get().getSamplingRate())
+            Rmax = Float(int(0.5 * self.volume.get().getXDim()))
+            outputs.refMap = String(self.volume.get().getFileName())
+            outputs.refMask = String(self.mask.get().getFileName())
+        else:
+            outputs = SetOfAtomStructs().create(self._getPath())
+            basis_params, _ = readZernikeFile(self._getExtraPath("z_clnm_1.txt"))
+            Rmax = basis_params[2]
 
         L1 = Integer(self.l1.get())
         L2 = Integer(self.l2.get())
-        Rmax = Float(basis_params[2])
-        deformation = Float(rmsd_def[2])
 
-        print("Deformation = %f" % rmsd_def[2])
+        outputs.L1 = L1
+        outputs.L2 = L2
+        outputs.Rmax = Rmax
+
+        input_files = len(glob.glob(self._getExtraPath("z_clnm_*.txt")))
+        for idp in range(input_files):
+            z_clnm_file = self._getExtraPath("z_clnm_%d.txt" % (idp + 1))
+            basis_params, z_clnm = readZernikeFile(z_clnm_file)
+            rmsd_def = np.loadtxt(self._getExtraPath("rmsd_def_%d.txt" % (idp + 1)))
+            deformation = Float(rmsd_def)
+
+            print("Deformation for structure %d = %f" % (idp + 1, rmsd_def))
+
+            if self.volume.get():
+                output = Volume()
+                output.setFileName(self.volume.get().getFileName())
+                output.setSamplingRate(self.volume.get().getSamplingRate())
+                z_clnm_vol = z_clnm[0] / output.getSamplingRate()
+                output.L1 = L1
+                output.L2 = L2
+                output.Rmax = Rmax
+                output._xmipp_sphDeformation = deformation
+                output._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vol]))
+                output.refMap = String(output.getFileName())
+                if self.mask.get():
+                    output.refMask = String(self.mask.get().getFileName())
+            else:
+                outFile = self._getExtraPath("structure_deformed.pdb")
+                output = AtomStruct(outFile)
+                output.L1 = L1
+                output.L2 = L2
+                output.Rmax = Rmax
+                output._xmipp_sphDeformation = deformation
+                output._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
+
+            outputs.append(output)
 
         if self.volume.get():
-            outVol = self.volume.get().clone()
-            z_clnm_vol = z_clnm[0] / outVol.getSamplingRate()
-            outVol.L1 = L1
-            outVol.L2 = L2
-            outVol.Rmax = Rmax
-            outVol._xmipp_sphDeformation = deformation
-            outVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm_vol]))
-            outVol.refMap = String(outVol.getFileName())
-            if self.mask.get():
-                outVol.refMask = String(self.mask.get().getFileName())
-            self._defineOutputs(deformedStructure=outVol)
-            self._defineSourceRelation(self.input, outVol)
-            self._defineSourceRelation(self.reference, outVol)
+            self._defineOutputs(zernikeVolumes=outputs)
         else:
-            outFile = self._getExtraPath("structure_deformed.pdb")
-            pdb = AtomStruct(outFile)
-            pdb.L1 = L1
-            pdb.L2 = L2
-            pdb.Rmax = Rmax
-            pdb._xmipp_sphDeformation = deformation
-            pdb._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm[0]]))
-            self._defineOutputs(deformedStructure=pdb)
-            self._defineSourceRelation(self.input, pdb)
-            self._defineSourceRelation(self.reference, pdb)
+            self._defineOutputs(zernikeStructures=outputs)
+        self._defineSourceRelation(self.inputs, outputs)
+        self._defineSourceRelation(self.reference, outputs)
 
     # --------------------------- UTILS functions ------------------------------
