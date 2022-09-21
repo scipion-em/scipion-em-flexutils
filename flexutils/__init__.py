@@ -54,7 +54,12 @@ class Plugin(pwplugin.Plugin):
     def getProgram(cls, program, python=True):
         """ Return the program binary that will be used. """
         scipion_packages = site.getsitepackages()[0]
+        flexutils_packages = scipion_packages.replace("scipion3/", "flexutils/")
         scipion_packages = glob.glob(os.path.join(scipion_packages, "scipion-em-*"))
+        flexutils_packages = glob.glob(os.path.join(flexutils_packages, "scipion-em-*"))
+        flexutils_packages = [package.replace("flexutils/", "scipion3/") for package in flexutils_packages]
+        set_dif = set(scipion_packages).symmetric_difference(set(flexutils_packages))
+        scipion_packages = list(set_dif)
         scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
 
