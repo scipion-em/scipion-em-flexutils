@@ -28,7 +28,10 @@
 
 import os
 
+import site
+
 import pyworkflow.plugin as pwplugin
+import pyworkflow.utils as pwutils
 
 import flexutils
 from flexutils.constants import CONDA_REQ
@@ -48,9 +51,15 @@ class Plugin(pwplugin.Plugin):
     @classmethod
     def getProgram(cls, program, python=True):
         """ Return the program binary that will be used. """
+        scipion_packages = site.getsitepackages()[0]
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+
         if python:
-            cmd += 'python '
+            with pwutils.weakImport("chimera"):
+                from chimera import Plugin as chimeraPlugin
+                cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
+            cmd += 'PYTHONPATH=%s python ' % scipion_packages
+
         return cmd + '%(program)s ' % locals()
 
     @classmethod

@@ -35,9 +35,11 @@ from sklearn.cluster import KMeans
 import pyvista as pv
 
 from traits.api import HasTraits, Instance, Array, Float, Int, Bool, String,\
-    on_trait_change
-from traits.trait_types import Button
-from traitsui.api import View, Item, HGroup, Group, HSplit, VGroup, RangeEditor, TextEditor
+    on_trait_change, Callable
+from traits.trait_types import Button, Enum
+from traitsui.api import View, Item, HGroup, Group, HSplit, VGroup, RangeEditor, TextEditor, EnumEditor
+
+from pyface.image_resource import ImageResource
 
 from tvtk.api import tvtk
 from tvtk.pyface.scene import Scene
@@ -51,7 +53,9 @@ from pwem.emlib.image import ImageHandler
 from pyworkflow.utils import getExt
 
 import xmipp3
+
 import flexutils
+from flexutils.viewers.viewer_morph_chimerax import FlexMorphChimeraX
 
 
 ################################################################################
@@ -105,23 +109,15 @@ class VolumeSlicer(HasTraits):
     path = String()
 
     # Zernike parameters
-    z_clnm = Array()
-    l1 = Int()
-    l2 = Int()
-    zernike_file = String('z_clnm_vw.txt')
-    d = Float()
-
-    # Volume coefficients
-    n_vol = Int()
+    z_space = Array()
+    vector_file = String('z_vw.txt')
 
     # For picking coefficients
     cursor_position = Array()
 
     # Map
     map = Array()
-    map_file = String()
-    deformed_map = Array()
-    deformed_file = String('deformed.mrc')
+    generated_map = Array()
 
     # Mask
     mask_file = String()
@@ -131,8 +127,8 @@ class VolumeSlicer(HasTraits):
 
     # Selections
     selection_name = String()
-    show_selections = Bool(True)
-    current_sel = String('reference')
+    # show_selections = Bool(True)
+    current_sel = String('origin')
     ipw_label = Instance(PipelineBase)
     save_file = String('saved_selections.txt')
 
@@ -143,8 +139,18 @@ class VolumeSlicer(HasTraits):
     rename_selection = Button("Rename selection")
     compute_kmeans = Button("Compute KMeans")
 
+    # Generate map function
+    mode = String()
+    generate_map = Callable()
+
+    # ChimeraX morphing
+    morphing_choice = Enum('Salesman', 'Random walk')
+    morph_chimerax = Button(label="",
+                            image=ImageResource(os.path.join(os.path.dirname(flexutils.__file__), "chimerax_logo.png")))
+
     # ---------------------------------------------------------------------------
     def __init__(self, **traits):
+        self.class_inputs = traits
         super(VolumeSlicer, self).__init__(**traits)
         # Force the creation of the image_plane_widgets:
         self.interpolateGrid()
@@ -162,19 +168,27 @@ class VolumeSlicer(HasTraits):
 
         # Create KDTree
         self.kdtree_data = KDTree(self.data)
-        self.kdtree_z_clnm = KDTree(self.z_clnm)
+        self.kdtree_z_space = KDTree(self.z_space)
+
+        # Generate map
+        self.mode
+        if self.mode == "Zernike3D":
+            from flexutils.protocols.xmipp.utils.utils import applyDeformationField
+            self.generate_map = applyDeformationField
 
         # Selections
+        self.selections = dict()
         pathFile = os.path.join(self.path, "selections_dict.pkl")
         if os.path.isfile(pathFile):
             self.readSelectionsDict()
-        else:
-            self.selections = dict()
-            for idx in range(self.n_vol):
-                if (idx+1) == self.n_vol:
+        elif not os.path.isfile(pathFile) and self.mode == "Zernike3D":
+            for idx in range(int(self.class_inputs["n_vol"])):
+                if (idx + 1) == int(self.class_inputs["n_vol"]):
                     self.selections['reference'] = self.data.shape[0] - (idx + 1)
                 else:
-                    self.selections['class_%d' % (idx+1)] = self.data.shape[0] - (idx + 1)
+                    self.selections['class_%d' % (idx + 1)] = self.data.shape[0] - (idx + 1)
+        else:
+            self.selections['origin'] = np.asarray([0, 0, 0])
 
         self.ipw_sel
 
@@ -228,7 +242,7 @@ class VolumeSlicer(HasTraits):
         return self.make_line_3d('z')
 
     def _ipw_pc_default(self):
-        return self.display_zernike_space_cloud()
+        return self.display_space_cloud()
 
     def _ipw_sel_default(self):
         return self.display_selections()
@@ -237,8 +251,8 @@ class VolumeSlicer(HasTraits):
         return self.display_map()
 
     def _map_default(self):
-        map = self.readMap(self.map_file)
-        return np.zeros(map.shape)
+        # map = self.readMap(self.map_file)
+        return np.zeros([64, 64, 64])
 
     # ---------------------------------------------------------------------------
     # Scene activation callbaks
@@ -272,7 +286,7 @@ class VolumeSlicer(HasTraits):
         self.scene_c.scene.background = (0, 0, 0)
 
     @on_trait_change('scene3d.activated')
-    def display_zernike_space_cloud(self):
+    def display_space_cloud(self):
         scatter = mlab.pipeline.scalar_scatter(self.data[:, 2], self.data[:, 1], self.data[:, 0], self.interp_val,
                                                figure=self.scene3d.mayavi_scene)
         scatter = mlab.pipeline.glyph(scatter,
@@ -292,7 +306,10 @@ class VolumeSlicer(HasTraits):
 
     @on_trait_change('scene3d.activated')
     def populateLabels(self):
-        self.ipw_label = self.addLabel('reference')
+        if self.mode == "Zernike3D":
+            self.ipw_label = self.addLabel('reference')
+        else:
+            self.ipw_label = self.addLabel('origin')
 
     def addLabel(self, label):
         data = self.data[self.selections[label]]
@@ -407,15 +424,14 @@ class VolumeSlicer(HasTraits):
                               self.cursor_position[1],
                               self.cursor_position[0]]).reshape(1, -1)
             _, ind = self.kdtree_data.query(pos, k=1)
-            self.selections.append(self.z_clnm[ind, :])
+            self.selections.append(self.z_space[ind, :])
 
     def _save_selections_fired(self):
         pathFile = os.path.join(self.path, self.save_file)
         with open(pathFile, 'w') as fid:
-            fid.write(' '.join(map(str, [self.l1, self.l2, 0.5 * self.d])) + "\n")
             for idc in list(self.selections.values()):
-                coeff = self.z_clnm[idc]
-                fid.write(' '.join(map(str, coeff.reshape(-1))) + "\n")
+                vector = self.z_space[idc]
+                fid.write(' '.join(map(str, vector.reshape(-1))) + "\n")
         self.saveSelectionsDict()
 
     def _add_selection_fired(self):
@@ -436,9 +452,9 @@ class VolumeSlicer(HasTraits):
                 del self.selections[key]
         # Compute KMeans and save automatic selection
         if int(self.n_clusters) > 0:
-            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.z_clnm)
+            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.z_space)
             centers = clusters.cluster_centers_
-            _, inds = self.kdtree_z_clnm.query(centers, k=1)
+            _, inds = self.kdtree_z_space.query(centers, k=1)
             for idx, ind in enumerate(inds):
                 self.selections["kmean_%d" % (idx + 1)] = ind[0]
         data = self.data[list(self.selections.values())]
@@ -460,6 +476,21 @@ class VolumeSlicer(HasTraits):
             self.ipw_label.actor.property.color = (1, 1, 1)
             data = self.data[list(self.selections.values())]
             self.ipw_sel.mlab_source.reset(x=data[:, 2], y=data[:, 1], z=data[:, 0])
+
+    def _morph_chimerax_fired(self):
+        # Morph maps in chimerax based on different ordering methods
+        idm = np.asarray(list(self.selections.values()))
+        sel_names = np.asarray(list(self.selections.keys()))
+        if len(self.selections) > 1:
+            if self.morphing_choice == "Salesman":
+                print("Salesman chosen")
+                morph_chimerax = FlexMorphChimeraX(self.z_space[idm], sel_names, self.mode, self.path, **self.class_inputs)
+                morph_chimerax.showSalesMan()
+            elif self.morphing_choice == "Random walk":
+                print("Random walk chosen")
+                morph_chimerax = FlexMorphChimeraX(self.z_space[idm], sel_names, self.mode, self.path,
+                                                   **self.class_inputs)
+                morph_chimerax.showRandomWalk()
 
     def picker_callback(self, picker):
         """ Picker callback: this get called when on pick events.
@@ -510,7 +541,7 @@ class VolumeSlicer(HasTraits):
     # Read functions
     # ---------------------------------------------------------------------------
     def readMap(self, file):
-        if getExt(self.map_file) == ".mrc":
+        if getExt(file) == ".mrc":
             map = ImageHandler().read(file + ":mrc").getData()
         else:
             map = ImageHandler().read(file).getData()
@@ -524,11 +555,10 @@ class VolumeSlicer(HasTraits):
     # ---------------------------------------------------------------------------
     # Write functions
     # ---------------------------------------------------------------------------
-    def writeZernikeFile(self, coeff):
-        pathFile = os.path.join(self.path, self.zernike_file)
+    def writeVectorFile(self, vector):
+        pathFile = os.path.join(self.path, self.vector_file)
         with open(pathFile, 'w') as fid:
-            fid.write(' '.join(map(str, [self.l1, self.l2, 0.5 * self.map.shape[0]])) + "\n")
-            fid.write(' '.join(map(str, coeff.reshape(-1))) + "\n")
+            fid.write(' '.join(map(str, vector.reshape(-1))) + "\n")
 
     def saveSelectionsDict(self):
         pathFile = os.path.join(self.path, "selections_dict.pkl")
@@ -560,19 +590,18 @@ class VolumeSlicer(HasTraits):
             line3d.mlab_source.reset(x=x, y=y, z=z)
 
         # Update real time conformation
-        pos = np.asarray([position[0], position[1], position[2]]).reshape(1, -1)
-        _, ind = self.kdtree_data.query(pos, k=1)
-        # mean_z_clnm = np.mean(self.z_clnm[ind[0], :], axis=0)
-        mean_z_clnm = self.z_clnm[ind[0], :]
-        self.writeZernikeFile((self.map.shape[0] / self.d) * mean_z_clnm)
-        pathFile = os.path.join(self.path, self.zernike_file)
-        deformedFile = os.path.join(self.path, self.deformed_file)
-        params = '-i %s --mask %s --step 1 --blobr 2 -o %s --clnm %s' % \
-                 (self.map_file, self.mask_file, deformedFile, pathFile)
-        xmipp3.Plugin.runXmippProgram('xmipp_volume_apply_coefficient_zernike3d', params)
-        self.deformed_map = self.readMap(deformedFile)
+            pos = np.asarray([position[0], position[1], position[2]]).reshape(1, -1)
+            _, ind = self.kdtree_data.query(pos, k=1)
+
+            if self.generate_map is not None:
+                if self.mode == "Zernike3D":
+                    self.generate_map("reference.mrc", "mask.mrc", "deformed.mrc",
+                                      self.path, self.z_space[ind[0], :],
+                                      int(self.class_inputs["L1"]), int(self.class_inputs["L2"]), 32)
+                    self.generated_map = self.readMap(os.path.join(self.path, "deformed.mrc"))
+
         volume = getattr(self, 'ipw_map')
-        volume.mlab_source.reset(scalars=self.deformed_map)
+        volume.mlab_source.reset(scalars=self.generated_map)
         volume.contour.contours = [0.0001]
 
     # ---------------------------------------------------------------------------
@@ -621,6 +650,14 @@ class VolumeSlicer(HasTraits):
                         Item('rename_selection'),
                         show_labels=False, columns=3
                     ),
+                    Group(
+                        Item('morphing_choice',
+                             editor=EnumEditor(
+                                 values={"Salesman": "Salesman",
+                                         "Random walk": "Random walk"}
+                             )),
+                        Item('morph_chimerax', style='custom', show_label=False),
+                        columns=2)
                 ),
                 Group(
                     Item('scene_c',
@@ -641,27 +678,37 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--coords', type=str, required=True)
-    parser.add_argument('--z_clnm', type=str, required=True)
-    parser.add_argument('--deformation', type=str, required=True)
+    parser.add_argument('--data', type=str, required=True)
+    parser.add_argument('--z_space', type=str, required=True)
+    parser.add_argument('--interp_val', type=str, required=True)
     parser.add_argument('--path', type=str, required=True)
-    parser.add_argument('--map_file', type=str, required=True)
-    parser.add_argument('--mask_file', type=str, required=True)
-    parser.add_argument('--l1', type=int, required=True)
-    parser.add_argument('--l2', type=int, required=True)
-    parser.add_argument('--d', type=int, required=True)
-    parser.add_argument('--num_vol', type=int, required=True)
+    parser.add_argument('--mode', type=str, required=True)
+
+    def float_or_str(s):
+        try:
+            return float(s)
+        except ValueError:
+            return s
+
+    parsed, unknown = parser.parse_known_args()
+    for arg in unknown:
+        if arg.startswith(("-", "--")):
+            # you can pass any arguments to add_argument
+            parser.add_argument(arg.split('=')[0], type=float_or_str)
 
     args = parser.parse_args()
 
     # Read and generate data
-    coords = np.loadtxt(args.coords)
-    z_clnm = np.loadtxt(args.z_clnm)
-    deformation = np.loadtxt(args.deformation)
+    data = np.loadtxt(args.data)
+    z_space = np.loadtxt(args.z_space)
+    interp_val = np.loadtxt(args.interp_val)
+
+    # Input
+    input_dict = vars(args)
+    input_dict['data'] = data
+    input_dict['z_space'] = z_space
+    input_dict['interp_val'] = interp_val
 
     # Initialize volume slicer
-    m = VolumeSlicer(data=coords, interp_val=deformation, z_clnm=z_clnm, path=args.path,
-                     map_file=args.map_file, l1=args.l1,
-                     l2=args.l2, d=args.d, n_vol=args.num_vol,
-                     mask_file=args.mask_file)
+    m = VolumeSlicer(**input_dict)
     m.configure_traits()

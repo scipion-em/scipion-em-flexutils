@@ -42,6 +42,8 @@ import pyworkflow.utils as pwutils
 from pwem.emlib.image import ImageHandler
 from pwem.convert.transformations import superimposition_matrix
 from pwem.viewers import Chimera
+
+import xmipp3
 #####################################
 
 
@@ -663,6 +665,13 @@ def reassociateCoefficients(Z, Zpp, Ap, A=None):
     # If A is None, invert the coefficients
     A = A if A is not None else np.zeros(Ap.shape)
     return np.transpose(computeInverse(Zpp.T @ Zpp) @ Zpp.T @ Z @ (A.T - Ap.T))
+
+def applyDeformationField(map, mask, output, path, z_clnm, L1, L2, Rmax):
+    writeZernikeFile(os.path.join(path, "z_clnm.txt"), z_clnm, L1, L2, Rmax)
+    params = '-i %s --mask %s --step 1 --blobr 2 -o %s --clnm %s' % \
+             (os.path.join(path, map), os.path.join(path, mask),
+              os.path.join(path, output), os.path.join(path, "z_clnm.txt"))
+    xmipp3.Plugin.runXmippProgram('xmipp_volume_apply_coefficient_zernike3d', params)
 
 
 ############## General functions ##############

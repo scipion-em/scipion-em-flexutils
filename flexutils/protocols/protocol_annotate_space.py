@@ -35,6 +35,7 @@ from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, MultiPointerParam
 import pyworkflow.utils as pwutils
 
+from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
 from pwem.objects import SetOfClasses3D, Class3D, Volume, SetOfVolumes
 
@@ -50,24 +51,27 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
 
     _label = 'annotate space'
     _devStatus = BETA
-    OUTPUT_PREFIX = 'zernike3DClasses'
+    OUTPUT_PREFIX = 'flexible3DClasses'
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Particles to annotate",
                       pointerClass='SetOfParticles', important=True,
-                      help="Particles must have a set of Zernike3D coefficients associated")
+                      help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
         form.addParam('reference', PointerParam, label="Reference map",
-                      condition="particles and not hasattr(particles,'refMap')",
+                      condition="particles and not hasattr(particles,'refMap') "
+                                "and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
                       pointerClass='Volume', important=True,
                       help='Map used as reference during the Zernike3D execution')
         form.addParam('mask', PointerParam, label="Zernike3D mask",
-                      condition="particles and not hasattr(particles,'refMap')",
+                      condition="particles and not hasattr(particles,'refMask') "
+                                "and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
                       pointerClass='VolumeMask', important=True,
                       help="Mask determining where to compute the Zernike3D deformation field")
         form.addParam('volumes', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumes, Volume",
+                      condition="hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
                       help='Volumes with Zernike3D coefficients associated (computed using '
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
@@ -102,58 +106,68 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
 
     def _createOutput(self):
         particles = self.particles.get()
-        reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
-        mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
         partIds = list(particles.getIdSet())
         neighbors = self.neighbors.get()
         num_part = particles.getSize()
         sr = particles.getSamplingRate()
 
-        L1 = particles.L1
-        L2 = particles.L2
-        Rmax = particles.Rmax
-        reference_file = String(reference)
-        mask_file = String(mask)
-
         # Read selected coefficients
-        z_clnm_vw = []
+        z_space_vw = []
         with open(self._getExtraPath('saved_selections.txt')) as f:
             lines = f.readlines()
             for line in lines:
-                z_clnm_vw.append(np.fromstring(line, dtype=float, sep=' '))
-        z_clnm_vw = np.asarray(z_clnm_vw[1:])
+                z_space_vw.append(np.fromstring(line, dtype=float, sep=' '))
+        z_space_vw = np.asarray(z_space_vw[self.num_vol:])
 
-        # Read Zernike coefficients
-        z_clnm = np.loadtxt(self._getExtraPath("z_clnm.txt"))
+        # Read space
+        z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
 
         # Create KDTree
-        kdtree = KDTree(z_clnm)
+        kdtree = KDTree(z_space)
 
         # Create SetOfClasses3Dl
         suffix = getOutputSuffix(self, SetOfClasses3D)
         classes3D = self._createSetOfClasses3D(particles, suffix)
 
         # Popoulate SetOfClasses3D with KMean particles
-        # factor = particles.getXDim() / 64
-        for clInx in range(z_clnm_vw.shape[0]):
-            _, currIds = kdtree.query(z_clnm_vw[clInx].reshape(1, -1), k=neighbors+10)
+        for clInx in range(z_space_vw.shape[0]):
+            _, currIds = kdtree.query(z_space_vw[clInx].reshape(1, -1), k=neighbors+10)
             currIds = currIds[0]
 
             newClass = Class3D()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
             representative = Volume()
-            representative.setLocation(reference)
             representative.setSamplingRate(sr)
-            csv_z_clnm = CsvList()
-            for c in z_clnm_vw[clInx]:
-                csv_z_clnm.append(c)
-            representative._xmipp_sphCoefficients = csv_z_clnm
-            representative.L1 = L1
-            representative.L2 = L2
-            representative.Rmax = Rmax
-            representative.refMap = reference_file
-            representative.refMask = mask_file
+
+            csv_z_space = CsvList()
+            for c in z_space_vw[clInx]:
+                csv_z_space.append(c)
+
+            # Fill representative information (for Zernike3D...)
+            if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+                reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
+                mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
+
+                # Resize coefficients
+                factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
+                for idx in range(len(csv_z_space)):
+                    csv_z_space[idx] *= factor
+
+                L1 = particles.L1
+                L2 = particles.L2
+                Rmax = particles.Rmax
+                reference_file = String(reference)
+                mask_file = String(mask)
+
+                representative.setLocation(reference)
+                representative.L1 = L1
+                representative.L2 = L2
+                representative.Rmax = Rmax
+                representative.refMap = reference_file
+                representative.refMask = mask_file
+                representative._xmipp_sphCoefficients = csv_z_space
+
             newClass.setRepresentative(representative)
 
             classes3D.append(newClass)
@@ -181,72 +195,86 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
     # --------------------------- STEPS functions -----------------------------
     def launchVolumeSlicer(self):
         particles = self.particles.get()
-        reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
-        mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
-        volumes = self.volumes.get()
+        self.num_vol = 0
 
-        # Resize reference map to increase real time conformation inspection performance
-        inputFile = reference
-        outFile = self._getExtraPath('reference.mrc')
-        if not os.path.isfile(outFile):
-            if pwutils.getExt(inputFile) == ".mrc":
-                inputFile += ":mrc"
-            self.runJob("xmipp_image_resize",
-                        "-i %s -o %s --dim %d " % (inputFile,
-                                                   outFile,
-                                                   64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+        # ********* Get Z space *********
+        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+            reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
+            mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
+            volumes = self.volumes.get()
 
-        # Resize mask
-        inputFile = mask
-        outFile = self._getExtraPath('mask.mrc')
-        if not os.path.isfile(outFile):
-            if pwutils.getExt(inputFile) == ".mrc":
-                inputFile += ":mrc"
-            self.runJob("xmipp_image_resize",
-                        "-i %s -o %s --dim %d " % (inputFile,
-                                                   outFile,
-                                                   64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-            self.runJob("xmipp_transform_threshold",
-                        "-i %s -o %s --select below 0.01 "
-                        "--substitute binarize " % (outFile, outFile), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            # Copy original reference and mask to extra
+            ih = ImageHandler()
+            ih.convert(reference, self._getExtraPath("reference_original.mrc"))
+            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"))
+
+            # Resize reference map to increase real time conformation inspection performance
+            inputFile = reference
+            outFile = self._getExtraPath('reference.mrc')
+            if not os.path.isfile(outFile):
+                if pwutils.getExt(inputFile) == ".mrc":
+                    inputFile += ":mrc"
+                self.runJob("xmipp_image_resize",
+                            "-i %s -o %s --dim %d " % (inputFile,
+                                                       outFile,
+                                                       64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+
+            # Resize mask
+            inputFile = mask
+            outFile = self._getExtraPath('mask.mrc')
+            if not os.path.isfile(outFile):
+                if pwutils.getExt(inputFile) == ".mrc":
+                    inputFile += ":mrc"
+                self.runJob("xmipp_image_resize",
+                            "-i %s -o %s --dim %d " % (inputFile,
+                                                       outFile,
+                                                       64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                self.runJob("xmipp_transform_threshold",
+                            "-i %s -o %s --select below 0.01 "
+                            "--substitute binarize " % (outFile, outFile), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
 
-        # Get image coefficients and scale them to reference size
-        # FIXME: Can we do the for loop with the aggregate? (follow ID order)
-        # factor = 64 / particles.getXDim()
-        # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
-        # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
-        z_clnm_part = []
-        for particle in particles.iterItems():
-            z_clnm_part.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-        z_clnm_part = np.asarray(z_clnm_part)
+            # Get image coefficients and scale them to reference size
+            # FIXME: Can we do the for loop with the aggregate? (follow ID order)
+            # factor = 64 / particles.getXDim()
+            # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
+            # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
+            z_space_part = []
+            for particle in particles.iterItems():
+                z_space_part.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+            z_space_part = np.asarray(z_space_part)
 
-        # Get volume coefficients (if exist) and scale them to reference size
-        # FIXME: Can we do the for loop with the aggregate? (follow ID order)
-        # z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
-        # if volumes:
-        #     z_clnm_aux = volumes.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
-        #     z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
-        #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
-        z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
-        if volumes:
-            for pointer in volumes:
-                item = pointer.get()
-                if isinstance(item, Volume):
-                    z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")])
-                elif isinstance(item, SetOfVolumes):
-                    for volume in item.iterItems():
-                        z_clnm_vol = np.vstack([z_clnm_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
-            # z_clnm_vol *= factor
+            # Get volume coefficients (if exist) and scale them to reference size
+            # FIXME: Can we do the for loop with the aggregate? (follow ID order)
+            # z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
+            # if volumes:
+            #     z_clnm_aux = volumes.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
+            #     z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
+            #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
+            z_space_vol = np.asarray([np.zeros(z_space_part.shape[1])])
+            if volumes:
+                for pointer in volumes:
+                    item = pointer.get()
+                    if isinstance(item, Volume):
+                        z_space_vol = np.vstack([z_space_vol, np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")])
+                    elif isinstance(item, SetOfVolumes):
+                        for volume in item.iterItems():
+                            z_space_vol = np.vstack([z_space_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
+                # z_clnm_vol *= factor
 
-        # Get useful parameters
-        num_vol = z_clnm_vol.shape[0]
-        z_clnm = np.vstack([z_clnm_part, z_clnm_vol])
+            # Get useful parameters
+            self.num_vol = z_space_vol.shape[0]
+            z_space = np.vstack([z_space_part, z_space_vol])
+
+            # Resize coefficients
+            z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
+
+        # ********************
 
         # Generate files to call command line
-        file_z_clnm = self._getExtraPath("z_clnm.txt")
-        file_deformation = self._getExtraPath("deformation.txt")
-        np.savetxt(file_z_clnm, z_clnm)
+        file_z_space = self._getExtraPath("z_space.txt")
+        file_interp_val = self._getExtraPath("interp_val.txt")
+        np.savetxt(file_z_space, z_space)
 
         # Compute/Read UMAP or PCA
         mode = self.mode.get()
@@ -254,7 +282,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       % (file_z_clnm, file_coords, self.nb_umap.get(), self.epochs_umap.get())
+                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get())
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
@@ -263,25 +291,33 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         elif mode == 1:
             file_coords = self._getExtraPath("pca_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s" % (file_z_clnm, file_coords)
+                args = "--input %s --pca --output %s" % (file_z_space, file_coords)
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                 program = flexutils.Plugin.getProgram(program)
                 self.runJob(program, args)
-        deformation = computeNormRows(z_clnm)
+
+        # ********* Get interpolation value for coloring the space *********
+        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+            interp_val = computeNormRows(z_space)
+        else:
+            interp_val = np.zeros([1, z_space.shape[0]])
+
+        # *********
 
         # Generate files to call command line
-        np.savetxt(file_deformation, deformation)
+        np.savetxt(file_interp_val, interp_val)
         path = self._getExtraPath()
 
-        # Run slicer
-        args = "--coords %s --z_clnm %s --deformation %s --path %s --map_file %s " \
-               "--mask_file %s --l1 %d --l2 %d --d %d --num_vol %d " \
-               % (file_coords, file_z_clnm, file_deformation, path, self._getExtraPath('reference.mrc'),
-                  self._getExtraPath('mask.mrc'), particles.L1.get(), particles.L2.get(),
-                  2 * particles.Rmax.get(), num_vol)
+        # ********* Run viewer *********
+        args = "--data %s --z_space %s --interp_val %s --path %s " \
+               "--L1 %d --L2 %d --n_vol %d --mode Zernike3D" \
+               % (file_coords, file_z_space, file_interp_val, path,
+                  particles.L1.get(), particles.L2.get(), self.num_vol)
         program = os.path.join(const.VIEWERS, "viewer_3d_slicer.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
+
+        # *********
 
         if os.path.isfile(self._getExtraPath("saved_selections.txt")):
             self._createOutput()
@@ -292,12 +328,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         if self.getOutputsSize() >= 1:
             for _, outClasses in self.iterOutputAttributes():
                 summary.append("Output *%s*:" % outClasses.getNameId().split('.')[1])
-                summary.append("    * Total Zernike3D classes: *%s*" % outClasses.getSize())
+                summary.append("    * Total annotated classes: *%s*" % outClasses.getSize())
         else:
-            summary.append("Output Zernike3D classes not ready yet")
+            summary.append("Output annotated classes not ready yet")
         return summary
 
     def _methods(self):
         return [
-            "Interactive annotation of Zernike3D coefficient space",
+            "Interactive annotation of flexible spaces",
         ]
