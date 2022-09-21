@@ -97,7 +97,7 @@ class MapView(HasTraits):
     coords_map = Array()
 
     # Atomic model
-    atom_file = String()
+    atom_file = String("None")
     atom_model = List()
 
     # Deformation field
@@ -132,25 +132,30 @@ class MapView(HasTraits):
     # ---------------------------------------------------------------------------
     # Default values
     # ---------------------------------------------------------------------------
-    def _ipw_map_default(self):
-        return self.display_map()
+    # def _ipw_map_default(self):
+    #     return self.display_map()
 
-    def _ipw_atom_defaut(self):
-        return self.display_atom_model()
+    # def _ipw_atom_pts_default(self):
+    #     if self.atom_model[0] != "None":
+    #         return self.display_atom_model()
 
-    def ipw_df_map_default(self):
-        return self.display_df_map()
+    # def _ipw_df_map_default(self):
+    #     return self.display_df_map()
 
-    def ipw_df_atom_default(self):
-        return self.display_df_atom()
+    # def _ipw_df_atom_default(self):
+    #     if self.atom_model[0] != "None":
+    #         return self.display_df_atom()
 
     def _map_default(self):
         map = self.readMap(self.map_file)
         return map
 
     def _atom_model_default(self):
-        atom_model = self.readPDB(self.atom_file)
-        return atom_model
+        if self.atom_file != "None":
+            atom_model = self.readPDB(self.atom_file)
+            return atom_model
+        else:
+            return ["None"]
 
     def _coords_map_default(self):
         return getCoordsAtLevel(self.map, 1)
@@ -205,17 +210,18 @@ class MapView(HasTraits):
 
     @on_trait_change('scene3d.activated')
     def display_atom_model(self):
-        # Xmipp convention is ZYX array
-        i_sr = 1 / self.class_inputs["sr"]
-        z, y, x, connections, scalars = self.atom_model
-        pts = mlab.points3d(x, y, z, color=(1., 1., 1.), scale_factor=3 * i_sr, resolution=10, opacity=0.)
-        pts.mlab_source.dataset.lines = np.array(connections)
-        tube = mlab.pipeline.tube(pts, tube_radius=1. * i_sr)
-        tube = mlab.pipeline.surface(tube, color=(0.5, 0.5, 0.5), opacity=0.)
-        pts.visible = False
-        tube.visible = False
-        setattr(self, 'ipw_atom_pts', pts)
-        setattr(self, 'ipw_atom_tubes', tube)
+        if self.atom_model[0] != "None":
+            # Xmipp convention is ZYX array
+            i_sr = 1 / self.class_inputs["sr"]
+            z, y, x, connections, scalars = self.atom_model
+            pts = mlab.points3d(x, y, z, color=(1., 1., 1.), scale_factor=3 * i_sr, resolution=10, opacity=0.)
+            pts.mlab_source.dataset.lines = np.array(connections)
+            tube = mlab.pipeline.tube(pts, tube_radius=1. * i_sr)
+            tube = mlab.pipeline.surface(tube, color=(0.5, 0.5, 0.5), opacity=0.)
+            pts.visible = False
+            tube.visible = False
+            setattr(self, 'ipw_atom_pts', pts)
+            setattr(self, 'ipw_atom_tubes', tube)
 
     @on_trait_change('scene3d.activated')
     def display_df_map(self):
@@ -230,20 +236,21 @@ class MapView(HasTraits):
 
     @on_trait_change('scene3d.activated')
     def display_df_atom(self):
-        # Xmipp convention is ZYX array
-        coords_map = np.asarray([self.coords_map[:, 2], self.coords_map[:, 1], self.coords_map[:, 0]]).T
-        tree = KDTree(coords_map)
-        z, y, x, _, _ = self.atom_model
-        coords_atoms = np.asarray([x, y, z]).T
-        _, ids = tree.query(coords_atoms, k=1)
-        self.ids = np.asarray(ids).reshape(-1)
-        w, v, u = self.df_stats[0][self.ids, 0], self.df_stats[0][self.ids, 1], self.df_stats[0][self.ids, 2]
-        scalars = np.linalg.norm(self.df_stats[0][self.ids, :], axis=1)
-        arrows = mlab.quiver3d(x, y, z, u, v, w, colormap="viridis", mask_points=1, scale_factor=1,
-                               scalars=scalars, figure=self.scene3d.mayavi_scene)
-        arrows.glyph.color_mode = 'color_by_scalar'
-        arrows.visible = False
-        setattr(self, 'ipw_df_atom', arrows)
+        if self.atom_model[0] != "None":
+            # Xmipp convention is ZYX array
+            coords_map = np.asarray([self.coords_map[:, 2], self.coords_map[:, 1], self.coords_map[:, 0]]).T
+            tree = KDTree(coords_map)
+            z, y, x, _, _ = self.atom_model
+            coords_atoms = np.asarray([x, y, z]).T
+            _, ids = tree.query(coords_atoms, k=1)
+            self.ids = np.asarray(ids).reshape(-1)
+            w, v, u = self.df_stats[0][self.ids, 0], self.df_stats[0][self.ids, 1], self.df_stats[0][self.ids, 2]
+            scalars = np.linalg.norm(self.df_stats[0][self.ids, :], axis=1)
+            arrows = mlab.quiver3d(x, y, z, u, v, w, colormap="viridis", mask_points=1, scale_factor=1,
+                                   scalars=scalars, figure=self.scene3d.mayavi_scene)
+            arrows.glyph.color_mode = 'color_by_scalar'
+            arrows.visible = False
+            setattr(self, 'ipw_df_atom', arrows)
 
     @on_trait_change("opacity")
     def change_opacity(self):
@@ -251,8 +258,9 @@ class MapView(HasTraits):
         atoms = getattr(self, 'ipw_atom_pts')
         tubes = getattr(self, 'ipw_atom_tubes')
         volume.actor.property.opacity = self.opacity
-        atoms.actor.property.opacity = self.opacity
-        tubes.actor.property.opacity = self.opacity
+        if self.atom_model[0] != "None":
+            atoms.actor.property.opacity = self.opacity
+            tubes.actor.property.opacity = self.opacity
 
         # scalars = volume.mlab_source.scalars
         # contour = np.amin(scalars) + (np.amax(scalars) - np.amin(scalars)) * self.contour_level
@@ -260,11 +268,12 @@ class MapView(HasTraits):
 
     @on_trait_change("show_atom_model")
     def show_map_or_atoms(self):
-        self.ipw_atom_pts.visible = self.show_atom_model
-        self.ipw_atom_tubes.visible = self.show_atom_model
-        self.ipw_df_atom.visible = self.show_atom_model
-        self.ipw_df_map.visible = not self.show_atom_model
-        self.ipw_map.visible = not self.show_atom_model
+        if self.atom_model[0] != "None":
+            self.ipw_atom_pts.visible = self.show_atom_model
+            self.ipw_atom_tubes.visible = self.show_atom_model
+            self.ipw_df_atom.visible = self.show_atom_model
+            self.ipw_df_map.visible = not self.show_atom_model
+            self.ipw_map.visible = not self.show_atom_model
 
     def _repaint_fired(self):
         arrows_map = getattr(self, 'ipw_df_map')
@@ -284,7 +293,8 @@ class MapView(HasTraits):
             # max_val = np.amax(std)
             # min_val = np.amin(std)
         arrows_map.mlab_source.reset(scalars=scalars)
-        arrows_atom.mlab_source.reset(scalars=scalars[self.ids])
+        if self.atom_model[0] != "None":
+            arrows_atom.mlab_source.reset(scalars=scalars[self.ids])
         # volume.contour.maximum_contour = max_val
         # volume.contour.minimum_contour = min_val
         # volume.actor.visible = True
@@ -295,16 +305,18 @@ class MapView(HasTraits):
     def _mask_arrows_fired(self):
         mask_factor = int(self.mask_factor)
         arrows_map = getattr(self, 'ipw_df_map')
-        arrows_atom = getattr(self, 'ipw_df_atom')
         arrows_map.glyph.mask_points.on_ratio = mask_factor
-        arrows_atom.glyph.mask_points.on_ratio = mask_factor
+        if self.atom_model[0] != "None":
+            arrows_atom = getattr(self, 'ipw_df_atom')
+            arrows_atom.glyph.mask_points.on_ratio = mask_factor
 
     def _scale_arrows_fired(self):
         scale_factor = float(self.scale_factor)
         arrows = getattr(self, 'ipw_df_map')
-        arrows_atom = getattr(self, 'ipw_df_atom')
         arrows.glyph.glyph.scale_factor = scale_factor
-        arrows_atom.glyph.glyph.scale_factor = scale_factor
+        if self.atom_model[0] != "None":
+            arrows_atom = getattr(self, 'ipw_df_atom')
+            arrows_atom.glyph.glyph.scale_factor = scale_factor
 
 
     # ---------------------------------------------------------------------------
