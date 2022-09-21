@@ -69,7 +69,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                       help="Mask determining where to compute the Zernike3D deformation field")
         form.addParam('volumes', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumes, Volume",
-                      condition="hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
+                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
                       help='A set of volumes with Zernike3D coefficients associated (computed using '
                            '"Reference map" as reference) to add as prior information to the Zernike3D '
                            'space')
