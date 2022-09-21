@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-from .viewer_morph_salesman import FlexMorphSalesmanViewer
+# from .viewer_morph_salesman import FlexMorphSalesmanViewer
 from .viewer_show_structures import FlexShowStructuresViewer
 from .viewer_show_maps import FlexShowMapsViewer
 
