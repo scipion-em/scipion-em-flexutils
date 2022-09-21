@@ -30,6 +30,8 @@ import os
 
 import site
 
+import glob
+
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
@@ -52,6 +54,8 @@ class Plugin(pwplugin.Plugin):
     def getProgram(cls, program, python=True):
         """ Return the program binary that will be used. """
         scipion_packages = site.getsitepackages()[0]
+        scipion_packages = glob.glob(os.path.join(scipion_packages, "scipion-em-*"))
+        scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
 
         if python:
