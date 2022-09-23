@@ -32,6 +32,8 @@ import site
 
 import glob
 
+import importlib
+
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
@@ -60,6 +62,20 @@ class Plugin(pwplugin.Plugin):
         flexutils_packages = [package.replace("flexutils/", "scipion3/") for package in flexutils_packages]
         set_dif = set(scipion_packages).symmetric_difference(set(flexutils_packages))
         scipion_packages = list(set_dif)
+        env_variables = ""
+        for idx in range(len(scipion_packages)):
+            if "egg-link" in scipion_packages[idx]:
+                with open(scipion_packages[idx], "r") as file:
+                    lines = file.readlines()
+                scipion_packages[idx] = lines[0].strip("\n")
+                package = os.path.basename(scipion_packages[idx])
+                if "scipion-em-" in package:
+                    package_name = package.replace("scipion-em-", "")
+                    package = importlib.import_module(package_name)
+                    package_env_vars = package.Plugin.getVars()
+                    for item, value in package_env_vars.items():
+                        if package_name.lower() in item.lower():
+                            env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
 
@@ -67,8 +83,7 @@ class Plugin(pwplugin.Plugin):
             with pwutils.weakImport("chimera"):
                 from chimera import Plugin as chimeraPlugin
                 cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
-            cmd += 'PYTHONPATH=%s python ' % scipion_packages
-
+            cmd += "PYTHONPATH=%s %s python " % (scipion_packages, env_variables)
         return cmd + '%(program)s ' % locals()
 
     @classmethod
