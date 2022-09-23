@@ -55,7 +55,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Particles to annotate",
-                      pointerClass='SetOfParticles', important=True,
+                      pointerClass='SetOfParticles, SetOfCryoDrgnParticles', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
         form.addParam('reference', PointerParam, label="Reference map",
                       pointerClass='Volume', important=True,
@@ -73,6 +73,10 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                       help='A set of volumes with Zernike3D coefficients associated (computed using '
                            '"Reference map" as reference) to add as prior information to the Zernike3D '
                            'space')
+        form.addParam('boxSize', IntParam, label="Box size",
+                      condition="particles and hasattr(particles.getFirstItem(),'_zCryoDRGValues')",
+                      help="Volumes generated from the CryoDrgn network will be resampled to the "
+                           "chosen box size (only for the visualization).")
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Dimensionality reduction method",
@@ -113,7 +117,9 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         z_space_vw = np.asarray(z_space_vw[self.num_vol:])
 
         # Read KMean labels
-        km_labels = np.loadtxt(self._getExtraPath('kmean_labels.txt'), delimiter=" ")[:-self.num_vol]
+        km_labels = np.loadtxt(self._getExtraPath('kmean_labels.txt'), delimiter=" ")
+        if self.num_vol > 0:
+            km_labels = km_labels[:-self.num_vol]
 
         # Create SetOfClasses3D
         suffix = getOutputSuffix(self, SetOfClasses3D)
@@ -131,7 +137,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             for c in z_space_vw[clInx]:
                 csv_z_space.append(c)
 
-            # Fill representative information (for Zernike3D...)
+            # ****** Fill representative information *******
             if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
                 reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
                 mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
@@ -154,6 +160,18 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                 representative.refMap = reference_file
                 representative.refMask = mask_file
                 representative._xmipp_sphCoefficients = csv_z_space
+
+            elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+                from cryodrgn.utils import generateVolumes
+                generateVolumes(z_space_vw[clInx], particles.weights.get(),
+                                particles.config.get(), self._getExtraPath(), downsample=self.boxSize.get(),
+                                apix=particles.getSamplingRate())
+                ImageHandler().convert(self._getExtraPath('vol_000.mrc'),
+                                       self._getExtraPath('class_%d.mrc') % clInx)
+                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                representative._zCryoDRGValues = csv_z_space
+
+            # ********************
 
             representative.setSamplingRate(sr)
             newClass.setRepresentative(representative)
@@ -248,6 +266,12 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             # Resize coefficients
             z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
 
+        elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+            z_space = []
+            for particle in particles.iterItems():
+                z_space.append(np.fromstring(particle._zCryoDRGValues.get(), sep=","))
+            z_space = np.asarray(z_space)
+
         # ********************
 
         # Generate files to call command line
@@ -294,9 +318,17 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                    "--L1 %d --L2 %d --n_vol %d --mode Zernike3D" \
                    % (file_coords, file_z_space, file_interp_val, path, particles.L1.get(), particles.L2.get(),
                       self.num_vol)
-            program = os.path.join(const.VIEWERS, "viewer_3d_pc.py")
-            program = flexutils.Plugin.getProgram(program)
-            self.runJob(program, args)
+
+        elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+            args = "--data %s --z_space %s --interp_val %s --path %s " \
+                   "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
+                   % (file_coords, file_z_space, file_interp_val, path,
+                      particles.weights.get(), particles.config.get(), self.boxSize.get(),
+                      particles.getSamplingRate())
+
+        program = os.path.join(const.VIEWERS, "viewer_3d_pc.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
 
         # *********
 

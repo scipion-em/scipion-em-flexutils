@@ -88,6 +88,7 @@ class PointCloudView(HasTraits):
 
     # Visualization style
     opacity = Float(0.0)
+    threshold = Float(0.0)
     op_min = Float(0.0)
     op_max = Float(1.0)
 
@@ -149,6 +150,11 @@ class PointCloudView(HasTraits):
         if self.mode == "Zernike3D":
             from flexutils.protocols.xmipp.utils.utils import applyDeformationField
             self.generate_map = applyDeformationField
+        elif self.mode == "CryoDrgn":
+            import cryodrgn
+            from cryodrgn.utils import generateVolumes
+            cryodrgn.Plugin._defineVariables()
+            self.generate_map = generateVolumes
 
         # Selections
         self.selections = dict()
@@ -162,7 +168,8 @@ class PointCloudView(HasTraits):
                 else:
                     self.selections['class_%d' % (idx+1)] = self.data.shape[0] - (idx + 1)
         else:
-            self.selections['origin'] = np.asarray([0, 0, 0])
+            _, idx = self.kdtree_data.query(np.asarray([0, 0, 0]).reshape(1, -1), k=1)
+            self.selections['origin'] = idx[0][0]
 
         self.ipw_sel
 
@@ -195,14 +202,14 @@ class PointCloudView(HasTraits):
     # def _line_3d_z_default(self):
     #     return self.make_line_3d('z')
 
-    def _ipw_pc_default(self):
-        return self.display_space_cloud()
+    # def _ipw_pc_default(self):
+    #     return self.display_space_cloud()
 
-    def _ipw_sel_default(self):
-        return self.display_selections()
+    # def _ipw_sel_default(self):
+    #     return self.display_selections()
 
-    def _ipw_map_default(self):
-        return self.display_map()
+    # def _ipw_map_default(self):
+    #     return self.display_map()
 
     def _map_default(self):
         # map = self.readMap(self.map_file)
@@ -274,12 +281,23 @@ class PointCloudView(HasTraits):
         #                               vmin=0.0, vmax=0.05)
 
         # Chimera visualization (slow)
-        volume = mlab.contour3d(self.map, color=(1, 1, 1), figure=self.scene_c.mayavi_scene)
+        volume = mlab.contour3d(self.map, color=(1, 1, 1), contours=1, figure=self.scene_c.mayavi_scene)
+        volume.contour.auto_contours = False
+        volume.contour.auto_update_range = True
         setattr(self, 'ipw_map', volume)
 
     @on_trait_change("opacity")
     def change_opacity_point_cloud(self):
         self.ipw_pc.actor.property.opacity = self.opacity
+
+    @on_trait_change("threshold")
+    def change_map_contour(self):
+        volume = getattr(self, 'ipw_map')
+        val_max = np.amax(volume.mlab_source.m_data.scalar_data)
+        val_min = np.amin(volume.mlab_source.m_data.scalar_data)
+        if val_max != val_min:
+            contour = (val_max - val_min) * self.threshold + val_min
+            volume.contour.contours = [contour]
 
     @on_trait_change("n_clusters")
     def change_n_clusters(self):
@@ -420,10 +438,18 @@ class PointCloudView(HasTraits):
                                   self.path, self.z_space[ind[0], :],
                                   int(self.class_inputs["L1"]), int(self.class_inputs["L2"]), 32)
                 self.generated_map = self.readMap(os.path.join(self.path, "deformed.mrc"))
+            elif self.mode == "CryoDrgn":
+                self.generate_map(self.z_space[ind[0], :], self.class_inputs["weights"],
+                                  self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
+                                  apix=int(self.class_inputs["sr"]))
+                self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
 
             volume = getattr(self, 'ipw_map')
+            val_max = np.amax(volume.mlab_source.m_data.scalar_data)
+            val_min = np.amin(volume.mlab_source.m_data.scalar_data)
             volume.mlab_source.reset(scalars=self.generated_map)
-            volume.contour.contours = [0.0001]
+            if val_max == val_min:
+                volume.contour.contours = [0.0001]
 
     # ---------------------------------------------------------------------------
     # The layout of the dialog created
@@ -439,6 +465,9 @@ class PointCloudView(HasTraits):
             VGroup(
                 Group(
                     Item('opacity',
+                         editor=RangeEditor(format='%.02f', low_name='op_min', high_name='op_max', mode='slider')
+                         ),
+                    Item('threshold',
                          editor=RangeEditor(format='%.02f', low_name='op_min', high_name='op_max', mode='slider')
                          ),
                     Group(

@@ -71,6 +71,16 @@ class FlexMorphChimeraX():
                 applyDeformationField("reference_original.mrc", "mask_reference_original.mrc",
                                       self.file_names[idz] + ".mrc", self.path, self.z_space[idz],
                                       int(self.other_inputs["L1"]), int(self.other_inputs["L2"]), 0.5 * d)
+        elif self.mode == "CryoDrgn":
+            import cryodrgn
+            from cryodrgn.utils import generateVolumes
+            cryodrgn.Plugin._defineVariables()
+            for idz in path:
+                generateVolumes(self.z_space[idz, :], self.other_inputs["weights"],
+                                self.other_inputs["config"], self.path, downsample=int(self.other_inputs["boxsize"]),
+                                apix=int(self.other_inputs["sr"]))
+                ImageHandler().convert(os.path.join(self.path, "vol_000.mrc"),
+                                       os.path.join(self.path, self.file_names[idz] + ".mrc"))
 
         self.file_names = self.file_names[path]
 
