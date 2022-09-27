@@ -32,6 +32,8 @@ from pyworkflow import BETA
 from pyworkflow.object import String, CsvList
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, MultiPointerParam
 import pyworkflow.utils as pwutils
+from pyworkflow.utils.properties import Message
+from pyworkflow.gui.dialog import askYesNo
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
@@ -332,7 +334,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
         # *********
 
-        if os.path.isfile(self._getExtraPath("saved_selections.txt")):
+        if os.path.isfile(self._getExtraPath("saved_selections.txt")) and \
+           askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
 
     # --------------------------- INFO functions -----------------------------

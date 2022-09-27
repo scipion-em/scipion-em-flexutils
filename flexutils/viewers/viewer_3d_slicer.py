@@ -621,7 +621,7 @@ class VolumeSlicer(HasTraits):
                     self.generate_map(self.z_space[ind[0], :], self.class_inputs["weights"],
                                       self.class_inputs["config"], self.path,
                                       downsample=int(self.class_inputs["boxsize"]),
-                                      apix=int(self.class_inputs["sr"]))
+                                      apix=float(self.class_inputs["sr"]))
                     self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
 
         volume = getattr(self, 'ipw_map')

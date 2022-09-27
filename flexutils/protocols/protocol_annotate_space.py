@@ -34,6 +34,8 @@ from pyworkflow.object import String, CsvList
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, MultiPointerParam
 import pyworkflow.utils as pwutils
+from pyworkflow.utils.properties import Message
+from pyworkflow.gui.dialog import askYesNo
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
@@ -52,6 +54,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
     _label = 'annotate space'
     _devStatus = BETA
     OUTPUT_PREFIX = 'flexible3DClasses'
+    DIMENSIONS = [2, 3]
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -102,6 +105,18 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                            "will increase when computing a DENSMAP")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
+        form.addParam('dimensions', EnumParam, choices=['2D', '3D'],
+                      default=0, display=EnumParam.DISPLAY_HLIST,
+                      label="Landscape space dimensions?",
+                      help="Determine if the original landscape will be reduced to have "
+                           "2 or 3 dimensions. This value will determine the interactive tool "
+                           "used to inspect and annotate the reduced conformational landscape\n"
+                           "\t * 2D: Provides a better understanding of the internal distribution "
+                           "of the particles within the landscape\n"
+                           "\t * 3D: Explains better the overall/loca shape of the pointcloud and the "
+                           "different clusters it might present\n"
+                           "**Note**: Once this value is chosen, it should not be changed "
+                           "when re-executing in interactive mode")
 
 
     # --------------------------- INSERT steps functions ----------------------
@@ -304,7 +319,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get())
+                       "--n_components %d" \
+                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
+                          self.DIMENSIONS[self.dimensions.get()])
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
@@ -313,7 +330,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         elif mode == 1:
             file_coords = self._getExtraPath("pca_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s" % (file_z_space, file_coords)
+                args = "--input %s --pca --n_components %d --output %s" \
+                       % (file_z_space, self.DIMENSIONS[self.dimensions.get()], file_coords)
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                 program = flexutils.Plugin.getProgram(program)
                 self.runJob(program, args)
@@ -328,7 +346,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
 
         # Generate files to call command line
         np.savetxt(file_interp_val, interp_val)
-        path = self._getExtraPath()
+        path = os.path.abspath(self._getExtraPath())
 
         # ********* Run viewer *********
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
@@ -344,13 +362,18 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                       particles.weights.get(), particles.config.get(), self.boxSize.get(),
                       particles.getSamplingRate())
 
-        program = os.path.join(const.VIEWERS, "viewer_3d_slicer.py")
+        dimensions = self.DIMENSIONS[self.dimensions.get()]
+        if dimensions == 2:
+            program = os.path.join(const.VIEWERS, "viewer_interactive_2d.py")
+        elif dimensions == 3:
+            program = os.path.join(const.VIEWERS, "viewer_3d_slicer.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
         # *********
 
-        if os.path.isfile(self._getExtraPath("saved_selections.txt")):
+        if os.path.isfile(self._getExtraPath("saved_selections.txt")) and \
+           askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
 
     # --------------------------- INFO functions -----------------------------
