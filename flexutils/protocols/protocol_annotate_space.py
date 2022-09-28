@@ -192,8 +192,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                 generateVolumes(z_space_vw[clInx], particles.weights.get(),
                                 particles.config.get(), self._getExtraPath(), downsample=self.boxSize.get(),
                                 apix=particles.getSamplingRate())
-                ImageHandler().convert(self._getExtraPath('vol_000.mrc'),
-                                       self._getExtraPath('class_%d.mrc') % clInx)
+                ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
+                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
+                                            finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
                 representative._zCryoDRGValues = csv_z_space
 
