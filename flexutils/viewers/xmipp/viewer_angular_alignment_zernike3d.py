@@ -103,7 +103,7 @@ class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
         if mode == 0:
             file_coords = self.protocol._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
+                args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d --n_components 3" \
                        % (file_z_clnm, file_coords, self.nb_umap.get(), self.epochs_umap.get())
                 if self.densmap_umap.get():
                     args += " --densmap"
@@ -113,7 +113,7 @@ class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
         elif mode == 1:
             file_coords = self.protocol._getExtraPath("pca_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s" % (file_z_clnm, file_coords)
+                args = "--input %s --pca --output %s --n_components 3" % (file_z_clnm, file_coords)
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                 program = flexutils.Plugin.getProgram(program)
                 runJob(None, program, args)
