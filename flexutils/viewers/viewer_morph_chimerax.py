@@ -67,9 +67,10 @@ class FlexMorphChimeraX():
         if self.mode == "Zernike3D":
             from flexutils.protocols.xmipp.utils.utils import applyDeformationField
             d = ImageHandler().read(os.path.join(self.path, "reference_original.mrc")).getDimensions()[0]
+            factor = d / 64
             for idz in path:
                 applyDeformationField("reference_original.mrc", "mask_reference_original.mrc",
-                                      self.file_names[idz] + ".mrc", self.path, self.z_space[idz],
+                                      self.file_names[idz] + ".mrc", self.path, factor * self.z_space[idz],
                                       int(self.other_inputs["L1"]), int(self.other_inputs["L2"]), 0.5 * d)
         elif self.mode == "CryoDrgn":
             import cryodrgn
