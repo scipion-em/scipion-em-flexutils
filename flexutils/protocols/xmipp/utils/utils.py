@@ -36,7 +36,7 @@ from scipy.spatial import KDTree
 from skimage import filters
 from skimage.measure import label
 from skimage.morphology import ball, convex_hull_image, skeletonize
-from subprocess import Popen
+from subprocess import call
 
 import pyworkflow.utils as pwutils
 
@@ -838,8 +838,8 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None, output_map=Non
     # program = Chimera.getProgram()
     chimera_home = os.environ.get("CHIMERA_HOME")
     program = os.path.join(chimera_home, 'bin', os.path.basename("ChimeraX"))
-    cmd = program + ' "%s"' % scriptFile
-    Popen(cmd, shell=True, env=Chimera.getEnviron(), cwd=os.getcwd())
+    cmd = program + ' --nogui "%s"' % scriptFile
+    call(cmd, shell=True, env=Chimera.getEnviron(), cwd=os.getcwd())
 
     with open('transformation.positions') as f:
         line = f.readline()
