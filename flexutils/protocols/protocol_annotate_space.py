@@ -340,7 +340,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
             interp_val = computeNormRows(z_space)
         else:
-            interp_val = np.zeros([1, z_space.shape[0]])
+            interp_val = np.ones([1, z_space.shape[0]])
 
         # *********
 

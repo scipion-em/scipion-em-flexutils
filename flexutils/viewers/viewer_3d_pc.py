@@ -429,7 +429,7 @@ class PointCloudView(HasTraits):
         #     line3d.mlab_source.reset(x=x, y=y, z=z)
 
         # Update real time conformation
-        pos = np.asarray([position[0], position[1], position[2]]).reshape(1, -1)
+        pos = np.asarray([position[2], position[1], position[0]]).reshape(1, -1)
         _, ind = self.kdtree_data.query(pos, k=1)
 
         if self.generate_map is not None:
