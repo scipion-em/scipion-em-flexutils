@@ -190,10 +190,10 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             basis_params, z_clnm = readZernikeFile(z_clnm_file)
             rmsd_def = np.loadtxt(rmsd_def_file)
 
-            Rmax = Float(basis_params[2])
             deformation = Float(rmsd_def)
             factor = dim / self.boxSize.get()
             z_clnm = factor * z_clnm
+            # Rmax = Float(factor * basis_params[2])
 
             zernikeVol = Volume()
             zernikeVol.setFileName(reference.getFileName())
