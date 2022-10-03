@@ -49,7 +49,7 @@ def readZernike3DFile(path, num_vol):
         lines = f.readlines()
         for line in lines:
             z_clnm_vw.append(np.fromstring(line, dtype=float, sep=' '))
-    return np.asarray(z_clnm_vw[1+num_vol:])
+    return np.asarray(z_clnm_vw[num_vol:])
 
 
 if __name__ == '__main__':

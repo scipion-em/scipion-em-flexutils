@@ -36,12 +36,15 @@ from scipy.spatial import KDTree
 from skimage import filters
 from skimage.measure import label
 from skimage.morphology import ball, convex_hull_image, skeletonize
+from subprocess import call
 
 import pyworkflow.utils as pwutils
 
 from pwem.emlib.image import ImageHandler
 from pwem.convert.transformations import superimposition_matrix
 from pwem.viewers import Chimera
+
+import xmipp3
 #####################################
 
 
@@ -664,6 +667,13 @@ def reassociateCoefficients(Z, Zpp, Ap, A=None):
     A = A if A is not None else np.zeros(Ap.shape)
     return np.transpose(computeInverse(Zpp.T @ Zpp) @ Zpp.T @ Z @ (A.T - Ap.T))
 
+def applyDeformationField(map, mask, output, path, z_clnm, L1, L2, Rmax):
+    writeZernikeFile(os.path.join(path, "z_clnm.txt"), z_clnm, L1, L2, Rmax)
+    params = '-i %s --mask %s --step 1 --blobr 2 -o %s --clnm %s' % \
+             (os.path.join(path, map), os.path.join(path, mask),
+              os.path.join(path, output), os.path.join(path, "z_clnm.txt"))
+    xmipp3.Plugin.runXmippProgram('xmipp_volume_apply_coefficient_zernike3d', params)
+
 
 ############## General functions ##############
 def inscribedRadius(atoms):
@@ -676,7 +686,7 @@ def inscribedRadius(atoms):
     return 1.1 * atoms_r
 
 def computeInverse(matrix):
-    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-8  # Probably -6 (for maps) -8 (for PDBs)
+    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-10  # Probably -6 (for maps) -8 (for PDBs)
     u, s, vh = np.linalg.svd(matrix)
 
     for idx in range(len(s)):
@@ -713,6 +723,16 @@ def getXmippOrigin(map):
 
 def maskMapOtsu(map):
     thr = filters.threshold_otsu(map)
+    mask = map > thr
+    return mask.astype(int)
+
+def maskMapLi(map):
+    thr = filters.threshold_li(map)
+    mask = map > thr
+    return mask.astype(int)
+
+def maskMapYen(map):
+    thr = filters.threshold_yen(map)
     mask = map > thr
     return mask.astype(int)
 
@@ -793,7 +813,7 @@ def coordsInMask(coords, mask):
     logic = mask[coords[:, 2], coords[:, 1], coords[:, 0]]
     return logic.astype(bool)
 
-def alignMapsChimeraX(map_file_1, map_file_2, global_search=None):
+def alignMapsChimeraX(map_file_1, map_file_2, global_search=None, output_map=None):
     scriptFile = 'fitmap_transformation.cxc'
     OPEN_FILE = "open %s\n"
     VOXEL_SIZE = "volume #%d voxelSize %f\n"
@@ -808,14 +828,16 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None):
         fhCmd.write(FITMAP)
         fhCmd.write("save transformation.positions #1\n")
         fhCmd.write("volume resample #1 onGrid #2\n")
-        fhCmd.write("save start_aligned.mrc #3\n")
+        if output_map:
+            fhCmd.write("save %s #3\n" % output_map)
+        else:
+            fhCmd.write("save start_aligned.mrc #3\n")
         fhCmd.write("exit\n")
 
     # program = Plugin.getProgram()
     # program = Chimera.getProgram()
-    from pwem import Config as emConfig
-    home = os.path.join(emConfig.EM_ROOT, 'chimerax-1.3')
-    program = os.path.join(home, 'bin', os.path.basename("ChimeraX"))
+    chimera_home = os.environ.get("CHIMERA_HOME")
+    program = os.path.join(chimera_home, 'bin', os.path.basename("ChimeraX"))
     cmd = program + ' --nogui "%s"' % scriptFile
     call(cmd, shell=True, env=Chimera.getEnviron(), cwd=os.getcwd())
 
@@ -826,7 +848,10 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None):
         Tr = Tr.astype(np.float)
         Tr = np.vstack([Tr, np.array([0, 0, 0, 1])])
 
-    map_1_algn = readMap("start_aligned.mrc")
+    if output_map:
+        map_1_algn = readMap(output_map)
+    else:
+        map_1_algn = readMap("start_aligned.mrc")
 
     return map_1_algn, Tr
 

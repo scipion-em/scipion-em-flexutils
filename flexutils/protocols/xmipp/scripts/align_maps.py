@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:  David Herreros Calero (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,9 +24,32 @@
 # *
 # **************************************************************************
 
-# from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
 
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+import flexutils.protocols.xmipp.utils.utils as utl
+
+
+def alignMaps(file_input, file_target, file_output, global_search=None):
+    # Align maps in ChimeraX using fitmap
+    _ = utl.alignMapsChimeraX(file_input, file_target, global_search=global_search,
+                              output_map=file_output)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Input parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--i', type=str, required=True)
+    parser.add_argument('--r', type=str, required=True)
+    parser.add_argument('--o', type=str, required=True)
+    parser.add_argument('--gs', type=int)
+
+    args = parser.parse_args()
+
+    if args.gs is None:
+        gs = None
+    else:
+        gs = args.gs
+
+    # Initialize volume slicer
+    alignMaps(args.i, args.r, args.o, gs)

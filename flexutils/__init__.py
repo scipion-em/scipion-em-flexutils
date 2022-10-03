@@ -28,7 +28,14 @@
 
 import os
 
+import site
+
+import glob
+
+import importlib
+
 import pyworkflow.plugin as pwplugin
+import pyworkflow.utils as pwutils
 
 import flexutils
 from flexutils.constants import CONDA_REQ
@@ -48,9 +55,35 @@ class Plugin(pwplugin.Plugin):
     @classmethod
     def getProgram(cls, program, python=True):
         """ Return the program binary that will be used. """
+        scipion_packages = site.getsitepackages()[0]
+        flexutils_packages = scipion_packages.replace("scipion3/", "flexutils/")
+        scipion_packages = glob.glob(os.path.join(scipion_packages, "scipion-em-*"))
+        flexutils_packages = glob.glob(os.path.join(flexutils_packages, "scipion-em-*"))
+        flexutils_packages = [package.replace("flexutils/", "scipion3/") for package in flexutils_packages]
+        set_dif = set(scipion_packages).symmetric_difference(set(flexutils_packages))
+        scipion_packages = list(set_dif)
+        env_variables = ""
+        for idx in range(len(scipion_packages)):
+            if "egg-link" in scipion_packages[idx]:
+                with open(scipion_packages[idx], "r") as file:
+                    lines = file.readlines()
+                scipion_packages[idx] = lines[0].strip("\n")
+                package = os.path.basename(scipion_packages[idx])
+                if "scipion-em-" in package:
+                    package_name = package.replace("scipion-em-", "")
+                    package = importlib.import_module(package_name)
+                    package_env_vars = package.Plugin.getVars()
+                    for item, value in package_env_vars.items():
+                        if package_name.lower() in item.lower():
+                            env_variables += " {}='{}'".format(item, value)
+        scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+
         if python:
-            cmd += 'python '
+            with pwutils.weakImport("chimera"):
+                from chimera import Plugin as chimeraPlugin
+                cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
+            cmd += "PYTHONPATH=%s %s python " % (scipion_packages, env_variables)
         return cmd + '%(program)s ' % locals()
 
     @classmethod
@@ -65,7 +98,8 @@ class Plugin(pwplugin.Plugin):
                 installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
             elif 'VIRTUAL_ENV' in os.environ:
                 installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
-            installationCmd += "conda activate flexutils && pip install -r " + CONDA_REQ + " && "
+            installationCmd += "conda activate flexutils && conda install -c anaconda cudatoolkit -y && " \
+                               "conda install -c conda-forge cudatoolkit-dev -y && pip install -r " + CONDA_REQ + " && "
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd
 
