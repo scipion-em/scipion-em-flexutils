@@ -13,3 +13,4 @@ bokeh==2.4.3
 PyQtWebEngine==5.15.6
 watchdog==2.1.9
 tqdm==4.59.0
+pandas==1.2.3
