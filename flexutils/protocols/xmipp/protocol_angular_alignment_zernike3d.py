@@ -144,13 +144,13 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         newTs = inputParticles.getSamplingRate() / correctionFactor
 
         ih = ImageHandler()
-        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
+        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get().getFileName()
         ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputVolume.get().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get()
+        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get().getFileName()
         if inputMask:
             ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
