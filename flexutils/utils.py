@@ -28,6 +28,8 @@
 
 import numpy as np
 
+from pyworkflow.utils import getExt
+
 
 def getOutputSuffix(protocol, cls):
     """ Get the name to be used for a new output.
@@ -65,3 +67,8 @@ def computeNormRows(array):
         c_3d = np.vstack([vec[:size], vec[size:2 * size], vec[2 * size:]])
         norm.append(np.linalg.norm(np.linalg.norm(c_3d, axis=1)))
     return np.vstack(norm).flatten()
+
+def getXmippFileName(filename):
+    if getExt(filename) == ".mrc":
+        filename += ":mrc"
+    return filename

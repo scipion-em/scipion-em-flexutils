@@ -46,6 +46,7 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
+from flexutils.utils import getXmippFileName
 
 
 class XmippProtReconstructZART(ProtReconstruct3D):
@@ -196,7 +197,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params = self.defineZARTArgs(inputMd, outFile, niter, step, mask)
 
         if refFile:
-            params += " --ref %s" % refFile
+            params += " --ref %s" % getXmippFileName(refFile)
 
         if self.numberOfThreads.get() == 1:
             self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())

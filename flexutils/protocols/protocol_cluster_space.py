@@ -52,6 +52,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
     _label = 'cluster space'
     _devStatus = BETA
     OUTPUT_PREFIX = 'flexible3DClasses'
+    DIMENSIONS = [2, 3]
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -288,7 +289,9 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get())
+                       "--n_components %d" \
+                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
+                          self.DIMENSIONS[self.dimensions.get()])
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
@@ -297,7 +300,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         elif mode == 1:
             file_coords = self._getExtraPath("pca_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s" % (file_z_space, file_coords)
+                args = "--input %s --pca --output %s --n_components %d" \
+                       % (file_z_space, file_coords, self.DIMENSIONS[self.dimensions.get()])
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                 program = flexutils.Plugin.getProgram(program)
                 self.runJob(program, args)
