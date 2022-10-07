@@ -73,6 +73,8 @@ class Plugin(pwplugin.Plugin):
                     package_name = package.replace("scipion-em-", "")
                     if "xmipp" in package_name:
                         package_name += "3"
+                    if "prody" in package_name:
+                        package_name += "2"
                     package = importlib.import_module(package_name)
                     package_env_vars = package.Plugin.getVars()
                     for item, value in package_env_vars.items():
