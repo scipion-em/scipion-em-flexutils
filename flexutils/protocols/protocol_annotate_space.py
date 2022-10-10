@@ -233,7 +233,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
             reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
             mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
-            volumes = self.volumes.get()
+            volumes = self.volumes
 
             # Copy original reference and mask to extra
             ih = ImageHandler()

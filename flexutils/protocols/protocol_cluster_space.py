@@ -37,7 +37,7 @@ from pyworkflow.gui.dialog import askYesNo
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
-from pwem.objects import SetOfClasses3D, Class3D, Volume
+from pwem.objects import SetOfClasses3D, Class3D, Volume, SetOfVolumes
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
@@ -206,7 +206,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
             reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
             mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
-            volumes = self.volumes.get()
+            volumes = self.volumes
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
@@ -258,8 +258,13 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
             z_space_vol = np.asarray([np.zeros(z_space_part.shape[1])])
             if volumes:
-                for volume in volumes.iterItems():
-                    z_space_vol = np.vstack([z_space_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
+                for pointer in volumes:
+                    item = pointer.get()
+                    if isinstance(item, Volume):
+                        z_space_vol = np.vstack([z_space_vol, np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")])
+                    elif isinstance(item, SetOfVolumes):
+                        for volume in item.iterItems():
+                            z_space_vol = np.vstack([z_space_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
                 # z_clnm_vol *= factor
 
             # Get useful parameters
