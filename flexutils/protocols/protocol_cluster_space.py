@@ -201,8 +201,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
     def launchInteractiveClustering(self):
         particles = self.particles.get()
         self.num_vol = 0
-        import time
-        time.sleep(5)
+
 
         # ********* Get Z space *********
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):

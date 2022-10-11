@@ -79,7 +79,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('boxSize', IntParam, label="Box size",
-                      condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZvalues')",
+                      condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZValues')",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
@@ -187,7 +187,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                 representative.refMask = mask_file
                 representative._xmipp_sphCoefficients = csv_z_space
 
-            elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
+            elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
                 from cryodrgn.utils import generateVolumes
                 generateVolumes(z_space_vw[clInx], particles._cryodrgnWeights.get(),
                                 particles._cryodrgnConfig.get(), self._getExtraPath(), downsample=self.boxSize.get(),
@@ -196,7 +196,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                                             self._getExtraPath('class_%d.mrc') % clInx, 1,
                                             finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
-                representative._cryodrgnZvalues = csv_z_space
+                representative._cryodrgnZValues = csv_z_space
 
             # ********************
 
@@ -301,10 +301,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             # Resize coefficients
             z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
 
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
+        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
             z_space = []
             for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._cryodrgnZvalues.get(), sep=","))
+                z_space.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
             z_space = np.asarray(z_space)
 
         # ********************
@@ -356,7 +356,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.L1.get(), particles.L2.get(), self.num_vol)
 
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
+        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
                    % (file_coords, file_z_space, file_interp_val, path,
