@@ -60,7 +60,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Particles to annotate",
-                      pointerClass='SetOfParticles, SetOfCryoDrgnParticles', important=True,
+                      pointerClass='SetOfParticles', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
         form.addParam('reference', PointerParam, label="Reference map",
                       condition="particles and not hasattr(particles,'refMap') "
@@ -79,7 +79,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('boxSize', IntParam, label="Box size",
-                      condition="particles and hasattr(particles.getFirstItem(),'_zCryoDRGValues')",
+                      condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZvalues')",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
@@ -187,16 +187,16 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                 representative.refMask = mask_file
                 representative._xmipp_sphCoefficients = csv_z_space
 
-            elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+            elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
                 from cryodrgn.utils import generateVolumes
-                generateVolumes(z_space_vw[clInx], particles.weights.get(),
-                                particles.config.get(), self._getExtraPath(), downsample=self.boxSize.get(),
+                generateVolumes(z_space_vw[clInx], particles._cryodrgnWeights.get(),
+                                particles._cryodrgnConfig.get(), self._getExtraPath(), downsample=self.boxSize.get(),
                                 apix=particles.getSamplingRate())
                 ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
                                             self._getExtraPath('class_%d.mrc') % clInx, 1,
                                             finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
-                representative._zCryoDRGValues = csv_z_space
+                representative._cryodrgnZvalues = csv_z_space
 
             # ********************
 
@@ -301,10 +301,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             # Resize coefficients
             z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
 
-        elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+        elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
             z_space = []
             for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._zCryoDRGValues.get(), sep=","))
+                z_space.append(np.fromstring(particle._cryodrgnZvalues.get(), sep=","))
             z_space = np.asarray(z_space)
 
         # ********************
@@ -356,11 +356,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.L1.get(), particles.L2.get(), self.num_vol)
 
-        elif hasattr(particles.getFirstItem(), "_zCryoDRGValues"):
+        elif hasattr(particles.getFirstItem(), "_cryodrgnZvalues"):
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
                    % (file_coords, file_z_space, file_interp_val, path,
-                      particles.weights.get(), particles.config.get(), self.boxSize.get(),
+                      particles._cryodrgnWeights.get(), particles._cryodrgnConfig.get(), self.boxSize.get(),
                       particles.getSamplingRate())
 
         dimensions = self.DIMENSIONS[self.dimensions.get()]
