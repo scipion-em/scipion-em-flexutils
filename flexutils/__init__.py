@@ -103,7 +103,8 @@ class Plugin(pwplugin.Plugin):
             elif 'VIRTUAL_ENV' in os.environ:
                 installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
             installationCmd += "conda activate flexutils && conda install -c anaconda cudatoolkit -y && " \
-                               "conda install -c conda-forge cudatoolkit-dev -y && pip install -r " + CONDA_REQ + " && "
+                               "conda install -c conda-forge cudatoolkit-dev -y && pip install -r " + CONDA_REQ + " && " \
+                               "conda install -c conda-forge mayavi -y && "
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd
 
