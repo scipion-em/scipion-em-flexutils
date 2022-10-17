@@ -329,9 +329,9 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
                 new_names.append(name)
         # Compute KMeans and save automatic selection
         if int(n_clusters) > 0:
-            clusters = KMeans(n_clusters=int(n_clusters), n_init=1).fit(self.z_space)
+            clusters = KMeans(n_clusters=int(n_clusters), n_init=1).fit(self.data)
             centers = clusters.cluster_centers_
-            _, inds = self.z_space_tree.query(centers, k=1)
+            _, inds = self.data_tree.query(centers, k=1)
             for idx, ind in enumerate(inds):
                 if not self.data[ind[0], 0] in old_x and not self.data[ind[0], 1] in old_y:
                     new_x.append(self.data[ind[0], 0])

@@ -470,9 +470,9 @@ class VolumeSlicer(HasTraits):
                 del self.selections[key]
         # Compute KMeans and save automatic selection
         if int(self.n_clusters) > 0:
-            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.z_space)
+            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.data)
             centers = clusters.cluster_centers_
-            _, inds = self.kdtree_z_space.query(centers, k=1)
+            _, inds = self.kdtree_data.query(centers, k=1)
             for idx, ind in enumerate(inds):
                 self.selections["kmean_%d" % (idx + 1)] = ind[0]
         data = self.data[list(self.selections.values())]
