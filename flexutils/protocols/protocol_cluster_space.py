@@ -69,11 +69,17 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                       condition="particles and not hasattr(particles,'refMask') "
                                 "and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
                       help="Mask determining where to compute the Zernike3D deformation field")
-        form.addParam('volumes', MultiPointerParam, label="Priors", allowsNull=True,
+        form.addHidden('volumes', PointerParam, label="Priors", allowsNull=True,
+                       pointerClass="SetOfVolumes, Volume",
+                       condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
+                       help='A set of volumes with Zernike3D coefficients associated (computed using '
+                            '"Reference map" as reference) to add as prior information to the Zernike3D '
+                            'space')
+        form.addParam('priors', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumes, Volume",
                       condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
-                      help='A set of volumes with Zernike3D coefficients associated (computed using '
-                           '"Reference map" as reference) to add as prior information to the Zernike3D '
+                      help='Volumes with Zernike3D coefficients associated (computed using '
+                           '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('boxSize', IntParam, label="Box size",
                       condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZValues')",
@@ -207,7 +213,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
             reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
             mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
-            volumes = self.volumes
+            volumes = self.priors
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
