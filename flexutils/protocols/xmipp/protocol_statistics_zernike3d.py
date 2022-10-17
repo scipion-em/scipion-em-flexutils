@@ -39,6 +39,8 @@ import flexutils.constants as const
 import pwem.emlib.metadata as md
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 
+from flexutils.utils import getXmippFileName
+
 
 class XmippProtStatisticsZernike3D(ProtAnalysis3D):
     """ 3D visualization of motion statistics """
@@ -109,7 +111,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
 
         # Run viewer
         args = "--i %s --r %s --L1 %d --L2 %d --sr %f --thr %d" \
-               % (self._getExtraPath("particles.xmd"), mask, L1, L2,
+               % (self._getExtraPath("particles.xmd"), getXmippFileName(mask), L1, L2,
                   particles.getSamplingRate(), self.numberOfThreads.get())
         if self.structure.get():
             args += " --atom_file %s" % self.structure.get().getFileName()

@@ -36,7 +36,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow.object import Float, Integer, String
 
 import flexutils
-from flexutils.utils import readZernikeFile
+from flexutils.utils import readZernikeFile, getXmippFileName
 import flexutils.constants as const
 
 
@@ -80,8 +80,8 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
 
     # --------------------------- STEPS functions ------------------------------
     def deformStep(self):
-        input = self.input.get().getFileName()
-        reference = self.reference.get().getFileName()
+        input = getXmippFileName(self.input.get().getFileName())
+        reference = getXmippFileName(self.reference.get().getFileName())
         output = self._getExtraPath("map_deformed.mrc")
         l1 = self.l1.get()
         l2 = self.l2.get()

@@ -24,6 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+
 import glob
 
 import numpy as np
@@ -41,8 +43,9 @@ from pwem.objects import SetOfVolumes, Volume
 import xmipp3
 
 import flexutils.constants as const
-from flexutils.utils import readZernikeFile
+from flexutils.utils import readZernikeFile, getXmippFileName
 import flexutils
+
 
 class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
     """ Compute Zernike3D priors and assign them to a SetOfVolumes """
@@ -96,7 +99,7 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def convertInputStep(self):
-        reference_file = self.reference.get().getFileName()
+        reference_file = getXmippFileName(self.reference.get().getFileName())
         dim = self.reference.get().getDim()[0]
         boxSize = self.boxSize.get()
 
@@ -105,10 +108,10 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         for pointer in self.inputVolumes:
             obj = pointer.get()
             if isinstance(obj, Volume):
-                input_files.append(obj.getFileName())
+                input_files.append(getXmippFileName(obj.getFileName()))
             elif isinstance(obj, SetOfVolumes):
                 for input_map in obj.iterItems():
-                    input_files.append(input_map.getFileName())
+                    input_files.append(getXmippFileName(input_map.getFileName()))
 
         # Rigid fitting of maps to reference
         for input_file in input_files:
@@ -125,14 +128,10 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
                             % (output_file + ":mrc", output_file, boxSize), numberOfMpi=1,
                             env=xmipp3.Plugin.getEnviron())
 
-        input_mask = self.mask.get().getFileName()
+        input_mask = getXmippFileName(self.mask.get().getFileName())
         out_mask = self._getExtraPath("ref_mask.mrc")
         out_reference = self._getExtraPath("ref.mrc")
         ih = ImageHandler()
-        if getExt(input_mask) == ".mrc":
-            input_mask += ":mrc"
-        if getExt(reference_file) == ".mrc":
-            reference_file += ":mrc"
         ih.convert(input_mask, out_mask)
         ih.convert(reference_file, out_reference)
         if dim != boxSize:

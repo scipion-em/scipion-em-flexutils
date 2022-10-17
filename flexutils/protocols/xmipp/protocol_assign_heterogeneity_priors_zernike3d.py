@@ -46,6 +46,7 @@ import xmipp3
 
 import flexutils.constants as const
 import flexutils
+from flexutils.utils import getXmippFileName
 
 
 class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
@@ -147,16 +148,16 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         ih = ImageHandler()
-        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get()
-        ih.convert(inputVolume, fnVol)
+        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get().getFileName()
+        ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputParticles.get().getFirstItem().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1,
                         env=xmipp3.Plugin.getEnviron())
-        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolumeMask.get()
+        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolumeMask.get().getFileName()
         if inputMask:
-            ih.convert(inputMask, fnVolMask)
+            ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,

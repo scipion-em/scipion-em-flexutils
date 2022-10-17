@@ -46,6 +46,7 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
+from flexutils.utils import getXmippFileName
 
 
 class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
@@ -143,15 +144,15 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         newTs = inputParticles.getSamplingRate() / correctionFactor
 
         ih = ImageHandler()
-        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get()
-        ih.convert(inputVolume, fnVol)
+        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get().getFileName()
+        ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputVolume.get().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get()
+        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get().getFileName()
         if inputMask:
-            ih.convert(inputMask, fnVolMask)
+            ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
@@ -173,7 +174,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
 
             # Compute deformations
             def_file = self._getExtraPath("def_file.txt")
-            args = "--i %s --z_clnm %s --o %s" % (fnVolMask, fnPriors, def_file)
+            args = "--i %s --z_clnm %s --o %s" % (getXmippFileName(fnVolMask), fnPriors, def_file)
             program = os.path.join(const.XMIPP_SCRIPTS, "compute_z_clnm_deformation.py")
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args, numberOfMpi=1)

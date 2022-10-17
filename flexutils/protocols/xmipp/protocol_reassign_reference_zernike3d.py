@@ -41,6 +41,7 @@ from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, setXmi
 
 import flexutils.constants as const
 import flexutils
+from flexutils.utils import getXmippFileName
 
 
 class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
@@ -120,7 +121,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
             f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
         args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
-               % (imgsFn, refMask, newRefMask, file_zclnm_r, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
+               % (imgsFn, getXmippFileName(refMask), getXmippFileName(newRefMask),
+                  file_zclnm_r, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
         program = os.path.join(const.XMIPP_SCRIPTS, "reassign_reference.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
