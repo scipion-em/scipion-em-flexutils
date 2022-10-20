@@ -99,7 +99,7 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def convertInputStep(self):
-        reference_file = getXmippFileName(self.reference.get().getFileName())
+        reference_file = self.reference.get().getFileName()
         dim = self.reference.get().getDim()[0]
         boxSize = self.boxSize.get()
 
@@ -108,10 +108,10 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         for pointer in self.inputVolumes:
             obj = pointer.get()
             if isinstance(obj, Volume):
-                input_files.append(getXmippFileName(obj.getFileName()))
+                input_files.append(obj.getFileName())
             elif isinstance(obj, SetOfVolumes):
                 for input_map in obj.iterItems():
-                    input_files.append(getXmippFileName(input_map.getFileName()))
+                    input_files.append(input_map.getFileName())
 
         # Rigid fitting of maps to reference
         for input_file in input_files:
@@ -133,7 +133,7 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         out_reference = self._getExtraPath("ref.mrc")
         ih = ImageHandler()
         ih.convert(input_mask, out_mask)
-        ih.convert(reference_file, out_reference)
+        ih.convert(getXmippFileName(reference_file), out_reference)
         if dim != boxSize:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d --interp nearest" % (out_mask, boxSize), numberOfMpi=1,
