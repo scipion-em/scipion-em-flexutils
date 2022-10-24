@@ -123,6 +123,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                            "different clusters it might present\n"
                            "**Note**: Once this value is chosen, it should not be changed "
                            "when re-executing in interactive mode")
+        form.addParallelSection(threads=4, mpi=0)
 
 
     # --------------------------- INSERT steps functions ----------------------
@@ -326,9 +327,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       "--n_components %d" \
+                       "--n_components %d --thr %d" \
                        % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
-                          self.DIMENSIONS[self.dimensions.get()])
+                          self.DIMENSIONS[self.dimensions.get()], self.numberOfThreads.get())
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")

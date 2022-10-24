@@ -106,6 +106,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                       default=False, condition="mode==0",
                       help="DENSMAP will try to bring densities in the UMAP space closer to each other. Execution time "
                            "will increase when computing a DENSMAP")
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -300,8 +301,9 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             file_coords = self._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
                 args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       "--n_components 3" \
-                       % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get())
+                       "--n_components 3 --thr %d" \
+                       % (file_z_space, file_coords, self.nb_umap.get(),
+                          self.epochs_umap.get(), self.numberOfThreads.get())
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")

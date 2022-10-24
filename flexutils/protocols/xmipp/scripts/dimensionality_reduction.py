@@ -39,8 +39,9 @@ def reduceDimensions(coords_ld, outFile, mode, **kwargs):
         n_neighbors = kwargs.pop("n_neighbors", 5)
         n_epochs = kwargs.pop("n_epochs", 5)
         densmap = kwargs.pop("densmap", 5)
+        thr = kwargs.pop("thr", 4)
         umap = UMAP(n_components=n_components, n_neighbors=n_neighbors,
-                    n_epochs=n_epochs, densmap=densmap).fit(coords_ld)
+                    n_epochs=n_epochs, densmap=densmap, n_jobs=thr).fit(coords_ld)
         coords = umap.transform(coords_ld)
     np.savetxt(outFile, coords)
 
@@ -58,6 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_epochs', type=int, required=False)
     parser.add_argument('--densmap', action='store_true')
     parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--thr', type=int, required=False)
 
     args = parser.parse_args()
 
@@ -69,4 +71,4 @@ if __name__ == '__main__':
     elif args.umap:
         reduceDimensions(coords, args.output, "umap", n_components=args.n_components,
                          n_neighbors=args.n_neighbors, n_epochs=args.n_epochs,
-                         densmap=args.densmap)
+                         densmap=args.densmap, thr=args.thr)
