@@ -328,10 +328,10 @@ class PointCloudView(HasTraits):
                 del self.selections[key]
         # Compute KMeans and save automatic selection
         if int(self.n_clusters) > 0:
-            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.data)
+            clusters = KMeans(n_clusters=int(self.n_clusters), n_init=1).fit(self.z_space)
             centers = clusters.cluster_centers_
             self.interp_val = clusters.labels_
-            _, inds = self.kdtree_data.query(centers, k=1)
+            _, inds = self.kdtree_z_pace.query(centers, k=1)
             for idx, ind in enumerate(inds):
                 self.selections["kmean_%d" % (idx + 1)] = ind[0]
         data = self.data[list(self.selections.values())]
