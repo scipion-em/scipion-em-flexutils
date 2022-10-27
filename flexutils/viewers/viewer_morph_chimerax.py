@@ -53,8 +53,8 @@ class FlexMorphChimeraX():
         self.path = _path
         self.other_inputs = kwargs
 
-        index = np.argwhere(self.file_names == "reference")
-        self.file_names = np.delete(self.file_names, index)
+        index = self.file_names.index("reference")
+        self.file_names.remove("reference")
         self.z_space = np.delete(self.z_space, index, axis=0)
 
     def showSalesMan(self, param=None):
@@ -83,7 +83,7 @@ class FlexMorphChimeraX():
                 ImageHandler().convert(os.path.join(self.path, "vol_000.mrc"),
                                        os.path.join(self.path, self.file_names[idz] + ".mrc"))
 
-        self.file_names = self.file_names[path]
+        self.file_names = [self.file_names[i] for i in path]
 
         # # Useful parameters
         # smprt = self.protocol.reference.get().getSamplingRate()
