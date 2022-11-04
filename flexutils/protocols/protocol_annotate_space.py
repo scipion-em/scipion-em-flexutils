@@ -84,6 +84,18 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                       help='Volumes with Zernike3D coefficients associated (computed using '
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
+        form.addParam('l1', IntParam, default=3,
+                      label='Zernike Degree',
+                      expertLevel=LEVEL_ADVANCED,
+                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
+                                "and not hasattr(particles,'L1')",
+                      help='Degree Zernike Polynomials of the deformation=1,2,3,...')
+        form.addParam('l2', IntParam, default=2,
+                      label='Harmonical Degree',
+                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
+                                "and not hasattr(particles,'L2')",
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         form.addParam('boxSize', IntParam, label="Box size",
                       condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZValues')",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
@@ -180,8 +192,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
                 for idx in range(len(csv_z_space)):
                     csv_z_space[idx] *= factor
 
-                L1 = particles.L1
-                L2 = particles.L2
+                L1 = particles.L1.get() if hasattr(particles, 'L1') else self.l1.get()
+                L2 = particles.L2.get() if hasattr(particles, 'L2') else self.l2.get()
                 Rmax = particles.Rmax
                 reference_file = String(reference)
                 mask_file = String(mask)
@@ -358,10 +370,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D):
 
         # ********* Run viewer *********
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+            L1 = particles.L1.get() if hasattr(particles, 'L1') else self.l1.get()
+            L2 = particles.L2.get() if hasattr(particles, 'L2') else self.l2.get()
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--L1 %d --L2 %d --n_vol %d --mode Zernike3D" \
                    % (file_coords, file_z_space, file_interp_val, path,
-                      particles.L1.get(), particles.L2.get(), self.num_vol)
+                      L1, L2, self.num_vol)
 
         elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
             args = "--data %s --z_space %s --interp_val %s --path %s " \
