@@ -498,7 +498,7 @@ class VolumeSlicer(HasTraits):
     def _morph_chimerax_fired(self):
         # Morph maps in chimerax based on different ordering methods
         idm = np.asarray(list(self.selections.values()))
-        sel_names = np.asarray(list(self.selections.keys()))
+        sel_names = list(self.selections.keys())
         if len(self.selections) > 1:
             if self.morphing_choice == "Salesman":
                 print("Salesman chosen")

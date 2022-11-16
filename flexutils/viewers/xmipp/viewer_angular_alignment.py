@@ -35,16 +35,20 @@ from pyworkflow.utils.process import runJob
 from flexutils.protocols.xmipp.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
 from flexutils.protocols.xmipp.protocol_focus_zernike3d import XmippProtFocusZernike3D
 from flexutils.protocols.xmipp.protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D
+from flexutils.protocols.tensorflow.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
+from flexutils.protocols.tensorflow.protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep
 
 import flexutils.constants as const
 from flexutils.utils import computeNormRows
 import flexutils
 
 
-class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
+class XmippAngularAlignmentViewer(ProtocolViewer):
     """ Visualize Zernike3D coefficient space """
     _label = 'viewer angular align - Zernike3D'
-    _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D, XmippProtReassignReferenceZernike3D]
+    _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D,
+                XmippProtReassignReferenceZernike3D, TensorflowProtAngularAlignmentZernike3Deep,
+                TensorflowProtPredictZernike3Deep]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
@@ -80,6 +84,8 @@ class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
                       default=False, condition="mode==0",
                       help="DENSMAP will try to bring densities in the UMAP space closer to each other. Execution time "
                            "will increase when computing a DENSMAP")
+        form.addParam('threads', params.IntParam, label="Number of threads",
+                      default=4, condition="mode==0")
         form.addParam('doShowSpace', params.LabelParam,
                       label="Display the Zernike3D coefficient space")
 
@@ -103,8 +109,10 @@ class XmippAngularAlignmentZernike3DViewer(ProtocolViewer):
         if mode == 0:
             file_coords = self.protocol._getExtraPath("umap_coords.txt")
             if not os.path.isfile(file_coords):
-                args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d --n_components 3" \
-                       % (file_z_clnm, file_coords, self.nb_umap.get(), self.epochs_umap.get())
+                args = "--input %s --umap --output %s --n_neighbors %d " \
+                       "--n_epochs %d --n_components 3 --thr %d" \
+                       % (file_z_clnm, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
+                          self.threads.get())
                 if self.densmap_umap.get():
                     args += " --densmap"
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")

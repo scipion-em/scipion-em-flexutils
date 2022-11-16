@@ -32,3 +32,4 @@ from .protocol_auto_reference import ProtFlexAutoReference
 
 # Zernike3D Xmipp protocols (offered here due to strong package dependency)
 from .xmipp import *
+from .tensorflow import *

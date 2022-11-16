@@ -316,8 +316,3 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                 errors.append('Zernike degree must be higher than '
                               'SPH degree.')
         return errors
-
-
-
-
-

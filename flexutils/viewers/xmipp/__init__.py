@@ -24,4 +24,4 @@
 # *
 # **************************************************************************
 
-from .viewer_angular_alignment_zernike3d import XmippAngularAlignmentZernike3DViewer
+from .viewer_angular_alignment import XmippAngularAlignmentViewer

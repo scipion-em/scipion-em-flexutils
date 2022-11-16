@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros (dherreros@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,17 +24,5 @@
 # *
 # **************************************************************************
 
-
-import os
-
-import flexutils
-
-
-# Conda environment requirements
-CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
-TENSORFLOW_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_requirements.txt')
-
-# Location inside plugin
-VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
-XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
-TENSORFLOW_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "tensorflow", "scripts")
+from .protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
+from .protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep

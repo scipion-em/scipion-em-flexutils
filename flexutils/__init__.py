@@ -38,7 +38,7 @@ import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
 import flexutils
-from flexutils.constants import CONDA_REQ
+from flexutils.constants import CONDA_REQ, TENSORFLOW_REQ
 
 
 __version__ = "3.0.1"
@@ -51,6 +51,10 @@ class Plugin(pwplugin.Plugin):
     @classmethod
     def getEnvActivation(cls):
         return "conda activate flexutils"
+
+    @classmethod
+    def getTensorflowActivation(cls):
+        return "conda activate flexutils-tensorflow"
 
     @classmethod
     def getProgram(cls, program, python=True):
@@ -91,12 +95,24 @@ class Plugin(pwplugin.Plugin):
         return cmd + '%(program)s ' % locals()
 
     @classmethod
+    def getTensorflowProgram(cls, program, python=True):
+        cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getTensorflowActivation())
+        if python:
+            import pyworkflow, pwem, xmipp3
+            pyworkflow_path = os.path.join(pyworkflow.__path__[0], "..")
+            pywem_path = os.path.join(pwem.__path__[0], "..")
+            xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
+            paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
+            cmd += "PYTHONPATH=%s TF_FORCE_GPU_ALLOW_GROWTH=true python " % ":".join(paths)
+        return cmd + '%(program)s ' % locals()
+
+    @classmethod
     def getCommand(cls, program, args, python=True):
         return cls.getProgram(program, python) + args
 
     @classmethod
     def defineBinaries(cls, env):
-        def getCondaInstallation():
+        def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
             if 'CONDA_DEFAULT_ENV' in os.environ:
                 installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
@@ -107,9 +123,23 @@ class Plugin(pwplugin.Plugin):
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd
 
+        def getCondaInstallationTensorflow():
+            installationCmd = cls.getCondaActivationCmd()
+            if 'CONDA_DEFAULT_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils-tensorflow'
+            elif 'VIRTUAL_ENV' in os.environ:
+                installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8'
+            installationCmd += "conda activate flexutils-tensorflow && " \
+                               "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
+                               "pip install -r " + TENSORFLOW_REQ
+            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+            return installationCmd
+
         commands = []
-        installationEnv = getCondaInstallation()
+        installationEnv = getCondaInstallationFlexutils()
+        installationTensorflow = getCondaInstallationTensorflow()
         commands.append((installationEnv, []))
+        commands.append((installationTensorflow, []))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,
