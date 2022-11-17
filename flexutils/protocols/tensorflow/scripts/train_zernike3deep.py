@@ -36,7 +36,8 @@ from flexutils.protocols.tensorflow.generators.generator_zernike3deep import Gen
 from flexutils.protocols.tensorflow.networks.zernike3deep import AutoEncoder
 
 physical_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
+for device in physical_devices:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 
 def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs):
