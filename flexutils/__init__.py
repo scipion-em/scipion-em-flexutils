@@ -131,8 +131,8 @@ class Plugin(pwplugin.Plugin):
                 installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8 && '
             installationCmd += "conda activate flexutils-tensorflow && " \
                                "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
-                               "pip install -r " + TENSORFLOW_REQ + " && "
-            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+                               "pip install -r " + TENSORFLOW_REQ
+            # installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
             return installationCmd
 
         commands = []
