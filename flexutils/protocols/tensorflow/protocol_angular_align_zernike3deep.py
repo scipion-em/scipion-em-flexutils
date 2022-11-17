@@ -166,7 +166,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         out_path = self._getExtraPath('h5_metadata')
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
-        sr = self.inputParticles.get().getSamplingRate()
+        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
+        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         unStack = self.unStack.get()
         volume = self._getFileName('fnVol')
