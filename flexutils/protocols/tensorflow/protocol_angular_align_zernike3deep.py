@@ -197,6 +197,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         args = "--h5_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
                "--shuffle --step %d --split_train %f --epochs %d" \
                % (h5_file, out_path, L1, L2, batch_size, step, split_train, epochs)
+        if self.useGpu.get():
+            gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
+            args += " --gpu %s" % gpu_list
+
         program = os.path.join(const.TENSORFLOW_SCRIPTS, "train_zernike3deep.py")
         program = flexutils.Plugin.getTensorflowProgram(program)
         self.runJob(program, args, numberOfMpi=1)

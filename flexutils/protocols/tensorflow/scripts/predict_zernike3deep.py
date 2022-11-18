@@ -35,8 +35,10 @@ import tensorflow as tf
 from flexutils.protocols.tensorflow.generators.generator_zernike3deep import Generator
 from flexutils.protocols.tensorflow.networks.zernike3deep import AutoEncoder
 
-physical_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# # os.environ["CUDA_VISIBLE_DEVICES"]="0,2,3,4"
+# physical_devices = tf.config.list_physical_devices('GPU')
+# for gpu_instance in physical_devices:
+#     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
 def predict(h5_file, weigths_file, L1, L2):
@@ -84,8 +86,15 @@ if __name__ == '__main__':
     parser.add_argument('--weigths_file', type=str, required=True)
     parser.add_argument('--L1', type=int, required=True)
     parser.add_argument('--L2', type=int, required=True)
+    parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
+
+    if args.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    physical_devices = tf.config.list_physical_devices('GPU')
+    for gpu_instance in physical_devices:
+        tf.config.experimental.set_memory_growth(gpu_instance, True)
 
     inputs = {"h5_file": args.h5_file, "weigths_file": args.weigths_file,
               "L1": args.L1, "L2": args.L2}

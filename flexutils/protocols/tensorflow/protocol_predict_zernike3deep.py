@@ -166,6 +166,9 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         L2 = zernikeParticles.L2.get()
         args = "--h5_file %s --weigths_file %s --L1 %d --L2 %d" \
                % (h5_file, weigths_file, L1, L2)
+        if self.useGpu.get():
+            gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
+            args += " --gpu %s" % gpu_list
         program = os.path.join(const.TENSORFLOW_SCRIPTS, "predict_zernike3deep.py")
         program = flexutils.Plugin.getTensorflowProgram(program)
         self.runJob(program, args, numberOfMpi=1)

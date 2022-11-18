@@ -35,9 +35,10 @@ import tensorflow as tf
 from flexutils.protocols.tensorflow.generators.generator_zernike3deep import Generator
 from flexutils.protocols.tensorflow.networks.zernike3deep import AutoEncoder
 
-physical_devices = tf.config.list_physical_devices('GPU')
-for gpu_instance in physical_devices:
-    tf.config.experimental.set_memory_growth(gpu_instance, True)
+# # os.environ["CUDA_VISIBLE_DEVICES"]="0,2,3,4"
+# physical_devices = tf.config.list_physical_devices('GPU')
+# for gpu_instance in physical_devices:
+#     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
 def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs):
@@ -95,8 +96,15 @@ if __name__ == '__main__':
     parser.add_argument('--step', type=int, required=True)
     parser.add_argument('--split_train', type=float, required=True)
     parser.add_argument('--epochs', type=int, required=True)
+    parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
+
+    if args.gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    physical_devices = tf.config.list_physical_devices('GPU')
+    for gpu_instance in physical_devices:
+        tf.config.experimental.set_memory_growth(gpu_instance, True)
 
     inputs = {"h5_file": args.h5_file, "outPath": args.out_path, "L1": args.L1,
               "L2": args.L2, "batch_size": args.batch_size, "shuffle": args.shuffle,
