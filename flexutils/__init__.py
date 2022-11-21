@@ -103,7 +103,7 @@ class Plugin(pwplugin.Plugin):
             pywem_path = os.path.join(pwem.__path__[0], "..")
             xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
+            cmd += "PYTHONPATH=%s TF_FORCE_GPU_ALLOW_GROWTH=true python " % ":".join(paths)
         return cmd + '%(program)s ' % locals()
 
     @classmethod
