@@ -34,7 +34,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 
-from flexutils_tensorflow.utils import getXmippOrigin
+from tensorflow_toolkit.utils import getXmippOrigin
 
 
 class DataGeneratorBase(tf.keras.utils.Sequence):

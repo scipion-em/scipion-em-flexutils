@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # **************************************************************************
 # *
 # * Authors:  David Herreros Calero (dherreros@cnb.csic.es)
@@ -32,8 +33,8 @@ import mrcfile
 
 import tensorflow as tf
 
-from flexutils_tensorflow.generators.generator_zernike3deep import Generator
-from flexutils_tensorflow.networks.zernike3deep import AutoEncoder
+from tensorflow_toolkit.generators.generator_zernike3deep import Generator
+from tensorflow_toolkit.networks.zernike3deep import AutoEncoder
 
 # # os.environ["CUDA_VISIBLE_DEVICES"]="0,2,3,4"
 # physical_devices = tf.config.list_physical_devices('GPU')

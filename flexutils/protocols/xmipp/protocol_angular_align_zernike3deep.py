@@ -201,8 +201,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = os.path.join(const.TENSORFLOW_SCRIPTS, "train_zernike3deep.py")
-        program = flexutils.Plugin.getTensorflowProgram(program)
+        program = "train_zernike3deep.py"
+        program = flexutils.Plugin.getTensorflowProgram(program, python=False)
         self.runJob(program, args, numberOfMpi=1)
 
     def createOutputStep(self):

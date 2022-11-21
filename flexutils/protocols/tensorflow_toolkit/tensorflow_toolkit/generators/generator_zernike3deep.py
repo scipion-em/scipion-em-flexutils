@@ -27,8 +27,8 @@
 
 import tensorflow as tf
 
-from flexutils_tensorflow.generators.generator_template import DataGeneratorBase
-from flexutils_tensorflow.utils import basisDegreeVectors, computeBasis
+from tensorflow_toolkit.generators.generator_template import DataGeneratorBase
+from tensorflow_toolkit.utils import basisDegreeVectors, computeBasis
 
 
 class Generator(DataGeneratorBase):
