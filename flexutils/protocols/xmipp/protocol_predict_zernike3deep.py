@@ -169,8 +169,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
-        program = os.path.join(const.TENSORFLOW_SCRIPTS, "predict_zernike3deep.py")
-        program = flexutils.Plugin.getTensorflowProgram(program)
+        program = flexutils.Plugin.getTensorflowProgram("predict_zernike3deep.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
 
     def createOutputStep(self):
