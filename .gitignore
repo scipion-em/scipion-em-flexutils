@@ -9,9 +9,3 @@
 
 # VSCODE files
 .vscode
-
-flexutils/protocols/*.egg-info
-flexutils/protocols/build
-flexutils/protocols/dist
-flexutils/protocols/flexutils_tensorflow/*.egg-info
-flexutils/protocols/flexutils_tensorflow/build

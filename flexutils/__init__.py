@@ -98,12 +98,12 @@ class Plugin(pwplugin.Plugin):
     def getTensorflowProgram(cls, program, python=True):
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getTensorflowActivation())
         if python:
-            import pyworkflow, pwem, xmipp3
-            pyworkflow_path = os.path.join(pyworkflow.__path__[0], "..")
-            pywem_path = os.path.join(pwem.__path__[0], "..")
-            xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
-            paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "PYTHONPATH=%s TF_FORCE_GPU_ALLOW_GROWTH=true python " % ":".join(paths)
+            # import pyworkflow, pwem, xmipp3
+            # pyworkflow_path = os.path.join(pyworkflow.__path__[0], "..")
+            # pywem_path = os.path.join(pwem.__path__[0], "..")
+            # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
+            # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
+            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
         return cmd + '%(program)s ' % locals()
 
     @classmethod
