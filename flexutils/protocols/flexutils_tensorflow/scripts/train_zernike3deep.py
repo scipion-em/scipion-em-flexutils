@@ -32,8 +32,8 @@ import mrcfile
 
 import tensorflow as tf
 
-from flexutils.protocols.tensorflow.generators.generator_zernike3deep import Generator
-from flexutils.protocols.tensorflow.networks.zernike3deep import AutoEncoder
+from flexutils_tensorflow.generators.generator_zernike3deep import Generator
+from flexutils_tensorflow.networks.zernike3deep import AutoEncoder
 
 # # os.environ["CUDA_VISIBLE_DEVICES"]="0,2,3,4"
 # physical_devices = tf.config.list_physical_devices('GPU')
@@ -41,14 +41,21 @@ from flexutils.protocols.tensorflow.networks.zernike3deep import AutoEncoder
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def predict(h5_file, weigths_file, L1, L2):
+def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs):
     # Create data generator
-    generator = Generator(L1, L2, h5_file=h5_file, shuffle=True, batch_size=32,
-                          step=1, splitTrain=1.0)
+    generator = Generator(L1, L2, h5_file=h5_file, shuffle=shuffle, batch_size=batch_size,
+                          step=step, splitTrain=splitTrain)
 
-    # Load model
-    autoencoder = AutoEncoder(generator)
-    autoencoder.load_weights(weigths_file)
+    # Train model
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        autoencoder = AutoEncoder(generator)
+        optimizer = tf.keras.optimizers.Adam(lr=1e-5)
+        autoencoder.compile(optimizer=optimizer)
+    autoencoder.fit(generator, epochs=epochs)
+
+    # Save model
+    autoencoder.save_weights(os.path.join(outPath, "zernike3deep_model"))
 
     # Get Zernike3DSpace
     if generator.fitInMemory:
@@ -83,9 +90,14 @@ if __name__ == '__main__':
     # Input parameters
     parser = argparse.ArgumentParser()
     parser.add_argument('--h5_file', type=str, required=True)
-    parser.add_argument('--weigths_file', type=str, required=True)
+    parser.add_argument('--out_path', type=str, required=True)
     parser.add_argument('--L1', type=int, required=True)
     parser.add_argument('--L2', type=int, required=True)
+    parser.add_argument('--batch_size', type=int, required=True)
+    parser.add_argument('--shuffle', action='store_true')
+    parser.add_argument('--step', type=int, required=True)
+    parser.add_argument('--split_train', type=float, required=True)
+    parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -96,8 +108,9 @@ if __name__ == '__main__':
     for gpu_instance in physical_devices:
         tf.config.experimental.set_memory_growth(gpu_instance, True)
 
-    inputs = {"h5_file": args.h5_file, "weigths_file": args.weigths_file,
-              "L1": args.L1, "L2": args.L2}
+    inputs = {"h5_file": args.h5_file, "outPath": args.out_path, "L1": args.L1,
+              "L2": args.L2, "batch_size": args.batch_size, "shuffle": args.shuffle,
+              "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs}
 
     # Initialize volume slicer
-    predict(**inputs)
+    train(**inputs)

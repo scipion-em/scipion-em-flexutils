@@ -30,7 +30,7 @@ from tensorflow.python.keras import Input
 from tensorflow.python.keras.models import Model
 from tensorflow.keras import layers
 
-from flexutils.protocols.tensorflow.utils import euler_matrix_row, computeCTF
+from flexutils_tensorflow.utils import euler_matrix_row, computeCTF
 
 
 class Encoder(Model):

@@ -103,7 +103,7 @@ class Plugin(pwplugin.Plugin):
             pywem_path = os.path.join(pwem.__path__[0], "..")
             xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "PYTHONPATH=%s TF_FORCE_GPU_ALLOW_GROWTH=true python " % ":".join(paths)
+            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
         return cmd + '%(program)s ' % locals()
 
     @classmethod
@@ -125,15 +125,13 @@ class Plugin(pwplugin.Plugin):
 
         def getCondaInstallationTensorflow():
             installationCmd = cls.getCondaActivationCmd()
-            if 'CONDA_DEFAULT_ENV' in os.environ:
-                installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8 && '
-            elif 'VIRTUAL_ENV' in os.environ:
-                installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8 && '
+            installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8 && '
             installationCmd += "conda activate flexutils-tensorflow && " \
                                "conda install -c conda-forge cudatoolkit=10.1 cudnn=7 -y && " \
                                "pip install -r " + TENSORFLOW_REQ
             # "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
-            # installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0],
+                                                                   "protocols", "flexutils-tensorflow"))
             return installationCmd
 
         commands = []

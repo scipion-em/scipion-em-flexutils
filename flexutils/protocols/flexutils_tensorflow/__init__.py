@@ -23,6 +23,3 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-from .protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
-from .protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep

@@ -30,8 +30,8 @@ setup(
     description='Tools for 3D visualization and manipulation of flexibility data',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-flexutilts',  # Optional
-    author='you',  # Optional
-    author_email='you@yourinstitution.email',  # Optional
+    author='David Herreros',  # Optional
+    author_email='dherreros@cnb.csic.es',  # Optional
     keywords='scipion continuous-heterogeneity imageprocessing scipion-3.0',  # Optional
     packages=find_packages(),
     install_requires=[requirements],

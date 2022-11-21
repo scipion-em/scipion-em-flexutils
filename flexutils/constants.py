@@ -37,4 +37,4 @@ TENSORFLOW_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow
 # Location inside plugin
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
 XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
-TENSORFLOW_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "tensorflow", "scripts")
+TENSORFLOW_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "flexutils_tensorflow", "scripts")
