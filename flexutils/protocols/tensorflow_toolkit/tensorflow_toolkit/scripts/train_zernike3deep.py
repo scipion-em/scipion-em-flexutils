@@ -61,10 +61,10 @@ def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epoch
     # Get Zernike3DSpace
     if generator.fitInMemory:
         images = generator.mrc
-        images = images.reshape(-1, generator.xsize, generator.xsize, 1)
+        # images = images.reshape(-1, generator.xsize, generator.xsize, 1)
         zernike_space = []
         for image in images:
-            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, :])
+            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, None])
             zernike_vec = np.hstack([z_x.numpy(), z_y.numpy(), z_z.numpy()])
             zernike_space.append(zernike_vec)
         zernike_space = np.vstack(zernike_space)

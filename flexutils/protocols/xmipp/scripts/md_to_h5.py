@@ -41,7 +41,7 @@ import xmipp3
 def ConvertMDToH5(metadata_file, outPath, sr, applyCTF, unStack, volume, mask, thr=4):
     # Read metadata file
     metadata = md.MetaData(metadata_file)
-    metadata.sort()
+    # metadata.sort()
 
     img_files = metadata.getColumnValues(md.MDL_IMAGE)
     rot = metadata.getColumnValues(md.MDL_ANGLE_ROT)
