@@ -89,11 +89,12 @@ class Decoder(Model):
     # CTF filter image
     decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(decoded)
 
-    self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z], decoded_ctf, name="decoder")
+    self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z],
+                         [decoded_ctf, d_x, d_y, d_z], name="decoder")
 
   def call(self, x):
-    decoded = self.decoder(x)
-    return decoded
+    decoded, d_x, d_y, d_z = self.decoder(x)
+    return decoded, d_x, d_y, d_z
 
 class AutoEncoder(Model):
     def __init__(self, generator, **kwargs):
@@ -102,13 +103,15 @@ class AutoEncoder(Model):
         self.encoder = Encoder(generator.zernike_size.shape[0], generator.xsize)
         self.decoder = Decoder(generator.zernike_size.shape[0], generator)
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
-        # self.cap_def_loss_tracker = tf.keras.metrics.Mean(name="cap_def_loss")
+        self.img_loss_tracker = tf.keras.metrics.Mean(name="img_loss")
+        self.cap_def_loss_tracker = tf.keras.metrics.Mean(name="cap_def_loss")
 
     @property
     def metrics(self):
         return [
             self.total_loss_tracker,
-            # self.cap_def_loss_tracker,
+            self.cap_def_loss_tracker,
+            self.img_loss_tracker,
         ]
 
     def train_step(self, data):
@@ -137,22 +140,25 @@ class AutoEncoder(Model):
 
         with tf.GradientTape() as tape:
             z_space_x, z_space_y, z_space_z = self.encoder(data[0])
-            decoded = self.decoder([z_space_x, z_space_y, z_space_z])
+            decoded, d_x, d_y, d_z = self.decoder([z_space_x, z_space_y, z_space_z])
 
             ori_images = self.decoder.generator.applyFourierMask(data[0])
             decoded = self.decoder.generator.applyFourierMask(decoded)
 
-            # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
+            cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
+            img_loss = self.generator.loss_correlation(ori_images, decoded)
 
-            total_loss = self.generator.loss_correlation(ori_images, decoded)  #+ cap_def_loss
+            total_loss = img_loss + cap_def_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
-        # self.cap_def_loss_tracker.update_state(cap_def_loss)
+        self.img_loss_tracker.update_state(img_loss)
+        self.cap_def_loss_tracker.update_state(cap_def_loss)
         return {
             "loss": self.total_loss_tracker.result(),
-            # "cap_def_loss": self.cap_def_loss_tracker.result()
+            "img_loss": self.img_loss_tracker.result(),
+            "cap_def_loss": self.cap_def_loss_tracker.result()
         }
 
     def call(self, input_features):

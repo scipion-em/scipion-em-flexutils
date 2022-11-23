@@ -26,6 +26,7 @@
 
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 import h5py
 import mrcfile
 import os
@@ -44,7 +45,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.indexes = np.arange(self.batch_size)
-        self.cap_def = tf.constant(5., dtype=tf.float32)
+        self.cap_def = 3.
 
         # Read metadata
         mask, volume = self.readH5Metadata(h5_file)
@@ -78,6 +79,10 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         size = int(0.5 * self.xsize + 1)
         circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
         self.circular_mask = circular_mask[0, :, :]
+
+        # Cap deformation vals
+        self.inv_sqrt_N = tf.constant(1. / np.sqrt(self.coords.shape[0]), dtype=tf.float32)
+        self.inv_bs = tf.constant(1. / self.batch_size, dtype=tf.float32)
 
     #----- Initialization methods -----#
 
@@ -195,7 +200,9 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         Y, X = np.ogrid[:h, :w]
         dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
 
-        mask = dist_from_center <= radius
+        mask = (dist_from_center <= radius).astype(np.float32)
+        mask = gaussian_filter(mask, sigma=2.)
+
         return mask
 
     def applyFourierMask(self, images):
@@ -206,11 +213,10 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         return tf.reshape(masked_images, [self.batch_size, self.xsize, self.xsize, 1])
 
     def capDeformation(self, d_x, d_y, d_z):
-        inv_sqrt_N = 1. / np.sqrt(self.coords.shape[0])
-        inv_bs = 1. / self.batch_size
-        num = tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z)
-        rmsdef = inv_sqrt_N * inv_bs * num
-        return tf.math.pow(100., rmsdef - self.cap_def)
+        num = tf.sqrt(tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z))
+        rmsdef = self.inv_sqrt_N * self.inv_bs * num
+        return tf.keras.activations.relu(rmsdef, threshold=self.cap_def)
+        # return tf.math.pow(1000., rmsdef - self.cap_def)
 
     # ----- -------- -----#
 
