@@ -41,10 +41,9 @@ class Encoder(Model):
 
     encoder_inputs = Input(shape=(input_dim, input_dim, 1))
     x = layers.Flatten()(encoder_inputs)
-    x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
+    for _ in range(3):
+        x = layers.Dense(512, activation='relu', kernel_regularizer=l2)(x)
     x = layers.Dropout(0.3)(x)
-    for _ in range(2):
-        x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
     x = layers.BatchNormalization()(x)
 
     z_space_x = layers.Dense(latent_dim, activation="linear", name="z_space_x")(x)
@@ -150,7 +149,8 @@ class AutoEncoder(Model):
             decoded = self.decoder.generator.applyFourierMask(decoded)
 
             # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
-            img_loss = self.generator.loss_correlation(ori_images, decoded)
+            img_loss = self.decoder.generator.loss_correlation(ori_images, decoded)
+            # img_loss = -tf.reduce_mean(self.decoder.generator.frc_loss(ori_images, decoded))
 
             total_loss = img_loss #+ cap_def_loss
 
