@@ -63,25 +63,25 @@ class Decoder(Model):
     decoder_inputs_z = Input(shape=(latent_dim,))
 
     # Compute deformation field
-    d_x = layers.Lambda(self.generator.computeDeformationField, trainable=False)(decoder_inputs_x)
-    d_y = layers.Lambda(self.generator.computeDeformationField, trainable=False)(decoder_inputs_y)
-    d_z = layers.Lambda(self.generator.computeDeformationField, trainable=False)(decoder_inputs_z)
+    d_x = layers.Lambda(self.generator.computeDeformationField, trainable=True)(decoder_inputs_x)
+    d_y = layers.Lambda(self.generator.computeDeformationField, trainable=True)(decoder_inputs_y)
+    d_z = layers.Lambda(self.generator.computeDeformationField, trainable=True)(decoder_inputs_z)
 
     # Apply deformation field
-    c_x = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 0), trainable=False)(d_x)
-    c_y = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 1), trainable=False)(d_y)
-    c_z = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 2), trainable=False)(d_z)
+    c_x = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 0), trainable=True)(d_x)
+    c_y = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 1), trainable=True)(d_y)
+    c_z = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 2), trainable=True)(d_z)
 
     # Apply alignment
-    c_r_x = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 0), trainable=False)([c_x, c_y, c_z])
-    c_r_y = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 1), trainable=False)([c_x, c_y, c_z])
+    c_r_x = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 0), trainable=True)([c_x, c_y, c_z])
+    c_r_y = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 1), trainable=True)([c_x, c_y, c_z])
 
     # Apply shifts
-    c_r_s_x = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 0), trainable=False)(c_r_x)
-    c_r_s_y = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 1), trainable=False)(c_r_y)
+    c_r_s_x = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 0), trainable=True)(c_r_x)
+    c_r_s_y = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 1), trainable=True)(c_r_y)
 
     # Scatter image and bypass gradient
-    scatter_images = layers.Lambda(self.generator.scatterImgByPass, trainable=False)([c_r_s_x, c_r_s_y])
+    scatter_images = layers.Lambda(self.generator.scatterImgByPass, trainable=True)([c_r_s_x, c_r_s_y])
 
     # Gaussian filter image
     decoded = layers.Lambda(self.generator.gaussianFilterImage)(scatter_images)
@@ -102,11 +102,13 @@ class AutoEncoder(Model):
         self.encoder = Encoder(generator.zernike_size.shape[0], generator.xsize)
         self.decoder = Decoder(generator.zernike_size.shape[0], generator)
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
+        # self.cap_def_loss_tracker = tf.keras.metrics.Mean(name="cap_def_loss")
 
     @property
     def metrics(self):
         return [
             self.total_loss_tracker,
+            # self.cap_def_loss_tracker,
         ]
 
     def train_step(self, data):
@@ -137,13 +139,20 @@ class AutoEncoder(Model):
             z_space_x, z_space_y, z_space_z = self.encoder(data[0])
             decoded = self.decoder([z_space_x, z_space_y, z_space_z])
 
-            total_loss = self.generator.loss_correlation(data[0], decoded)
+            ori_images = self.decoder.generator.applyFourierMask(data[0])
+            decoded = self.decoder.generator.applyFourierMask(decoded)
+
+            # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
+
+            total_loss = self.generator.loss_correlation(ori_images, decoded)  #+ cap_def_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
+        # self.cap_def_loss_tracker.update_state(cap_def_loss)
         return {
             "loss": self.total_loss_tracker.result(),
+            # "cap_def_loss": self.cap_def_loss_tracker.result()
         }
 
     def call(self, input_features):

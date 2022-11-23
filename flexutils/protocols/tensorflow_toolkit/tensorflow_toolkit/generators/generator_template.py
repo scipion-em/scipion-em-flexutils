@@ -44,6 +44,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.indexes = np.arange(self.batch_size)
+        self.cap_def = tf.constant(5., dtype=tf.float32)
 
         # Read metadata
         mask, volume = self.readH5Metadata(h5_file)
@@ -69,6 +70,14 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         # Prepare alignment
         self.r = [np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3])]
 
+        # Prepare circular mask
+        radius_mask = 0.85 * 0.5 * self.xsize
+        circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius=radius_mask)
+        circular_mask = tf.constant(circular_mask, dtype=tf.float32)
+        circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
+        size = int(0.5 * self.xsize + 1)
+        circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
+        self.circular_mask = circular_mask[0, :, :]
 
     #----- Initialization methods -----#
 
@@ -175,6 +184,33 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         ft_ctf_images = tf.complex(ft_ctf_images_real, tf.math.imag(ft_images))
         ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
         return tf.reshape(ctf_images, [self.batch_size, self.xsize, self.xsize, 1])
+
+    def create_circular_mask(self, h, w, center=None, radius=None):
+
+        if center is None:  # use the middle of the image
+            center = (int(w / 2), int(h / 2))
+        if radius is None:  # use the smallest distance between the center and image walls
+            radius = min(center[0], center[1], w - center[0], h - center[1])
+
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
+
+        mask = dist_from_center <= radius
+        return mask
+
+    def applyFourierMask(self, images):
+        ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
+        ft_masked_images_real = tf.multiply(tf.math.real(ft_images), self.circular_mask[None, :, :])
+        ft_masked_images = tf.complex(ft_masked_images_real, tf.math.imag(ft_images))
+        masked_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_masked_images))
+        return tf.reshape(masked_images, [self.batch_size, self.xsize, self.xsize, 1])
+
+    def capDeformation(self, d_x, d_y, d_z):
+        inv_sqrt_N = 1. / np.sqrt(self.coords.shape[0])
+        inv_bs = 1. / self.batch_size
+        num = tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z)
+        rmsdef = inv_sqrt_N * inv_bs * num
+        return tf.math.pow(100., rmsdef - self.cap_def)
 
     # ----- -------- -----#
 
