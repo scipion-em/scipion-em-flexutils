@@ -37,11 +37,15 @@ class Encoder(Model):
   def __init__(self, latent_dim, input_dim):
     super(Encoder, self).__init__()
     self.latent_dim = latent_dim
+    l2 = tf.keras.regularizers.l2(1e-3)
 
     encoder_inputs = Input(shape=(input_dim, input_dim, 1))
     x = layers.Flatten()(encoder_inputs)
-    for _ in range(12):
-        x = layers.Dense(1024, activation='relu')(x)
+    x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
+    x = layers.Dropout(0.3)(x)
+    for _ in range(2):
+        x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
+    x = layers.BatchNormalization()(x)
 
     z_space_x = layers.Dense(latent_dim, activation="linear", name="z_space_x")(x)
     z_space_y = layers.Dense(latent_dim, activation="linear", name="z_space_y")(x)
@@ -93,8 +97,8 @@ class Decoder(Model):
                          [decoded_ctf, d_x, d_y, d_z], name="decoder")
 
   def call(self, x):
-    decoded, d_x, d_y, d_z = self.decoder(x)
-    return decoded, d_x, d_y, d_z
+    decoded, _, _, _ = self.decoder(x)
+    return decoded
 
 class AutoEncoder(Model):
     def __init__(self, generator, **kwargs):
@@ -103,15 +107,15 @@ class AutoEncoder(Model):
         self.encoder = Encoder(generator.zernike_size.shape[0], generator.xsize)
         self.decoder = Decoder(generator.zernike_size.shape[0], generator)
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
-        self.img_loss_tracker = tf.keras.metrics.Mean(name="img_loss")
-        self.cap_def_loss_tracker = tf.keras.metrics.Mean(name="cap_def_loss")
+        # self.img_loss_tracker = tf.keras.metrics.Mean(name="img_loss")
+        # self.cap_def_loss_tracker = tf.keras.metrics.Mean(name="cap_def_loss")
 
     @property
     def metrics(self):
         return [
             self.total_loss_tracker,
-            self.cap_def_loss_tracker,
-            self.img_loss_tracker,
+            # self.cap_def_loss_tracker,
+            # self.img_loss_tracker,
         ]
 
     def train_step(self, data):
@@ -140,25 +144,25 @@ class AutoEncoder(Model):
 
         with tf.GradientTape() as tape:
             z_space_x, z_space_y, z_space_z = self.encoder(data[0])
-            decoded, d_x, d_y, d_z = self.decoder([z_space_x, z_space_y, z_space_z])
+            decoded = self.decoder([z_space_x, z_space_y, z_space_z])
 
             ori_images = self.decoder.generator.applyFourierMask(data[0])
             decoded = self.decoder.generator.applyFourierMask(decoded)
 
-            cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
+            # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
             img_loss = self.generator.loss_correlation(ori_images, decoded)
 
-            total_loss = img_loss + cap_def_loss
+            total_loss = img_loss #+ cap_def_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
-        self.img_loss_tracker.update_state(img_loss)
-        self.cap_def_loss_tracker.update_state(cap_def_loss)
+        # self.img_loss_tracker.update_state(img_loss)
+        # self.cap_def_loss_tracker.update_state(cap_def_loss)
         return {
             "loss": self.total_loss_tracker.result(),
-            "img_loss": self.img_loss_tracker.result(),
-            "cap_def_loss": self.cap_def_loss_tracker.result()
+            # "img_loss": self.img_loss_tracker.result(),
+            # "cap_def_loss": self.cap_def_loss_tracker.result()
         }
 
     def call(self, input_features):

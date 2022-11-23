@@ -45,7 +45,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.indexes = np.arange(self.batch_size)
-        self.cap_def = 3.
+        # self.cap_def = 3.
 
         # Read metadata
         mask, volume = self.readH5Metadata(h5_file)
@@ -212,11 +212,11 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         masked_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_masked_images))
         return tf.reshape(masked_images, [self.batch_size, self.xsize, self.xsize, 1])
 
-    def capDeformation(self, d_x, d_y, d_z):
-        num = tf.sqrt(tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z))
-        rmsdef = self.inv_sqrt_N * self.inv_bs * num
-        return tf.keras.activations.relu(rmsdef, threshold=self.cap_def)
-        # return tf.math.pow(1000., rmsdef - self.cap_def)
+    # def capDeformation(self, d_x, d_y, d_z):
+    #     num = tf.sqrt(tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z))
+    #     rmsdef = self.inv_sqrt_N * self.inv_bs * num
+    #     return tf.keras.activations.relu(rmsdef, threshold=self.cap_def)
+    #     # return tf.math.pow(1000., rmsdef - self.cap_def)
 
     # ----- -------- -----#
 
