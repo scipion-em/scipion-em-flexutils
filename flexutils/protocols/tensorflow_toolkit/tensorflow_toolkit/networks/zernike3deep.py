@@ -41,8 +41,8 @@ class Encoder(Model):
 
     encoder_inputs = Input(shape=(input_dim, input_dim, 1))
     x = layers.Flatten()(encoder_inputs)
-    for _ in range(3):
-        x = layers.Dense(512, activation='relu', kernel_regularizer=l2)(x)
+    for _ in range(12):
+        x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
     x = layers.Dropout(0.3)(x)
     x = layers.BatchNormalization()(x)
 
@@ -93,11 +93,10 @@ class Decoder(Model):
     decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(scatter_images)
     # decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(decoded)
 
-    self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z],
-                         [decoded_ctf, d_x, d_y, d_z], name="decoder")
+    self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z], decoded_ctf, name="decoder")
 
   def call(self, x):
-    decoded, _, _, _ = self.decoder(x)
+    decoded = self.decoder(x)
     return decoded
 
 class AutoEncoder(Model):
@@ -152,6 +151,7 @@ class AutoEncoder(Model):
             # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
             img_loss = self.decoder.generator.loss_correlation(data[0], decoded)
             # img_loss = -tf.reduce_mean(self.decoder.generator.frc_loss(data[0], decoded))
+            # img_loss = self.decoder.generator.compute_loss_frc(data[0], decoded)
 
             total_loss = img_loss #+ cap_def_loss
 

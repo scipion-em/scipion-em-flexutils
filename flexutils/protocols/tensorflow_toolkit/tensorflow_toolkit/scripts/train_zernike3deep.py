@@ -51,7 +51,7 @@ def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epoch
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         autoencoder = AutoEncoder(generator)
-        optimizer = tf.keras.optimizers.Adam(lr=1e-4)
+        optimizer = tf.keras.optimizers.Adam(lr=1e-5)
         autoencoder.compile(optimizer=optimizer)
     autoencoder.fit(generator, epochs=epochs)
 
