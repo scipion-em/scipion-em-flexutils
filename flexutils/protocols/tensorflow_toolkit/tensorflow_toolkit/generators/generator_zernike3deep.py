@@ -78,10 +78,10 @@ class Generator(DataGeneratorBase):
         bposf = c_sampling - bposf
 
         # Bilinear interpolation to provide forward mapping gradients
-        bamp0 = bamp[None, :] * (1.0 - bposf[:, :, 0]) * (1.0 - bposf[:, :, 1])  # 0,0
-        bamp1 = bamp[None, :] * (bposf[:, :, 0]) * (1.0 - bposf[:, :, 1])  # 1,0
-        bamp2 = bamp[None, :] * (bposf[:, :, 0]) * (bposf[:, :, 1])  # 1,1
-        bamp3 = bamp[None, :] * (1.0 - bposf[:, :, 0]) * (bposf[:, :, 1])  #
+        bamp0 = bamp[None, :] * (1.0 - bposf[:, :, 0]) * (1.0 - bposf[:, :, 1])
+        bamp1 = bamp[None, :] * (bposf[:, :, 0]) * (1.0 - bposf[:, :, 1])
+        bamp2 = bamp[None, :] * (bposf[:, :, 0]) * (bposf[:, :, 1])
+        bamp3 = bamp[None, :] * (1.0 - bposf[:, :, 0]) * (bposf[:, :, 1])
         bampall = tf.concat([bamp0, bamp1, bamp2, bamp3], axis=1)
         bposall = tf.concat([bposi, bposi + (1, 0), bposi + (1, 1), bposi + (0, 1)], 1)
         images = tf.stack([tf.tensor_scatter_nd_add(imgs[i], bposall[i], bampall[i]) for i in range(imgs.shape[0])])

@@ -72,17 +72,21 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.r = [np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3])]
 
         # Prepare circular mask
-        radius_mask = 0.85 * 0.5 * self.xsize
-        circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius=radius_mask)
-        circular_mask = tf.constant(circular_mask, dtype=tf.float32)
-        circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
-        size = int(0.5 * self.xsize + 1)
-        circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
-        self.circular_mask = circular_mask[0, :, :]
+        # radius_mask = 0.85 * 0.5 * self.xsize
+        # circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius=radius_mask)
+        # circular_mask = tf.constant(circular_mask, dtype=tf.float32)
+        # circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
+        # size = int(0.5 * self.xsize + 1)
+        # circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
+        # self.circular_mask = circular_mask[0, :, :]
 
         # Cap deformation vals
-        self.inv_sqrt_N = tf.constant(1. / np.sqrt(self.coords.shape[0]), dtype=tf.float32)
-        self.inv_bs = tf.constant(1. / self.batch_size, dtype=tf.float32)
+        # self.inv_sqrt_N = tf.constant(1. / np.sqrt(self.coords.shape[0]), dtype=tf.float32)
+        # self.inv_bs = tf.constant(1. / self.batch_size, dtype=tf.float32)
+
+        # Fourier rings
+        self.getFourierRings()
+        # self.radial_masks, self.spatial_freq = self.get_radial_masks()
 
     #----- Initialization methods -----#
 
@@ -218,6 +222,44 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
     #     return tf.keras.activations.relu(rmsdef, threshold=self.cap_def)
     #     # return tf.math.pow(1000., rmsdef - self.cap_def)
 
+    def getFourierRings(self):
+        idx = np.indices((self.xsize, self.xsize)) - self.xsize // 2
+        idx = np.fft.fftshift(idx)
+        idx = idx[:, :, :self.xsize // 2 + 1]
+
+        # self.idxft = (idx / self.xsize).astype(np.float32)
+        # self.rrft = np.sqrt(np.sum(idx ** 2, axis=0)).astype(np.float32)  ## batch, npts, x-y
+
+        rr = np.round(np.sqrt(np.sum(idx ** 2, axis=0))).astype(int)
+        self.rings = np.zeros((self.xsize, self.xsize // 2 + 1, self.xsize // 2), dtype=np.float32)  #### Fourier rings
+        for i in range(self.xsize // 2):
+            self.rings[:, :, i] = (rr == i)
+
+        # self.xvec = tf.constant(np.fromfunction(lambda i, j: 1.0 - 2 * ((i + j) % 2),
+        #                                         (self.xsize, self.xsize // 2 + 1), dtype=np.float32))
+
+    def radial_mask(self, r, cx=64, cy=64, sx=np.arange(0, 128), sy=np.arange(0, 128), delta=1):
+        ind = (sx[np.newaxis, :] - cx) ** 2 + (sy[:, np.newaxis] - cy) ** 2
+        ind1 = ind <= ((r[0] + delta) ** 2)  # one liner for this and below?
+        ind2 = ind > (r[0] ** 2)
+        return ind1 * ind2
+
+    @tf.function
+    def get_radial_masks(self):
+        bxsize = self.xsize
+        half_bxsize = self.xsize // 2
+        freq_nyq = int(np.floor(int(bxsize) / 2.0))
+        radii = np.arange(half_bxsize).reshape(half_bxsize, 1)  # image size 256, binning = 3
+        radial_masks = np.apply_along_axis(self.radial_mask, 1, radii, half_bxsize, half_bxsize,
+                                           np.arange(0, bxsize), np.arange(0, bxsize), 1)
+        radial_masks = np.expand_dims(radial_masks, 1)
+        radial_masks = np.expand_dims(radial_masks, 1)
+
+        spatial_freq = radii.astype(np.float32) / freq_nyq
+        spatial_freq = spatial_freq / max(spatial_freq)
+
+        return radial_masks, spatial_freq
+
     # ----- -------- -----#
 
 
@@ -237,5 +279,59 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         r_den = K.sqrt(x_square_sum * y_square_sum)
         r = r_num / (r_den + epsilon)
         return 1 - K.mean(r)
+
+    def frc_loss(self, y_true, y_pred, minpx=1, maxpx=-1):
+        y_true = tf.signal.rfft2d(y_true[:, :, :, 0])
+        y_pred = tf.signal.rfft2d(y_pred[:, :, :, 0])
+        mreal, mimag = tf.math.real(y_pred), tf.math.imag(y_pred)
+        dreal, dimag = tf.math.real(y_true), tf.math.imag(y_true)
+        #### normalization per ring
+        nrm_img = mreal ** 2 + mimag ** 2
+        nrm_data = dreal ** 2 + dimag ** 2
+
+        nrm0 = tf.tensordot(nrm_img, self.rings, [[1, 2], [0, 1]])
+        nrm1 = tf.tensordot(nrm_data, self.rings, [[1, 2], [0, 1]])
+
+        nrm = tf.sqrt(nrm0) * tf.sqrt(nrm1)
+        nrm = tf.maximum(nrm, 1e-4)  #### so we do not divide by 0
+
+        #### average FRC per batch
+        ccc = mreal * dreal + mimag * dimag
+        frc = tf.tensordot(ccc, self.rings, [[1, 2], [0, 1]]) / nrm
+
+        frcval = tf.reduce_mean(frc[:, minpx:maxpx], axis=1)
+        return frcval
+
+    # @tf.function
+    # def fourier_ring_correlation(self, image1, image2, rn, spatial_freq):
+    #     # we need the channels first format for this loss
+    #     image1 = tf.transpose(image1, perm=[0, 3, 1, 2])
+    #     image2 = tf.transpose(image2, perm=[0, 3, 1, 2])
+    #     image1 = tf.cast(image1, tf.complex64)
+    #     image2 = tf.cast(image2, tf.complex64)
+    #     rn = tf.cast(rn, tf.complex64)
+    #     fft_image1 = tf.signal.fftshift(tf.signal.fft2d(image1), axes=[2, 3])
+    #     fft_image2 = tf.signal.fftshift(tf.signal.fft2d(image2), axes=[2, 3])
+    #
+    #     t1 = tf.multiply(fft_image1, rn)  # (128, BS?, 3, 256, 256)
+    #     t2 = tf.multiply(fft_image2, rn)
+    #     c1 = tf.math.real(tf.reduce_sum(tf.multiply(t1, tf.math.conj(t2)), [2, 3, 4]))
+    #     c2 = tf.reduce_sum(tf.math.abs(t1) ** 2, [2, 3, 4])
+    #     c3 = tf.reduce_sum(tf.math.abs(t2) ** 2, [2, 3, 4])
+    #     frc = tf.math.divide(c1, tf.math.sqrt(tf.math.multiply(c2, c3)))
+    #     frc = tf.where(tf.compat.v1.is_inf(frc), tf.zeros_like(frc), frc)  # inf
+    #     frc = tf.where(tf.compat.v1.is_nan(frc), tf.zeros_like(frc), frc)  # nan
+    #
+    #     t = spatial_freq
+    #     y = frc
+    #     riemann_sum = tf.reduce_sum(tf.multiply(t[1:] - t[:-1], (y[:-1] + y[1:]) / 2.), 0)
+    #     return riemann_sum
+    #
+    # @tf.function
+    # def compute_loss_frc(self, y_true, y_pred):
+    #     loss = -self.fourier_ring_correlation(y_true, y_pred, self.radial_masks, self.spatial_freq)
+    #
+    #     loss = tf.math.reduce_mean(loss)
+    #     return loss
 
     # ----- -------- -----#
