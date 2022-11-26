@@ -90,4 +90,32 @@ class Generator(DataGeneratorBase):
 
         return images
 
+    def centerMassShift(self):
+        coords_o = tf.constant(self.coords, dtype=tf.float32)
+        coords_o_x = tf.transpose(tf.gather(coords_o, 0, axis=1))
+        coords_o_y = tf.transpose(tf.gather(coords_o, 1, axis=1))
+        coords_o_z = tf.transpose(tf.gather(coords_o, 2, axis=1))
+
+        diff_x = self.def_coords[0] - coords_o_x[:, None]
+        diff_y = self.def_coords[1] - coords_o_y[:, None]
+        diff_z = self.def_coords[2] - coords_o_z[:, None]
+
+        mean_diff_x = tf.reduce_mean(diff_x)
+        mean_diff_y = tf.reduce_mean(diff_y)
+        mean_diff_z = tf.reduce_mean(diff_z)
+
+        cm = tf.sqrt(mean_diff_x * mean_diff_x + mean_diff_y * mean_diff_y + mean_diff_z * mean_diff_z)
+
+        return cm
+        # return tf.keras.activations.relu(cm, threshold=0.2)
+
+    def averageDeformation(self):
+        d_x = self.def_coords[0]
+        d_y = self.def_coords[1]
+        d_z = self.def_coords[2]
+
+        rmsdef = tf.reduce_mean(tf.sqrt(tf.reduce_mean(d_x * d_x + d_y * d_y + d_z * d_z, axis=0)))
+
+        return rmsdef
+
     # ----- -------- -----#

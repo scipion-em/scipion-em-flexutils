@@ -190,7 +190,8 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
     def ctfFilterImage(self, images):
         ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
         ft_ctf_images_real = tf.multiply(tf.math.real(ft_images), self.ctf)
-        ft_ctf_images = tf.complex(ft_ctf_images_real, tf.math.imag(ft_images))
+        ft_ctf_images_imag = tf.multiply(tf.math.imag(ft_images), self.ctf)
+        ft_ctf_images = tf.complex(ft_ctf_images_real, ft_ctf_images_imag)
         ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
         return tf.reshape(ctf_images, [self.batch_size, self.xsize, self.xsize, 1])
 
@@ -209,12 +210,20 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
 
         return mask
 
-    def applyFourierMask(self, images):
+    def applyRealMask(self, images):
         ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
         ft_masked_images_real = tf.multiply(tf.math.real(ft_images), self.circular_mask[None, :, :])
-        ft_masked_images = tf.complex(ft_masked_images_real, tf.math.imag(ft_images))
+        ft_masked_images_imag = tf.multiply(tf.math.imag(ft_images), self.circular_mask[None, :, :])
+        ft_masked_images = tf.complex(ft_masked_images_real, ft_masked_images_imag)
         masked_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_masked_images))
         return tf.reshape(masked_images, [self.batch_size, self.xsize, self.xsize, 1])
+
+    def applyFourierMask(self, ft_images):
+        # FT images must be shifted with tf.signal.fftshift
+        ft_masked_images_real = tf.multiply(tf.math.real(ft_images), self.circular_mask[None, :, :])
+        ft_masked_images_imag = tf.multiply(tf.math.imag(ft_images), self.circular_mask[None, :, :])
+        ft_masked_images = tf.complex(ft_masked_images_real, ft_masked_images_imag)
+        return ft_masked_images
 
     # def capDeformation(self, d_x, d_y, d_z):
     #     num = tf.sqrt(tf.reduce_sum(d_x * d_x + d_y * d_y + d_z * d_z))
@@ -279,6 +288,23 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         r_den = K.sqrt(x_square_sum * y_square_sum)
         r = r_num / (r_den + epsilon)
         return 1 - K.mean(r)
+
+    def fourier_phase_correlation(self, x, y):
+        x = tf.signal.fftshift(tf.signal.rfft2d(x[:, :, :, 0]))
+        y = tf.signal.fftshift(tf.signal.rfft2d(y[:, :, :, 0]))
+
+        # In case we want to exclude some high (noisy) frequencies from the cost (using hard or
+        # soft circular masks in Fourier space)
+        # x = self.applyFourierMask(x)
+        # y = self.applyFourierMask(y)
+
+        num = tf.abs(tf.reduce_sum(x * tf.math.conj(y), axis=(1, 2)))
+        d_1 = tf.reduce_sum(tf.abs(x) ** 2, axis=(1, 2))
+        d_2 = tf.reduce_sum(tf.abs(y) ** 2, axis=(1, 2))
+        den = tf.sqrt(d_1 * d_2)
+        cross_power_spectrum = num / den
+
+        return -K.mean(cross_power_spectrum)
 
     def frc_loss(self, y_true, y_pred, minpx=1, maxpx=-1):
         y_true = tf.signal.rfft2d(y_true[:, :, :, 0])
