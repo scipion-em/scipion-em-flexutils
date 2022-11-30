@@ -131,7 +131,7 @@ class Plugin(pwplugin.Plugin):
                                "pip install -r " + TENSORFLOW_REQ
             # "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
             installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0],
-                                                                   "protocols", "tensorflow-toolkit"))
+                                                                   "protocols", "tensorflow_toolkit"))
             return installationCmd
 
         commands = []
