@@ -53,9 +53,10 @@ class FlexMorphChimeraX():
         self.path = _path
         self.other_inputs = kwargs
 
-        index = self.file_names.index("reference")
-        self.file_names.remove("reference")
-        self.z_space = np.delete(self.z_space, index, axis=0)
+        if "reference" in self.file_names:
+            index = self.file_names.index("reference")
+            self.file_names.remove("reference")
+            self.z_space = np.delete(self.z_space, index, axis=0)
 
     def showSalesMan(self, param=None):
         # Get shortest path
