@@ -39,7 +39,7 @@ from tensorflow_toolkit.utils import getXmippOrigin
 
 
 class DataGeneratorBase(tf.keras.utils.Sequence):
-    def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8, keepMap=False):
+    def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8, radius=2, keepMap=False):
         # Attributes
         self.step = step
         self.shuffle = shuffle
@@ -48,19 +48,28 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         # self.cap_def = 3.
 
         # Read metadata
-        mask, volume = self.readH5Metadata(h5_file)
+        mask, volume, structure = self.readH5Metadata(h5_file)
 
         # Are images fitted in memory?
         stack = os.path.join(self.images_path[0], "stack.mrc")
         if os.path.isfile(stack):
             with mrcfile.open(stack) as mrc:
                 self.mrc = mrc.data
+            self.xsize = self.mrc.shape[1]
+            self.xmipp_origin = getXmippOrigin(self.xsize)
             self.fitInMemory = True
         else:
+            with mrcfile.open(os.path.join(self.images_path[0], "theo_1.mrc")) as mrc:
+                self.xsize = mrc.data.shape[1]
+            self.xmipp_origin = getXmippOrigin(self.xsize)
             self.fitInMemory = False
 
-        # Read volume data
-        self.readVolumeData(mask, volume, keepMap)
+        if volume[0] != "":
+            # Read volume data
+            self.readVolumeData(mask, volume, keepMap)
+        elif structure[0] != "":
+            # Read structure data
+            self.readStructureData(structure)
 
         # Get train dataset
         # self.getTrainDataset(splitTrain)
@@ -72,7 +81,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.r = [np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3])]
 
         # Prepare circular mask
-        # radius_mask = 0.85 * 0.5 * self.xsize
+        # radius_mask = radius * 0.5 * self.xsize
         # circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius=radius_mask)
         # circular_mask = tf.constant(circular_mask, dtype=tf.float32)
         # circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
@@ -85,7 +94,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         # self.inv_bs = tf.constant(1. / self.batch_size, dtype=tf.float32)
 
         # Fourier rings
-        self.getFourierRings()
+        # self.getFourierRings()
         # self.radial_masks, self.spatial_freq = self.get_radial_masks()
 
     #----- Initialization methods -----#
@@ -98,6 +107,8 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         mask = [str(n) for n in mask.astype(str)]
         volume = np.array(hf.get('volume'))
         volume = [str(n) for n in volume.astype(str)]
+        structure = np.array(hf.get('structure'))
+        structure = [str(n) for n in structure.astype(str)]
         self.angle_rot = tf.constant(np.asarray(hf.get('angle_rot')), dtype=tf.float32)
         self.angle_tilt = tf.constant(np.asarray(hf.get('angle_tilt')), dtype=tf.float32)
         self.angle_psi = tf.constant(np.asarray(hf.get('angle_psi')), dtype=tf.float32)
@@ -116,12 +127,12 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.applyCTF = np.asarray(hf.get('applyCTF'))
         hf.close()
 
-        return mask, volume
+        return mask, volume, structure
 
     def readVolumeData(self, mask, volume, keepMap=False):
         with mrcfile.open(mask[0]) as mrc:
-            self.xsize = mrc.data.shape[0]
-            self.xmipp_origin = getXmippOrigin(mrc.data)
+            # self.xsize = mrc.data.shape[0]
+            # self.xmipp_origin = getXmippOrigin(self.xsize)
             coords = np.asarray(np.where(mrc.data == 1))
             coords = np.transpose(np.asarray([coords[2, :], coords[1, :], coords[0, :]]))
             self.coords = coords - self.xmipp_origin
@@ -138,6 +149,22 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
 
             if keepMap:
                 self.vol = mrc.data
+
+        # Flag (reference is map)
+        self.ref_is_struct = False
+
+    def readStructureData(self, structure):
+        pdb_info = np.loadtxt(structure[0])
+
+        # Get structure coords
+        self.coords = pdb_info[:, :-1]
+
+        # Values for every atom
+        # self.values = np.ones(self.coords.shape[0])
+        self.values = (pdb_info[:, -1]).reshape(-1)
+
+        # Flag (reference is structure)
+        self.ref_is_struct = True
 
     def getTrainDataset(self, splitTrain):
         indexes = np.arange(self.file_idx.size)
@@ -184,7 +211,9 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
     # ----- Utils -----#
 
     def gaussianFilterImage(self, images):
-        images = tfa.image.gaussian_filter2d(images, 2 * self.step, self.step)
+        # Both 4 and 3 are ok for the kernel size (same time and results)
+        # images = tfa.image.gaussian_filter2d(images, 4 * self.step, self.step)
+        images = tfa.image.gaussian_filter2d(images, 3 * self.step, self.step)
         return images
 
     def ctfFilterImage(self, images):
@@ -195,7 +224,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
         return tf.reshape(ctf_images, [self.batch_size, self.xsize, self.xsize, 1])
 
-    def create_circular_mask(self, h, w, center=None, radius=None):
+    def create_circular_mask(self, h, w, center=None, radius=None, soft=True):
 
         if center is None:  # use the middle of the image
             center = (int(w / 2), int(h / 2))
@@ -206,7 +235,9 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
 
         mask = (dist_from_center <= radius).astype(np.float32)
-        mask = gaussian_filter(mask, sigma=2.)
+
+        if soft:
+            mask = gaussian_filter(mask, sigma=2.)
 
         return mask
 
@@ -304,7 +335,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         den = tf.sqrt(d_1 * d_2)
         cross_power_spectrum = num / den
 
-        return -K.mean(cross_power_spectrum)
+        return 1 - K.mean(cross_power_spectrum)
 
     def frc_loss(self, y_true, y_pred, minpx=1, maxpx=-1):
         y_true = tf.signal.rfft2d(y_true[:, :, :, 0])

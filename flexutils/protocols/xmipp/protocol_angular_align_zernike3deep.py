@@ -28,6 +28,7 @@
 import numpy as np
 import os
 import h5py
+import re
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, CsvList
@@ -64,8 +65,24 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
-        form.addParam('inputVolume', params.PointerParam, label="Input volume", pointerClass='Volume')
-        form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask')
+        form.addParam('referenceType', params.EnumParam, choices=['Volume', 'Structure'],
+                      default=0, label="Reference type", display=params.EnumParam.DISPLAY_HLIST,
+                      help="Determine which type of reference will be used to compute the motions. "
+                           "In general, Structure will lead to faster and more accurate estimations "
+                           "if available.")
+        form.addParam('inputVolume', params.PointerParam, condition="referenceType==0",
+                      label="Input volume", pointerClass='Volume')
+        form.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
+                      label="Input volume mask", pointerClass='VolumeMask')
+        form.addParam('inputStruct', params.PointerParam, condition="referenceType==1",
+                      label="Input structure", pointerClass='AtomStruct',
+                      help="Reference structure should be aligned within Scipion to the map reconstructed "
+                           "from the input particles. This will ensure that the structure coordinates are "
+                           "properly placed in the expected reference frame.")
+        form.addParam("onlyCAlpha", params.BooleanParam, default=False, label="Use only alpha carbons?",
+                      condition="referenceType==1",
+                      help="If yes, only alpha carbons will be considered during the estimation to speed up "
+                           "computations. It might decrease the accuracy of the estimations.")
         form.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help='In general, downsampling the particles will increase performance without compromising '
@@ -94,10 +111,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                       help="Number of images that will be used simultaneously for every training step. "
                            "We do not recommend to change this value unless you experience memory errors. "
                            "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=0.8, label='Traning dataset fraction',
+        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                       help="This value (between 0 and 1) determines the fraction of images that will "
                            "be used to train the network.")
-        form.addParam('step', params.IntParam, default=2, label='Points step',
+        form.addParam('step', params.IntParam, default=1, label='Points step', condition="referenceType==0",
                       help="How many points (voxels) to skip during the training computations. "
                            "A value of 1 means that all point within the mask provided in the input "
                            "will be used. A value of 2 implies that half of the point will be skipped "
@@ -110,6 +127,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
             'imgsFn': self._getExtraPath('input_particles.xmd'),
             'fnVol': self._getExtraPath('input_volume.vol'),
             'fnVolMask': self._getExtraPath('input_volume_mask.vol'),
+            'fnStruct': self._getExtraPath('input_structure.txt'),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -127,25 +145,32 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
+        structure = self._getFileName('fnStruct')
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        i_sr = 1. / inputParticles.getSamplingRate()
 
-        ih = ImageHandler()
-        inputVolume = self.inputVolume.get().getFileName()
-        ih.convert(getXmippFileName(inputVolume), fnVol)
-        if Xdim != self.newXdim:
-            self.runJob("xmipp_image_resize",
-                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-
-        inputMask = self.inputVolumeMask.get().getFileName()
-        if inputMask:
-            ih.convert(getXmippFileName(inputMask), fnVolMask)
+        if self.referenceType.get() == 0:  # Map reference
+            ih = ImageHandler()
+            inputVolume = self.inputVolume.get().getFileName()
+            ih.convert(getXmippFileName(inputVolume), fnVol)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
-                            env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+
+            inputMask = self.inputVolumeMask.get().getFileName()
+            if inputMask:
+                ih.convert(getXmippFileName(inputMask), fnVolMask)
+                if Xdim != self.newXdim:
+                    self.runJob("xmipp_image_resize",
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                env=xmipp3.Plugin.getEnviron())
+        else:  # Structure reference
+            pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
+            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
+            np.savetxt(structure, pdb_coordinates)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -172,13 +197,18 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         unStack = self.unStack.get()
         volume = self._getFileName('fnVol')
         mask = self._getFileName('fnVolMask')
+        structure = self._getFileName('fnStruct')
         thr = self.numberOfThreads.get()
-        args = "--md_file %s --out_path %s --sr %f --volume %s --mask %s --thr %d" \
-               % (md_file, out_path, sr, volume, mask, thr)
+        args = "--md_file %s --out_path %s --sr %f --thr %d" \
+               % (md_file, out_path, sr, thr)
         if applyCTF:
             args += " --applyCTF"
         if unStack:
             args += " --unStack"
+        if self.referenceType.get() == 0:
+            args += " --volume %s --mask %s" % (volume, mask)
+        else:
+            args += " --structure %s" % structure
         program = os.path.join(const.XMIPP_SCRIPTS, "md_to_h5.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args, numberOfMpi=1)
@@ -195,8 +225,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         split_train = self.split_train.get()
         epochs = self.epochs.get()
         args = "--h5_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
-               "--shuffle --step %d --split_train %f --epochs %d" \
-               % (h5_file, out_path, L1, L2, batch_size, step, split_train, epochs)
+               "--shuffle --split_train %f --epochs %d" \
+               % (h5_file, out_path, L1, L2, batch_size, split_train, epochs)
+        if self.referenceType.get() == 0:
+            args += " --step %d" % step
+        else:
+            args += " --step 1"
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
@@ -215,8 +249,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
-        inputMask = self.inputVolumeMask.get().getFileName()
-        inputVolume = self.inputVolume.get().getFileName()
+
+        if self.referenceType.get() == 0:
+            inputMask = self.inputVolumeMask.get().getFileName()
+            inputVolume = self.inputVolume.get().getFileName()
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -237,9 +273,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         partSet.L1 = Integer(self.l1.get())
         partSet.L2 = Integer(self.l2.get())
         partSet.Rmax = Float(Xdim / 2)
-        partSet.refMask = String(inputMask)
-        partSet.refMap = String(inputVolume)
         partSet.modelPath = String(model_path)
+
+        if self.referenceType.get() == 0:
+            partSet.refMask = String(inputMask)
+            partSet.refMap = String(inputVolume)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
@@ -254,6 +292,27 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
     def getInputParticles(self):
         return self.inputParticles.get()
+
+    def readPDB(self, fnIn):
+        with open(fnIn) as f:
+            lines = f.readlines()
+        return lines
+
+    def PDB2List(self, lines):
+        newlines = []
+        for line in lines:
+            eval = re.search(r'^ATOM\s+\d+\s+CA\s+', line) if self.onlyCAlpha.get() else line.startswith("ATOM ")
+            if eval:
+                try:
+                    x = float(line[30:38])
+                    y = float(line[38:46])
+                    z = float(line[46:54])
+                    val = float(line[54:60])
+                    newline = [x, y, z, val]
+                    newlines.append(newline)
+                except:
+                    pass
+        return newlines
 
     # ----------------------- VALIDATE functions ----------------------------------------
     def validate(self):

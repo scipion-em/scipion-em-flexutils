@@ -633,10 +633,10 @@ def basisDegreeVectors(L1, L2):
 
     return np.asarray(degrees)
 
-def getXmippOrigin(map):
-    return np.asarray([int(0.5 * map.shape[2]),
-                       int(0.5 * map.shape[1]),
-                       int(0.5 * map.shape[0])])
+def getXmippOrigin(boxsize):
+    return np.asarray([int(0.5 * boxsize),
+                       int(0.5 * boxsize),
+                       int(0.5 * boxsize)])
 
 def euler_from_matrix(matrix):
     # Only valid for Xmipp axes szyz

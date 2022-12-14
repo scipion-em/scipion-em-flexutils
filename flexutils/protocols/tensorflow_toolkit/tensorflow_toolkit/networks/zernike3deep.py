@@ -86,12 +86,15 @@ class Decoder(Model):
     # Scatter image and bypass gradient
     scatter_images = layers.Lambda(self.generator.scatterImgByPass, trainable=True)([c_r_s_x, c_r_s_y])
 
-    # Gaussian filter image
-    # decoded = layers.Lambda(self.generator.gaussianFilterImage)(scatter_images)
+    if self.generator.step > 1 or self.generator.ref_is_struct:
+        # Gaussian filter image
+        decoded = layers.Lambda(self.generator.gaussianFilterImage)(scatter_images)
 
-    # CTF filter image
-    decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(scatter_images)
-    # decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(decoded)
+        # CTF filter image
+        decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(decoded)
+    else:
+        # CTF filter image
+        decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(scatter_images)
 
     self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z], decoded_ctf, name="decoder")
 
