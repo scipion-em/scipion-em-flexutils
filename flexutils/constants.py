@@ -32,7 +32,8 @@ import flexutils
 
 # Conda environment requirements
 CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
-TENSORFLOW_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_requirements.txt')
+TENSORFLOW_2_3_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_2_3_requirements.txt')
+TENSORFLOW_2_4_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_2_4_requirements.txt')
 
 # Location inside plugin
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
