@@ -79,9 +79,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                       help="Reference structure should be aligned within Scipion to the map reconstructed "
                            "from the input particles. This will ensure that the structure coordinates are "
                            "properly placed in the expected reference frame.")
-        form.addParam("onlyCAlpha", params.BooleanParam, default=False, label="Use only alpha carbons?",
+        form.addParam("onlyBackbone", params.BooleanParam, default=False, label="Use only backbone atoms?",
                       condition="referenceType==1",
-                      help="If yes, only alpha carbons will be considered during the estimation to speed up "
+                      help="If yes, only backbone atoms will be considered during the estimation to speed up "
                            "computations. It might decrease the accuracy of the estimations.")
         form.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
@@ -301,7 +301,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
     def PDB2List(self, lines):
         newlines = []
         for line in lines:
-            eval = re.search(r'^ATOM\s+\d+\s+CA\s+', line) if self.onlyCAlpha.get() else line.startswith("ATOM ")
+            eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) if self.onlyBackbone.get() else line.startswith("ATOM ")
             if eval:
                 try:
                     x = float(line[30:38])
