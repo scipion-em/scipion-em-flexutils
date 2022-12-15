@@ -73,7 +73,8 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
             self.readStructureData(structure)
 
         # Get train dataset
-        # self.getTrainDataset(splitTrain)
+        if splitTrain < 1.0:
+            self.getTrainDataset(splitTrain)
 
         # Prepare CTF
         self.ctf = np.zeros([self.batch_size, self.xsize, int(0.5 * self.xsize + 1)])
