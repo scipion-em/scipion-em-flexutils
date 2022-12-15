@@ -42,10 +42,12 @@ from tensorflow_toolkit.networks.zernike3deep import AutoEncoder
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs):
+def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs, cost,
+          radius_mask, smooth_mask):
     # Create data generator
     generator = Generator(L1, L2, h5_file=h5_file, shuffle=shuffle, batch_size=batch_size,
-                          step=step, splitTrain=splitTrain)
+                          step=step, splitTrain=splitTrain, cost=cost, radius_mask=radius_mask,
+                          smooth_mask=smooth_mask)
 
     # Train model
     strategy = tf.distribute.MirroredStrategy()
@@ -99,6 +101,9 @@ if __name__ == '__main__':
     parser.add_argument('--step', type=int, required=True)
     parser.add_argument('--split_train', type=float, required=True)
     parser.add_argument('--epochs', type=int, required=True)
+    parser.add_argument('--cost', type=str, required=True)
+    parser.add_argument('--radius_mask', type=float, required=False, default=2)
+    parser.add_argument('--smooth_mask', action='store_true')
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -111,7 +116,8 @@ if __name__ == '__main__':
 
     inputs = {"h5_file": args.h5_file, "outPath": args.out_path, "L1": args.L1,
               "L2": args.L2, "batch_size": args.batch_size, "shuffle": args.shuffle,
-              "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs}
+              "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs,
+              "cost": args.cost, "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask}
 
     # Initialize volume slicer
     train(**inputs)

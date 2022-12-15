@@ -153,11 +153,12 @@ class AutoEncoder(Model):
             # decoded = self.decoder.generator.applyFourierMask(decoded)
 
             # cap_def_loss = self.decoder.generator.capDeformation(d_x, d_y, d_z)
-            img_loss = self.decoder.generator.loss_correlation(data[0], decoded)
+            # img_loss = self.decoder.generator.loss_correlation(data[0], decoded)
             # img_loss = tf.keras.metrics.mse(data[0], decoded)
             # img_loss = self.decoder.generator.fourier_phase_correlation(data[0], decoded)
             # img_loss = -tf.reduce_mean(self.decoder.generator.frc_loss(data[0], decoded))
             # img_loss = self.decoder.generator.compute_loss_frc(data[0], decoded)
+            img_loss = self.decoder.generator.cost_function(data[0], decoded)
 
             total_loss = img_loss
             # 0.01 * self.decoder.generator.averageDeformation()  # Extra loss term to compensate large deformations

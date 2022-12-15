@@ -39,7 +39,8 @@ from tensorflow_toolkit.utils import getXmippOrigin
 
 
 class DataGeneratorBase(tf.keras.utils.Sequence):
-    def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8, radius=2, keepMap=False):
+    def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8,
+                 radius_mask=2, smooth_mask=True, cost="corr", keepMap=False):
         # Attributes
         self.step = step
         self.shuffle = shuffle
@@ -81,13 +82,14 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.r = [np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3])]
 
         # Prepare circular mask
-        # radius_mask = radius * 0.5 * self.xsize
-        # circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius=radius_mask)
-        # circular_mask = tf.constant(circular_mask, dtype=tf.float32)
-        # circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
-        # size = int(0.5 * self.xsize + 1)
-        # circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
-        # self.circular_mask = circular_mask[0, :, :]
+        radius_mask = radius_mask * 0.5 * self.xsize
+        circular_mask = self.create_circular_mask(self.xsize, self.xsize, radius_mask=radius_mask,
+                                                  smooth_mask=smooth_mask)
+        circular_mask = tf.constant(circular_mask, dtype=tf.float32)
+        circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
+        size = int(0.5 * self.xsize + 1)
+        circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
+        self.circular_mask = circular_mask[0, :, :]
 
         # Cap deformation vals
         # self.inv_sqrt_N = tf.constant(1. / np.sqrt(self.coords.shape[0]), dtype=tf.float32)
@@ -96,6 +98,13 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         # Fourier rings
         # self.getFourierRings()
         # self.radial_masks, self.spatial_freq = self.get_radial_masks()
+
+        # Cost function
+        if cost == "corr":
+            self.cost_function = self.loss_correlation
+        elif cost == "fpc":
+            self.cost_function = self.fourier_phase_correlation
+
 
     #----- Initialization methods -----#
 
@@ -224,19 +233,19 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
         return tf.reshape(ctf_images, [self.batch_size, self.xsize, self.xsize, 1])
 
-    def create_circular_mask(self, h, w, center=None, radius=None, soft=True):
+    def create_circular_mask(self, h, w, center=None, radius_mask=None, smooth_mask=True):
 
         if center is None:  # use the middle of the image
             center = (int(w / 2), int(h / 2))
-        if radius is None:  # use the smallest distance between the center and image walls
-            radius = min(center[0], center[1], w - center[0], h - center[1])
+        if radius_mask is None:  # use the smallest distance between the center and image walls
+            radius_mask = min(center[0], center[1], w - center[0], h - center[1])
 
         Y, X = np.ogrid[:h, :w]
         dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
 
-        mask = (dist_from_center <= radius).astype(np.float32)
+        mask = (dist_from_center <= radius_mask).astype(np.float32)
 
-        if soft:
+        if smooth_mask:
             mask = gaussian_filter(mask, sigma=2.)
 
         return mask

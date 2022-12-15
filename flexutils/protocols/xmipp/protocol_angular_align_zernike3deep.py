@@ -119,6 +119,23 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                            "A value of 1 means that all point within the mask provided in the input "
                            "will be used. A value of 2 implies that half of the point will be skipped "
                            "to increase the performance.")
+        form.addSection(label='Cost function')
+        form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Fourier Phase Correlation'],
+                      default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
+                      help="Determine the cost function to be minimized during the neural network training. Both, "
+                           "Correlation and Fourier Phase Correlation will yield similar results. However, Fourier "
+                           "Shell Correlation allows excluding high frequency information by masking in the Fourier "
+                           "space. This might help preveting overfitting in scenarios with low Signal to Noise ratios "
+                           "at the expense of slightly increasing computation time.")
+        form.addParam('maskRadius', params.FloatParam, default=0.85, label="Mask radius (%)",
+                      condition="costFunction==1",
+                      help="Determine the radius (in percentage) of the circular mask to be applied to the Fourier "
+                           "Transform of the images. A value of 1 implies that the circular mask is inscribed to the "
+                           "bounding box the Fourier Transform.")
+        form.addParam("smoothMask", params.BooleanParam, default=True, label="Smooth mask?",
+                      condition="costFunction==1",
+                      help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
+                           "vanishing transition.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -227,10 +244,19 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         args = "--h5_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
                "--shuffle --split_train %f --epochs %d" \
                % (h5_file, out_path, L1, L2, batch_size, split_train, epochs)
+
         if self.referenceType.get() == 0:
             args += " --step %d" % step
         else:
             args += " --step 1"
+
+        if self.costFunction.get() == 0:
+            args += " --cost corr"
+        elif self.costFunction.get() == 1:
+            args += " --cost fpc --radius_mask %f" % self.maskRadius.get()
+            if self.smoothMask.get():
+                args += " --smooth_mask"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
