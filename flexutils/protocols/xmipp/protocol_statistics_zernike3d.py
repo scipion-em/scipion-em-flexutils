@@ -87,12 +87,12 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
         L1 = particles.L1.get() if hasattr(particles, "L1") else self.L1.get()
         L2 = particles.L2.get() if hasattr(particles, "L2") else self.L2.get()
         z_clnm_vec = {}
-        def_vec = {}
+        # def_vec = {}
 
         for particle in particles.iterItems():
             z_clnm = np.fromstring(particle._xmipp_sphCoefficients.get(), sep=",")
             z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
-            def_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
+            # def_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
 
         def zernikeRow(part, partRow, **kwargs):
             imageToRow(part, partRow, md.MDL_IMAGE, **kwargs)
@@ -104,7 +104,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
             partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
-            partRow.setValue(md.MDL_SPH_DEFORMATION, def_vec[idx])
+            # partRow.setValue(md.MDL_SPH_DEFORMATION, def_vec[idx])
 
         if not os.path.isfile(self._getExtraPath("particles.xmd")):
             writeSetOfImages(particles, self._getExtraPath("particles.xmd"), zernikeRow)
