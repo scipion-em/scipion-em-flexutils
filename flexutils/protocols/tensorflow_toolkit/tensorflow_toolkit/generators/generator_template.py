@@ -336,8 +336,8 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
 
         # In case we want to exclude some high (noisy) frequencies from the cost (using hard or
         # soft circular masks in Fourier space)
-        # x = self.applyFourierMask(x)
-        # y = self.applyFourierMask(y)
+        x = self.applyFourierMask(x)
+        y = self.applyFourierMask(y)
 
         num = tf.abs(tf.reduce_sum(x * tf.math.conj(y), axis=(1, 2)))
         d_1 = tf.reduce_sum(tf.abs(x) ** 2, axis=(1, 2))

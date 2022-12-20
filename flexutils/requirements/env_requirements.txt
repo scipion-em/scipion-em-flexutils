@@ -10,6 +10,7 @@ umap-learn==0.5.1
 mlrose==1.3.0
 prody==2.2.0
 farneback3d==0.1.3
+panel==0.14.1
 bokeh==2.4.3
 PyQtWebEngine==5.15.6
 watchdog==2.1.9
