@@ -48,7 +48,7 @@ import xmipp3
 
 
 class ProtFlexClusterSpace(ProtAnalysis3D):
-    """ Interactive clustering of Zernikes3D space """
+    """ Interactive clustering of conformational spaces """
 
     _label = 'cluster space'
     _devStatus = BETA
@@ -98,28 +98,6 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                       condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZValues')",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
-        form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
-                      default=0, display=EnumParam.DISPLAY_HLIST,
-                      label="Dimensionality reduction method",
-                      help="\t * UMAP: usually leads to more meaningfull spaces, although execution "
-                           "is higher\n"
-                           "\t * PCA: faster but less meaningfull spaces \n"
-                           "UMAP and PCA are only computed the first time the are used. Afterwards, they "
-                           "will be reused to increase performance")
-        form.addParam('nb_umap', IntParam, label="UMAP neighbors",
-                      default=5, condition="mode==0",
-                      help="Number of neighbors to associate to each point in the space when computing "
-                           "the UMAP space. The higher the number of neighbors, the more predominant "
-                           "global in the original space features will be")
-        form.addParam('epochs_umap', IntParam, label="Number of UMAP epochs",
-                      default=1000, condition="mode==0",
-                      help="Increasing the number of epochs will lead to more accurate UMAP spaces at the cost "
-                           "of larger execution times")
-        form.addParam('densmap_umap', BooleanParam, label="Compute DENSMAP?",
-                      default=False, condition="mode==0",
-                      help="DENSMAP will try to bring densities in the UMAP space closer to each other. Execution time "
-                           "will increase when computing a DENSMAP")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -171,14 +149,14 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
                 L1 = particles.L1.get() if hasattr(particles, 'L1') else self.l1.get()
                 L2 = particles.L2.get() if hasattr(particles, 'L2') else self.l2.get()
-                Rmax = particles.Rmax
+                # Rmax = particles.Rmax
                 reference_file = String(reference)
                 mask_file = String(mask)
 
                 representative.setLocation(reference)
                 representative.L1 = L1
                 representative.L2 = L2
-                representative.Rmax = Rmax
+                # representative.Rmax = Rmax
                 representative.refMap = reference_file
                 representative.refMask = mask_file
                 representative._xmipp_sphCoefficients = csv_z_space
@@ -265,10 +243,10 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             # factor = 64 / particles.getXDim()
             # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
             # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
-            z_space_part = []
+            z_space = []
             for particle in particles.iterItems():
-                z_space_part.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-            z_space_part = np.asarray(z_space_part)
+                z_space.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+            z_space = np.asarray(z_space)
 
             # Get volume coefficients (if exist) and scale them to reference size
             # FIXME: Can we do the for loop with the aggregate? (follow ID order)
@@ -277,20 +255,21 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             #     z_clnm_aux = volumes.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
             #     z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
             #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
-            z_space_vol = np.asarray([np.zeros(z_space_part.shape[1])])
+            z_space_vol = []
             if volumes:
                 for pointer in volumes:
                     item = pointer.get()
                     if isinstance(item, Volume):
-                        z_space_vol = np.vstack([z_space_vol, np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")])
+                        z_space_vol.append(np.fromstring(item._xmipp_sphCoefficients.get(), sep=","))
                     elif isinstance(item, SetOfVolumes):
                         for volume in item.iterItems():
-                            z_space_vol = np.vstack([z_space_vol, np.fromstring(volume._xmipp_sphCoefficients.get(), sep=",")])
-                # z_clnm_vol *= factor
+                            z_space_vol.append(np.fromstring(volume._xmipp_sphCoefficients.get(), sep=","))
+            z_space_vol = np.asarray(z_space_vol)
 
             # Get useful parameters
             self.num_vol = z_space_vol.shape[0]
-            z_space = np.vstack([z_space_part, z_space_vol])
+            if self.num_vol > 0:
+                z_space = np.vstack([z_space, z_space_vol])
 
             # Resize coefficients
             z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
@@ -309,27 +288,12 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         np.savetxt(file_z_space, z_space)
 
         # Compute/Read UMAP or PCA
-        mode = self.mode.get()
-        if mode == 0:
-            file_coords = self._getExtraPath("umap_coords.txt")
-            if not os.path.isfile(file_coords):
-                args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                       "--n_components 3 --thr %d" \
-                       % (file_z_space, file_coords, self.nb_umap.get(),
-                          self.epochs_umap.get(), self.numberOfThreads.get())
-                if self.densmap_umap.get():
-                    args += " --densmap"
-                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
-                program = flexutils.Plugin.getProgram(program)
-                self.runJob(program, args)
-        elif mode == 1:
-            file_coords = self._getExtraPath("pca_coords.txt")
-            if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s --n_components 3" \
-                       % (file_z_space, file_coords)
-                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
-                program = flexutils.Plugin.getProgram(program)
-                self.runJob(program, args)
+        file_coords = self._getExtraPath("red_coords.txt")
+        red_space = []
+        for particle in particles.iterItems():
+            red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+        red_space = np.asarray(red_space)
+        np.savetxt(file_coords, red_space)
 
         # ********* Get interpolation value for coloring the space *********
         if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
@@ -383,5 +347,15 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
     def _methods(self):
         return [
-            "Interactive automatic clustering of flexible spaces",
+            "Interactive automatic clustering of conformational spaces",
         ]
+
+    def _validate(self):
+        errors = []
+        red_c = np.fromstring(self.particles.get().getFirstItem()._red_space.get(), sep=",")
+        dim = red_c.size
+
+        if dim < 3:
+            errors.append("This protocols has been implemented only for reduced spaces of three dimensions")
+
+        return errors

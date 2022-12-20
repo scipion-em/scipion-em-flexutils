@@ -373,12 +373,12 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
                                            'names': names})
         else:
             x, y, names = [], [], []
-            if "n_vol" in self.class_inputs:
-                n_vol = int(self.class_inputs["n_vol"])
-                x, y = self.data[-n_vol:, 0].tolist(), self.data[-n_vol:, 1].tolist()
-                names.append("reference")
-                for idx in range(1, n_vol):
-                    names.append("class_%d" % idx)
+            # if "n_vol" in self.class_inputs:
+            #     n_vol = int(self.class_inputs["n_vol"])
+            #     x, y = self.data[-n_vol:, 0].tolist(), self.data[-n_vol:, 1].tolist()
+            #     names.append("reference")
+            #     for idx in range(1, n_vol):
+            #         names.append("class_%d" % idx)
             data = {'x': x, 'y': y, 'names': names}
             self.seeds = ColumnDataSource(data)
 

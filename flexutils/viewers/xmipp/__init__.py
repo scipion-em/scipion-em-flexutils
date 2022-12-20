@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from .viewer_angular_alignment import XmippAngularAlignmentViewer
+from .viewer_reduced_space import XmippReducedSpaceViewer

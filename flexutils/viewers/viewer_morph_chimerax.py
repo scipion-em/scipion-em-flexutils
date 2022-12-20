@@ -53,9 +53,9 @@ class FlexMorphChimeraX():
         self.path = _path
         self.other_inputs = kwargs
 
-        if "reference" in self.file_names:
-            index = self.file_names.index("reference")
-            self.file_names.remove("reference")
+        if "origin" in self.file_names:
+            index = self.file_names.index("origin")
+            self.file_names.remove("origin")
             self.z_space = np.delete(self.z_space, index, axis=0)
 
     def showSalesMan(self, param=None):
