@@ -31,7 +31,8 @@ import numpy as np
 from pyworkflow import BETA
 from pyworkflow.object import CsvList
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
+                                       GPU_LIST, USE_GPU
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -51,6 +52,16 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='General parameters')
+        form.addHidden(USE_GPU, BooleanParam, default=True,
+                       condition="mode==2",
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                                             Select the one you want to use.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       condition="mode==2",
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Input particles",
                       pointerClass='SetOfParticles', important=True,
                       help="Particles must have a Zernike3D flexibility information associated")
@@ -75,14 +86,17 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
                            "will be used to get the new conformational space.\n"
                            "\t * Residuals: the deformation field associated with all the generated strucutres "
                            "will be used to get the new conformational landscape.\n")
-        form.addParam('mode', EnumParam, choices=['UMAP', 'PCA'],
+        form.addParam('mode', EnumParam, choices=['UMAP', 'PCA', 'deepElastic'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Dimensionality reduction method",
                       help="\t * UMAP: usually leads to more meaningfull spaces, although execution "
                            "is higher\n"
                            "\t * PCA: faster but less meaningfull spaces \n"
-                           "UMAP and PCA are only computed the first time the are used. Afterwards, they "
-                           "will be reused to increase performance")
+                           "\t * deepElastic: Variational autencoder based dimred method. This method learns and "
+                           "embedding that tries to keep as best as possible the internal clustering structure of "
+                           "the original N-D space \n"
+                           "UMAP, PCA, and cryoExplode are only computed the first time the are used. Afterwards, they "
+                           "will be reused to increase performance.")
         form.addParam('nb_umap', IntParam, label="UMAP neighbors",
                       default=5, condition="mode==0",
                       help="Number of neighbors to associate to each point in the space when computing "
@@ -96,6 +110,33 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
                       default=False, condition="mode==0",
                       help="DENSMAP will try to bring densities in the UMAP space closer to each other. Execution time "
                            "will increase when computing a DENSMAP")
+        form.addParam('clusters', IntParam, label="Initial number of clusters", default=10,
+                      condition="mode==2",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="The N-D space will be splitted in the number of cluster specified so the network "
+                           "can learn the best way to keep their strucutre in the reduced space.")
+        form.addParam('init_power', FloatParam, label="Initial explosion power", default=10.0,
+                      condition="mode==2",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="The initial power to scatter the landscape. This help the network to learn appropiately "
+                           "the initial clustering")
+        form.addParam('end_power', FloatParam, label="Final explosion power", default=1.0,
+                      condition="mode==2",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="The final power to scatter the landscape. This will determine how close the clusters will "
+                           "be in the final embedding.")
+        form.addParam('vae_sigma', FloatParam, label="Variational autoencoder sigma", default=1.0,
+                      condition="mode==2",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Larger values of sigma will enfoce continuity of the final embedding. If set to zero, a "
+                           "non-variational autoencoder will be trained.")
+        form.addParam('loss_lambda', FloatParam, label="Cosine mapping lambda", default=1.0,
+                      condition="mode==2",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="If 0.0, cosine distance mapping will not be considered in the lost function. In general, "
+                           "adding the cosine distance mapping to the cost function will lead to more discriminative "
+                           "embeddings, at the expense of having possible visual artefacts. By default it is set to "
+                           "1.0 consider it in the cost function.")
         form.addParam('dimensions', EnumParam, choices=['2D', '3D'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Landscape space dimensions?",
@@ -205,6 +246,19 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
             program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
+        elif mode == 2:
+            args = "--space %s --output %s --split_train 1 --clusters %d --init_power %f " \
+                   "--end_power %f --vae_sigma %f --lat_dim %d --loss_lambda %f" \
+                    % (file_z_space, self._getExtraPath("red_coords.txt"), self.clusters.get(),
+                       self.init_power.get(), self.end_power.get(), self.vae_sigma.get(),
+                       self.DIMENSIONS[self.dimensions.get()], self.loss_lambda.get())
+
+            if self.useGpu.get():
+                gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
+                args += " --gpu %s" % gpu_list
+
+            program = flexutils.Plugin.getTensorflowProgram("train_deep_elastic.py", python=False)
+            self.runJob(program, args, numberOfMpi=1)
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
