@@ -38,7 +38,7 @@ import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
 import flexutils
-from flexutils.constants import CONDA_REQ, TENSORFLOW_2_3_REQ, TENSORFLOW_2_4_REQ
+from flexutils.constants import CONDA_REQ, TENSORFLOW_2_3_REQ, TENSORFLOW_2_11_REQ
 
 
 __version__ = "3.0.1"
@@ -104,7 +104,7 @@ class Plugin(pwplugin.Plugin):
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
             cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + '%(program)s ' % locals()
+        return cmd + 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/ %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
@@ -144,12 +144,13 @@ class Plugin(pwplugin.Plugin):
 
             # If at least one GPU is series 3000 and above, change installation requirements
             for gpu_model in gpu_models:
-                if re.match(r'30\d\d', gpu_model):
+                if re.findall(r"30[0-9]+", gpu_model):
                     cuda_version = "11"
+                    break
 
             if cuda_version == "11":
-                installationCmd += "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
-                                   "pip install -r " + TENSORFLOW_2_4_REQ + " && "
+                installationCmd += "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 cudatoolkit-dev -y && " \
+                                   "pip install -r " + TENSORFLOW_2_11_REQ + " && "
             else:
                 installationCmd += "conda install -c conda-forge cudatoolkit=10.1 cudnn=7 -y && " \
                                    "pip install -r " + TENSORFLOW_2_3_REQ + " && "
