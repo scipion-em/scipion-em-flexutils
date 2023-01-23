@@ -29,7 +29,7 @@ import math
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.python.ops.numpy_ops import deg2rad
+# from tensorflow.python.ops.numpy_ops import deg2rad
 
 
 # axis sequences for Euler angles
@@ -679,12 +679,12 @@ def euler_matrix_row(alpha, beta, gamma, row, batch_size):
     A = []
 
     for idx in range(batch_size):
-        ca = tf.cos(deg2rad(tf.gather(alpha, idx, axis=0)))
-        sa = tf.sin(deg2rad(tf.gather(alpha, idx, axis=0)))
-        cb = tf.cos(deg2rad(tf.gather(beta, idx, axis=0)))
-        sb = tf.sin(deg2rad(tf.gather(beta, idx, axis=0)))
-        cg = tf.cos(deg2rad(tf.gather(gamma, idx, axis=0)))
-        sg = tf.sin(deg2rad(tf.gather(gamma, idx, axis=0)))
+        ca = tf.cos(tf.gather(alpha, idx, axis=0) * (np.pi / 180.0))
+        sa = tf.sin(tf.gather(alpha, idx, axis=0) * (np.pi / 180.0))
+        cb = tf.cos(tf.gather(beta, idx, axis=0) * (np.pi / 180.0))
+        sb = tf.sin(tf.gather(beta, idx, axis=0) * (np.pi / 180.0))
+        cg = tf.cos(tf.gather(gamma, idx, axis=0) * (np.pi / 180.0))
+        sg = tf.sin(tf.gather(gamma, idx, axis=0) * (np.pi / 180.0))
 
         cc = cb * ca
         cs = cb * sa
@@ -703,6 +703,30 @@ def euler_matrix_row(alpha, beta, gamma, row, batch_size):
 
     return tf.stack(A)
 
+def euler_matrix_batch(alpha, beta, gamma):
+
+    ca = tf.cos(alpha * (np.pi / 180.0))[:, None]
+    sa = tf.sin(alpha * (np.pi / 180.0))[:, None]
+    cb = tf.cos(beta * (np.pi / 180.0))[:, None]
+    sb = tf.sin(beta * (np.pi / 180.0))[:, None]
+    cg = tf.cos(gamma * (np.pi / 180.0))[:, None]
+    sg = tf.sin(gamma * (np.pi / 180.0))[:, None]
+
+    cc = cb * ca
+    cs = cb * sa
+    sc = sb * ca
+    ss = sb * sa
+
+    row_1 = tf.concat([cg * cc - sg * sa, cg * cs + sg * ca, -cg * sb], axis=1)
+    # A.append([cg * cc - sg * sa, -sg * cc - cg, sc])
+
+    row_2 = tf.concat([-sg * cc - cg * sa, -sg * cs + cg * ca, sg * sb], axis=1)
+    # A.append([cg * cs + sg * ca, -sg * cs + cg * ca, sg * ss])
+
+    row_3 = tf.concat([sc, ss, cb], axis=1)
+    # A.append([-cg * sb, sg * ss, cb])
+
+    return row_1, row_2, row_3
 
 def ctf_freqs(shape, d=1.0, full=True):
     """
@@ -736,7 +760,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
     :param bf:  B-factor, divided by 4 in exponential, lowpass positive.
     :param lp:  Hard low-pass filter (Å), should usually be Nyquist.
     """
-    angast = deg2rad(angast)
+    angast = angast * (np.pi / 180.0)
     kv = kv * 1e3
     cs = cs * 1e7
     lamb = 12.2643247 / tf.sqrt(kv * (1. + kv * 0.978466e-6))
@@ -746,7 +770,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
     k2 = np.pi / 2. * cs * lamb ** 3.
     k3 = tf.sqrt(1. - ac ** 2.)
     k4 = bf / 4.  # B-factor, follows RELION convention.
-    k5 = deg2rad(phase)  # Phase shift.
+    k5 = phase * (np.pi / 180.0)  # Phase shift.
     if lp != 0:  # Hard low- or high-pass.
         s *= s <= (1. / lp)
     s_2 = s ** 2.

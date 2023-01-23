@@ -26,44 +26,91 @@
 
 
 import tensorflow as tf
-from tensorflow.python.keras import Input
-from tensorflow.python.keras.models import Model
 from tensorflow.keras import layers
 
-from tensorflow_toolkit.utils import euler_matrix_row, computeCTF
+from tensorflow_toolkit.utils import euler_matrix_row, computeCTF, euler_matrix_batch
+from tensorflow_toolkit.layers.residue_conv2d import ResidueConv2D
 
 
-class Encoder(Model):
-  def __init__(self, latent_dim, input_dim):
+class Encoder(tf.keras.Model):
+  def __init__(self, latent_dim, input_dim, refinePose, architecture="convnn"):
     super(Encoder, self).__init__()
     self.latent_dim = latent_dim
     l2 = tf.keras.regularizers.l2(1e-3)
+    # shift_activation = lambda y: 2 * tf.keras.activations.tanh(y)
 
-    encoder_inputs = Input(shape=(input_dim, input_dim, 1))
-    x = layers.Flatten()(encoder_inputs)
-    for _ in range(12):
-        x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
-    x = layers.Dropout(0.3)(x)
-    x = layers.BatchNormalization()(x)
+    encoder_inputs = tf.keras.Input(shape=(input_dim, input_dim, 1))
 
-    z_space_x = layers.Dense(latent_dim, activation="linear", name="z_space_x")(x)
-    z_space_y = layers.Dense(latent_dim, activation="linear", name="z_space_y")(x)
-    z_space_z = layers.Dense(latent_dim, activation="linear", name="z_space_z")(x)
-    self.encoder = Model(encoder_inputs, [z_space_x, z_space_y, z_space_z], name="encoder")
+    x = tf.keras.layers.Flatten()(encoder_inputs)
+
+    if architecture == "mlpnn":
+        for _ in range(12):
+            x = layers.Dense(1024, activation='relu', kernel_regularizer=l2)(x)
+        x = layers.Dropout(0.3)(x)
+        x = layers.BatchNormalization()(x)
+
+    elif architecture == "convnn":
+        for _ in range(3):
+            x = layers.Dense(64 * 64, activation='relu', kernel_regularizer=l2)(x)
+
+        x = tf.keras.layers.Dense(64 * 64, kernel_regularizer=l2)(x)
+        x = tf.keras.layers.Reshape((64, 64, 1))(x)
+
+        x = tf.keras.layers.Conv2D(64, 5, activation="relu", strides=(2, 2), padding="same")(x)
+        for _ in range(1):
+            x = ResidueConv2D(64, 5, activation="relu", padding="same")(x)
+        x = tf.keras.layers.Conv2D(32, 5, activation="relu", strides=(2, 2), padding="same")(x)
+        for _ in range(1):
+            x = ResidueConv2D(32, 5, activation="relu", padding="same")(x)
+        x = tf.keras.layers.Conv2D(16, 3, activation="relu", strides=(2, 2), padding="same")(x)
+        x = ResidueConv2D(16, 3, activation="relu", padding="same")(x)
+        x = tf.keras.layers.Flatten()(x)
+        x = tf.keras.layers.Dropout(.1)(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+
+        for _ in range(3):
+            x = layers.Dense(3 * 16 * 16, activation='relu', kernel_regularizer=l2)(x)
+        x = layers.Dropout(.1)(x)
+        x = layers.BatchNormalization()(x)
+
+        # x = tf.keras.layers.Conv2D(4, 5, activation="relu", strides=(2, 2), padding="same")(x)
+        # x = tf.keras.layers.Conv2D(8, 5, activation="relu", strides=(2, 2), padding="same")(x)
+        # x = tf.keras.layers.Conv2D(16, 3, activation="relu", strides=(2, 2), padding="same")(x)
+        # x = tf.keras.layers.Conv2D(16, 3, activation="relu", strides=(2, 2), padding="same")(x)
+        # x = tf.keras.layers.Flatten()(x)
+        # x = tf.keras.layers.Dropout(.1)(x)
+        # x = tf.keras.layers.BatchNormalization()(x)
+
+    if refinePose:
+        z_space_x = layers.Dense(latent_dim, activation="linear", name="z_space_x")(x)
+        z_space_y = layers.Dense(latent_dim, activation="linear", name="z_space_y")(x)
+        z_space_z = layers.Dense(latent_dim, activation="linear", name="z_space_z")(x)
+        delta_euler = layers.Dense(3, activation="linear", name="delta_euler")(x)
+        # delta_shifts = layers.Dense(2, activation=shift_activation, name="delta_shifts")(x)
+        delta_shifts = layers.Dense(2, activation="linear", name="delta_shifts")(x)
+        self.encoder = tf.keras.Model(encoder_inputs,
+                                      [z_space_x, z_space_y, z_space_z, delta_euler, delta_shifts], name="encoder")
+    else:
+        z_space_x = layers.Dense(latent_dim, activation="linear", name="z_space_x")(x)
+        z_space_y = layers.Dense(latent_dim, activation="linear", name="z_space_y")(x)
+        z_space_z = layers.Dense(latent_dim, activation="linear", name="z_space_z")(x)
+        self.encoder = tf.keras.Model(encoder_inputs, [z_space_x, z_space_y, z_space_z], name="encoder")
 
   def call(self, x):
-    z_space_x, z_space_y, z_space_z = self.encoder(x)
-    return z_space_x, z_space_y, z_space_z
+    return self.encoder(x)
 
 
-class Decoder(Model):
+class Decoder(tf.keras.Model):
   def __init__(self, latent_dim, generator):
     super(Decoder, self).__init__()
     self.generator = generator
 
-    decoder_inputs_x = Input(shape=(latent_dim,))
-    decoder_inputs_y = Input(shape=(latent_dim,))
-    decoder_inputs_z = Input(shape=(latent_dim,))
+    decoder_inputs_x = tf.keras.Input(shape=(latent_dim,))
+    decoder_inputs_y = tf.keras.Input(shape=(latent_dim,))
+    decoder_inputs_z = tf.keras.Input(shape=(latent_dim,))
+    if self.generator.refinePose:
+        delta_euler = tf.keras.Input(shape=(3,))
+        delta_shifts = tf.keras.Input(shape=(2,))
 
     # Compute deformation field
     d_x = layers.Lambda(self.generator.computeDeformationField, trainable=True)(decoder_inputs_x)
@@ -76,12 +123,24 @@ class Decoder(Model):
     c_z = layers.Lambda(lambda inp: self.generator.applyDeformationField(inp, 2), trainable=True)(d_z)
 
     # Apply alignment
-    c_r_x = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 0), trainable=True)([c_x, c_y, c_z])
-    c_r_y = layers.Lambda(lambda inp: self.generator.applyAlignment(inp, 1), trainable=True)([c_x, c_y, c_z])
+    if self.generator.refinePose:
+        c_r_x = layers.Lambda(lambda inp: self.generator.applyAlignmentDeltaEuler(inp, 0), trainable=True)\
+                ([c_x, c_y, c_z, delta_euler])
+        c_r_y = layers.Lambda(lambda inp: self.generator.applyAlignmentDeltaEuler(inp, 1), trainable=True)\
+                ([c_x, c_y, c_z, delta_euler])
+    else:
+        c_r_x = layers.Lambda(lambda inp: self.generator.applyAlignmentMatrix(inp, 0), trainable=True)([c_x, c_y, c_z])
+        c_r_y = layers.Lambda(lambda inp: self.generator.applyAlignmentMatrix(inp, 1), trainable=True)([c_x, c_y, c_z])
 
     # Apply shifts
-    c_r_s_x = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 0), trainable=True)(c_r_x)
-    c_r_s_y = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 1), trainable=True)(c_r_y)
+    if self.generator.refinePose:
+        c_r_s_x = layers.Lambda(lambda inp: self.generator.applyDeltaShifts(inp, 0), trainable=True)\
+                  ([c_r_x, delta_shifts])
+        c_r_s_y = layers.Lambda(lambda inp: self.generator.applyDeltaShifts(inp, 1), trainable=True)\
+                  ([c_r_y, delta_shifts])
+    else:
+        c_r_s_x = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 0), trainable=True)(c_r_x)
+        c_r_s_y = layers.Lambda(lambda inp: self.generator.applyShifts(inp, 1), trainable=True)(c_r_y)
 
     # Scatter image and bypass gradient
     scatter_images = layers.Lambda(self.generator.scatterImgByPass, trainable=True)([c_r_s_x, c_r_s_y])
@@ -96,18 +155,24 @@ class Decoder(Model):
         # CTF filter image
         decoded_ctf = layers.Lambda(self.generator.ctfFilterImage)(scatter_images)
 
-    self.decoder = Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z], decoded_ctf, name="decoder")
+    if self.generator.refinePose:
+        self.decoder = tf.keras.Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z,
+                                       delta_euler, delta_shifts], decoded_ctf, name="decoder")
+    else:
+        self.decoder = tf.keras.Model([decoder_inputs_x, decoder_inputs_y, decoder_inputs_z],
+                                       decoded_ctf, name="decoder")
 
   def call(self, x):
     decoded = self.decoder(x)
     # self.generator.def_coords = [d_x, d_y, d_z]
     return decoded
 
-class AutoEncoder(Model):
-    def __init__(self, generator, **kwargs):
+class AutoEncoder(tf.keras.Model):
+    def __init__(self, generator, architecture="convnn", **kwargs):
         super(AutoEncoder, self).__init__(**kwargs)
         self.generator = generator
-        self.encoder = Encoder(generator.zernike_size.shape[0], generator.xsize)
+        self.encoder = Encoder(generator.zernike_size.shape[0], generator.xsize,
+                               generator.refinePose, architecture=architecture)
         self.decoder = Decoder(generator.zernike_size.shape[0], generator)
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         # self.img_loss_tracker = tf.keras.metrics.Mean(name="img_loss")
@@ -126,13 +191,19 @@ class AutoEncoder(Model):
         self.decoder.generator.current_images = data[0]
 
         # Precompute batch aligments
-        rot_batch = tf.gather(self.decoder.generator.angle_rot, data[1], axis=0)
-        tilt_batch = tf.gather(self.decoder.generator.angle_tilt, data[1], axis=0)
-        psi_batch = tf.gather(self.decoder.generator.angle_psi, data[1], axis=0)
-        row_1 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 1, self.decoder.generator.batch_size)
-        row_2 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 2, self.decoder.generator.batch_size)
-        row_3 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 3, self.decoder.generator.batch_size)
-        self.decoder.generator.r = [row_1, row_2, row_3]
+        if self.decoder.generator.refinePose:
+            self.decoder.generator.rot_batch = tf.gather(self.decoder.generator.angle_rot, data[1], axis=0)
+            self.decoder.generator.tilt_batch = tf.gather(self.decoder.generator.angle_tilt, data[1], axis=0)
+            self.decoder.generator.psi_batch = tf.gather(self.decoder.generator.angle_psi, data[1], axis=0)
+        else:
+            rot_batch = tf.gather(self.decoder.generator.angle_rot, data[1], axis=0)
+            tilt_batch = tf.gather(self.decoder.generator.angle_tilt, data[1], axis=0)
+            psi_batch = tf.gather(self.decoder.generator.angle_psi, data[1], axis=0)
+            # row_1 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 1, self.decoder.generator.batch_size)
+            # row_2 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 2, self.decoder.generator.batch_size)
+            # row_3 = euler_matrix_row(rot_batch, tilt_batch, psi_batch, 3, self.decoder.generator.batch_size)
+            # self.decoder.generator.r = [row_1, row_2, row_3]
+            self.decoder.generator.r = euler_matrix_batch(rot_batch, tilt_batch, psi_batch)
 
         # Precompute batch CTFs
         defocusU_batch = tf.gather(self.decoder.generator.defocusU, data[1], axis=0)
@@ -146,8 +217,8 @@ class AutoEncoder(Model):
         self.decoder.generator.ctf = ctf
 
         with tf.GradientTape() as tape:
-            z_space_x, z_space_y, z_space_z = self.encoder(data[0])
-            decoded = self.decoder([z_space_x, z_space_y, z_space_z])
+            encoded = self.encoder(data[0])
+            decoded = self.decoder(encoded)
 
             # ori_images = self.decoder.generator.applyFourierMask(data[0])
             # decoded = self.decoder.generator.applyFourierMask(decoded)
@@ -171,6 +242,4 @@ class AutoEncoder(Model):
         }
 
     def call(self, input_features):
-        z_x, z_y, z_z = self.encoder(input_features)
-        decoded = self.decoder([z_x, z_y, z_z])
-        return decoded
+        return self.decoder(self.encoder(input_features))

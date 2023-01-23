@@ -39,7 +39,8 @@ import pwem.emlib.metadata as md
 from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
-from xmipp3.convert import createItemMatrix, setXmippAttributes, imageToRow, coordinateToRow, writeSetOfParticles
+from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
+                           geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
@@ -182,6 +183,13 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         with h5py.File(h5_file, 'r') as hf:
             zernike_space = np.asarray(hf.get('zernike_space'))
 
+            if "delta_angle_rot" in hf.keys():
+                delta_rot = np.asarray(hf.get('delta_angle_rot'))
+                delta_tilt = np.asarray(hf.get('delta_angle_tilt'))
+                delta_psi = np.asarray(hf.get('delta_angle_psi'))
+                delta_shift_x = np.asarray(hf.get('delta_shift_x'))
+                delta_shift_y = np.asarray(hf.get('delta_shift_y'))
+
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
         inputMask = zernikeParticles.refMask.get()
@@ -192,6 +200,9 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
 
         correctionFactor = Xdim / self.newXdim
         zernike_space = correctionFactor * zernike_space
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
         for idx, particle in enumerate(inputSet.iterItems()):
             # z = correctionFactor * zernike_space[idx]
 
@@ -200,6 +211,23 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
                 csv_z_space.append(c)
 
             particle._xmipp_sphCoefficients = csv_z_space
+
+            if self.refinePose.get():
+                tr_ori = particle.getTransform().getMatrix()
+                shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
+
+                # Apply delta angles
+                angles[0] += delta_rot[idx]
+                angles[1] += delta_tilt[idx]
+                angles[2] += delta_psi[idx]
+
+                # Apply delta shifts
+                shifts[0] += delta_shift_x[idx]
+                shifts[1] += delta_shift_y[idx]
+
+                # Set new transformation matrix
+                tr = matrixFromGeometry(shifts, angles, inverseTransform)
+                particle.getTransform().setMatrix(tr)
 
             partSet.append(particle)
 

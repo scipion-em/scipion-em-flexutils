@@ -25,21 +25,31 @@
 # **************************************************************************
 
 
+import numpy as np
+
 import tensorflow as tf
 
 from tensorflow_toolkit.generators.generator_template import DataGeneratorBase
-from tensorflow_toolkit.utils import basisDegreeVectors, computeBasis
+from tensorflow_toolkit.utils import basisDegreeVectors, computeBasis, euler_matrix_batch
 
 
 class Generator(DataGeneratorBase):
-    def __init__(self, L1=3, L2=2, **kwargs):
+    def __init__(self, L1=3, L2=2, refinePose=True, **kwargs):
         super().__init__(**kwargs)
+
+        self.refinePose = refinePose
 
         # Get Zernike3D vector size
         self.zernike_size = basisDegreeVectors(L1, L2)
 
         # Precompute Zernike3D basis
         self.Z = computeBasis(self.coords, L1=L1, L2=L2, r=0.5 * self.xsize)
+
+        # Initialize pose information
+        if refinePose:
+            self.rot_batch = np.zeros(self.batch_size)
+            self.tilt_batch = np.zeros(self.batch_size)
+            self.psi_batch = np.zeros(self.batch_size)
 
 
     # ----- Utils -----#
@@ -54,15 +64,29 @@ class Generator(DataGeneratorBase):
         coords_axis = tf.transpose(tf.gather(coords, axis, axis=1))
         return tf.add(coords_axis[:, None], d)
 
-    def applyAlignment(self, c, axis):
+    def applyAlignmentMatrix(self, c, axis):
         c_r_1 = tf.multiply(c[0], tf.cast(tf.gather(self.r[axis], 0, axis=1), dtype=tf.float32))
         c_r_2 = tf.multiply(c[1], tf.cast(tf.gather(self.r[axis], 1, axis=1), dtype=tf.float32))
         c_r_3 = tf.multiply(c[2], tf.cast(tf.gather(self.r[axis], 2, axis=1), dtype=tf.float32))
         return tf.add(tf.add(c_r_1, c_r_2), c_r_3)
 
+    def applyAlignmentDeltaEuler(self, inputs, axis):
+        r = euler_matrix_batch(self.rot_batch + inputs[3][:, 0],
+                               self.tilt_batch + inputs[3][:, 1],
+                               self.psi_batch + inputs[3][:, 2])
+
+        c_r_1 = tf.multiply(inputs[0], tf.cast(tf.gather(r[axis], 0, axis=1), dtype=tf.float32))
+        c_r_2 = tf.multiply(inputs[1], tf.cast(tf.gather(r[axis], 1, axis=1), dtype=tf.float32))
+        c_r_3 = tf.multiply(inputs[2], tf.cast(tf.gather(r[axis], 2, axis=1), dtype=tf.float32))
+        return tf.add(tf.add(c_r_1, c_r_2), c_r_3)
+
     def applyShifts(self, c, axis):
         shifts_batch = tf.gather(self.shifts[axis], self.indexes, axis=0)
         return tf.add(tf.subtract(c, shifts_batch[None, :]), self.xmipp_origin[axis])
+
+    def applyDeltaShifts(self, c, axis):
+        shifts_batch = tf.gather(self.shifts[axis], self.indexes, axis=0) + c[1][:, axis]
+        return tf.add(tf.subtract(c[0], shifts_batch[None, :]), self.xmipp_origin[axis])
 
     def scatterImgByPass(self, c):
         c_x = tf.reshape(tf.transpose(c[0]), [self.batch_size, -1, 1])

@@ -52,15 +52,20 @@ def predict(h5_file, weigths_file, L1, L2):
     autoencoder.load_weights(weigths_file)
 
     # Get Zernike3DSpace
+    zernike_space = []
+    delta_euler = []
+    delta_shifts = []
     if generator.fitInMemory:
         images = generator.mrc
         images = images.reshape(-1, generator.xsize, generator.xsize, 1)
-        zernike_space = []
         for image in images:
-            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, :])
-            zernike_vec = np.hstack([z_x.numpy(), z_y.numpy(), z_z.numpy()])
+            encoded = autoencoder.encoder(image[None, :, :, :])
+            zernike_vec = np.hstack([encoded[0].numpy(), encoded[1].numpy(), encoded[2].numpy()])
             zernike_space.append(zernike_vec)
-        zernike_space = np.vstack(zernike_space)
+
+            if len(encoded) > 3:
+                delta_euler.append(encoded[3].numpy())
+                delta_shifts.append(encoded[4].numpy())
     else:
         zernike_space = []
         images_id = np.arange(generator.angle_rot.numpy().size)
@@ -68,14 +73,29 @@ def predict(h5_file, weigths_file, L1, L2):
         for index in images_id:
             with mrcfile.open(os.path.join(generator.images_path[0], "theo_%d.mrc" % index)) as mrc:
                 image = mrc.data
-            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, None])
-            zernike_vec = np.hstack([z_x.numpy(), z_y.numpy(), z_z.numpy()])
+            encoded = autoencoder.encoder(image[None, :, :, None])
+            zernike_vec = np.hstack([encoded[0].numpy(), encoded[1].numpy(), encoded[2].numpy()])
             zernike_space.append(zernike_vec)
-        zernike_space = np.vstack(zernike_space)
+
+            if len(encoded) > 3:
+                delta_euler.append(encoded[3].numpy())
+                delta_shifts.append(encoded[4].numpy())
+
+    zernike_space = np.vstack(zernike_space)
 
     # Save space to metadata file
     with h5py.File(h5_file, 'a') as hf:
         hf.create_dataset('zernike_space', data=zernike_space)
+
+        if len(encoded) > 3:
+            delta_euler = np.vstack(delta_euler)
+            delta_shifts = np.vstack(delta_shifts)
+
+            hf.create_dataset('delta_angle_rot', data=delta_euler[:, 0])
+            hf.create_dataset('delta_angle_tilt', data=delta_euler[:, 1])
+            hf.create_dataset('delta_angle_psi', data=delta_euler[:, 2])
+            hf.create_dataset('delta_shift_x', data=delta_shifts[:, 0])
+            hf.create_dataset('delta_shift_y', data=delta_shifts[:, 1])
 
 
 if __name__ == '__main__':

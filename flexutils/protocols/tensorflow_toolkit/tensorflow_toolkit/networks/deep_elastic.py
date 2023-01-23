@@ -29,8 +29,6 @@ import numpy as np
 
 import tensorflow as tf
 from tensorflow.keras import layers, losses
-from tensorflow.keras.models import Model
-from tensorflow.python.keras import Input
 from tensorflow.python.ops.linalg.linalg_impl import diag_part
 from tensorflow.python.ops.math_ops import to_float
 from tensorflow.python.ops.array_ops import shape_internal
@@ -40,12 +38,12 @@ from tensorflow.python.ops.array_ops import shape_internal
 # VAE Autoencoder
 # --------------------------------------------
 
-class Encoder(Model):
+class Encoder(tf.keras.Model):
   def __init__(self, latent_dim, input_dim, sigma=1., train_log_var=True):
     super(Encoder, self).__init__()
     self.latent_dim = latent_dim
 
-    encoder_inputs = Input(shape=(input_dim))
+    encoder_inputs = tf.keras.Input(shape=(input_dim))
     x = layers.Dense(10 * latent_dim, activation='relu')(encoder_inputs)
     x = layers.Dense(5 * latent_dim, activation='relu')(x)
     x = layers.Dense(2 * latent_dim, activation='relu')(x)
@@ -60,14 +58,14 @@ class Encoder(Model):
     else:
         z_log_var = layers.Dense(latent_dim, activation=None, name="z_log_var")(x)
         z_sampled = Sampling_Fix_Var(sigma=sigma)([z_mean, z_log_var])
-    self.encoder = Model(encoder_inputs, [z_mean, z_log_var, z_sampled], name="encoder")
+    self.encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z_sampled], name="encoder")
 
   def call(self, x):
     z_mean, z_log_var, z_sampled = self.encoder(x)
     return z_mean, z_log_var, z_sampled
 
 
-class Decoder(Model):
+class Decoder(tf.keras.Model):
   def __init__(self, latent_dim, final_dim):
     super(Decoder, self).__init__()
     self.latent_dim = latent_dim
@@ -84,7 +82,7 @@ class Decoder(Model):
     decoded = self.decoder(x)
     return decoded
 
-class VAExplode(Model):
+class VAExplode(tf.keras.Model):
     def __init__(self, latent_dim, data_dim, kl_lambda=0., loss_lambda=0., dist_sigma=1., epsilon=1e-5,
                  train_log_var=True, **kwargs):
         super(VAExplode, self).__init__(**kwargs)

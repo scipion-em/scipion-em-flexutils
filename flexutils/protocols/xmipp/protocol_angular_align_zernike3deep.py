@@ -40,7 +40,8 @@ import pwem.emlib.metadata as md
 from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
-from xmipp3.convert import createItemMatrix, setXmippAttributes, imageToRow, coordinateToRow, writeSetOfParticles
+from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
+                           geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
@@ -106,6 +107,16 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                            "memory during the training steps. This will make the training slightly "
                            "slower.")
         form.addSection(label='Network')
+        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+                      expertLevel=params.LEVEL_ADVANCED,
+                      default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                      help="* *ConvNN*: convolutional neural network\n"
+                           "* *MLPNN*: multiperceptron neural network")
+        form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+                      help="If True, the neural network will be also trained to refine the angular "
+                           "and shift assignation of the particles to make it more consistent with the "
+                           "flexibility estimation. Otherwise, only heterogeneity information will be "
+                           "estimated.")
         form.addParam('epochs', params.IntParam, default=20, label='Number of training epochs')
         form.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
                       help="Number of images that will be used simultaneously for every training step. "
@@ -257,6 +268,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
             if self.smoothMask.get():
                 args += " --smooth_mask"
 
+        if self.refinePose.get():
+            args += " --refine_pose"
+
+        if self.architecture.get() == 0:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 1:
+            args += " --architecture mlpnn"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
@@ -273,6 +292,13 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         with h5py.File(h5_file, 'r') as hf:
             zernike_space = np.asarray(hf.get('zernike_space'))
 
+            if self.refinePose.get():
+                delta_rot = np.asarray(hf.get('delta_angle_rot'))
+                delta_tilt = np.asarray(hf.get('delta_angle_tilt'))
+                delta_psi = np.asarray(hf.get('delta_angle_psi'))
+                delta_shift_x = np.asarray(hf.get('delta_shift_x'))
+                delta_shift_y = np.asarray(hf.get('delta_shift_y'))
+
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
 
@@ -285,6 +311,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
         correctionFactor = Xdim / self.newXdim
         zernike_space = correctionFactor * zernike_space
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
         for idx, particle in enumerate(inputSet.iterItems()):
             # z = correctionFactor * zernike_space[idx]
 
@@ -293,6 +322,23 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                 csv_z_space.append(c)
 
             particle._xmipp_sphCoefficients = csv_z_space
+
+            if self.refinePose.get():
+                tr_ori = particle.getTransform().getMatrix()
+                shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
+
+                # Apply delta angles
+                angles[0] += delta_rot[idx]
+                angles[1] += delta_tilt[idx]
+                angles[2] += delta_psi[idx]
+
+                # Apply delta shifts
+                shifts[0] += delta_shift_x[idx]
+                shifts[1] += delta_shift_y[idx]
+
+                # Set new transformation matrix
+                tr = matrixFromGeometry(shifts, angles, inverseTransform)
+                particle.getTransform().setMatrix(tr)
 
             partSet.append(particle)
 

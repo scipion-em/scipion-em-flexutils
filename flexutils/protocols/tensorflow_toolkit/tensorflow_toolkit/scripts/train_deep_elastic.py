@@ -77,7 +77,7 @@ def train(space, output, splitTrain, n_clusters, init_power, end_power, vae_sigm
             lr = 0.0001  # Initial 0.001
             batch_size = 32  # Initial 64, then 16
             epochs = 10
-        optimizer = tf.keras.optimizers.Adam(lr=lr)  # Initial Adamax
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr)  # Initial Adamax
         encoder.compile(optimizer=optimizer)
         data_train_aux = cluster_explosion(data_train, clusters, power)
         np.random.shuffle(data_train_aux)
