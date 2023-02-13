@@ -31,7 +31,7 @@ import h5py
 import re
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList
+from pyworkflow.object import Integer, Float, String, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -41,7 +41,7 @@ from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
-                           geometryFromMatrix, matrixFromGeometry
+    geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
@@ -65,47 +65,66 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                        expertLevel=params.LEVEL_ADVANCED,
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
-        form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
-        form.addParam('referenceType', params.EnumParam, choices=['Volume', 'Structure'],
-                      default=0, label="Reference type", display=params.EnumParam.DISPLAY_HLIST,
-                      help="Determine which type of reference will be used to compute the motions. "
-                           "In general, Structure will lead to faster and more accurate estimations "
-                           "if available.")
-        form.addParam('inputVolume', params.PointerParam, condition="referenceType==0",
-                      label="Input volume", pointerClass='Volume')
-        form.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
-                      label="Input volume mask", pointerClass='VolumeMask')
-        form.addParam('inputStruct', params.PointerParam, condition="referenceType==1",
-                      label="Input structure", pointerClass='AtomStruct',
-                      help="Reference structure should be aligned within Scipion to the map reconstructed "
-                           "from the input particles. This will ensure that the structure coordinates are "
-                           "properly placed in the expected reference frame.")
-        form.addParam("onlyBackbone", params.BooleanParam, default=False, label="Use only backbone atoms?",
-                      condition="referenceType==1",
-                      help="If yes, only backbone atoms will be considered during the estimation to speed up "
-                           "computations. It might decrease the accuracy of the estimations.")
-        form.addParam('boxSize', params.IntParam, default=128,
-                      label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
-                      help='In general, downsampling the particles will increase performance without compromising '
-                           'the estimation the deformation field for each particle. Note that output particles will '
-                           'have the original box size, and Zernike3D coefficients will be modified to work with the '
-                           'original size images')
-        form.addParam('l1', params.IntParam, default=3,
-                      label='Zernike Degree',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help='Degree Zernike Polynomials of the deformation=1,2,3,...')
-        form.addParam('l2', params.IntParam, default=2,
-                      label='Harmonical Degree',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
-        form.addParam('applyCTF', params.BooleanParam, default=True, label='Apply CTF?',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help="If true, volume projection will be subjected to CTF corrections")
-        form.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help="If true, images stored in the metadata will be unstacked to save GPU "
-                           "memory during the training steps. This will make the training slightly "
-                           "slower.")
+        group = form.addGroup("Data")
+        group.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
+        group.addParam('referenceType', params.EnumParam, choices=['Volume', 'Structure'],
+                       default=0, label="Reference type", display=params.EnumParam.DISPLAY_HLIST,
+                       help="Determine which type of reference will be used to compute the motions. "
+                            "In general, Structure will lead to faster and more accurate estimations "
+                            "if available.")
+        group.addParam('inputVolume', params.PointerParam, condition="referenceType==0",
+                       label="Input volume", pointerClass='Volume')
+        group.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
+                       label="Input volume mask", pointerClass='VolumeMask')
+        group.addParam('inputStruct', params.PointerParam, condition="referenceType==1",
+                       label="Input structure", pointerClass='AtomStruct',
+                       help="Reference structure should be aligned within Scipion to the map reconstructed "
+                            "from the input particles. This will ensure that the structure coordinates are "
+                            "properly placed in the expected reference frame.")
+        group.addParam("onlyBackbone", params.BooleanParam, default=False, label="Use only backbone atoms?",
+                       condition="referenceType==1",
+                       help="If yes, only backbone atoms will be considered during the estimation to speed up "
+                            "computations. It might decrease the accuracy of the estimations.")
+        group.addParam('boxSize', params.IntParam, default=128,
+                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
+                       help='In general, downsampling the particles will increase performance without compromising '
+                            'the estimation the deformation field for each particle. Note that output particles will '
+                            'have the original box size, and Zernike3D coefficients will be modified to work with the '
+                            'original size images')
+        group = form.addGroup("Zernike3D Parameters (Advanced)",
+                              expertLevel=params.LEVEL_ADVANCED)
+        group.addParam('l1', params.IntParam, default=3,
+                       label='Zernike Degree',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Degree Zernike Polynomials of the deformation=1,2,3,...')
+        group.addParam('l2', params.IntParam, default=2,
+                       label='Harmonical Degree',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Degree Spherical Harmonics of the deformation=1,2,3,...')
+        group = form.addGroup("CTF Parameters (Advanced)",
+                              expertLevel=params.LEVEL_ADVANCED)
+        group.addParam('applyCTF', params.BooleanParam, default=True, label='Apply CTF?',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="If true, volume projection will be subjected to CTF corrections")
+        group.addParam('ctfType', params.EnumParam, choices=['Apply', 'Wiener'],
+                       default=0, label="CTF correction type",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       condition="applyCTF", expertLevel=params.LEVEL_ADVANCED,
+                       help="* *Apply*: CTF is applied to the projection generated from the reference map\n"
+                            "* *Wiener*: input particle is CTF corrected by a Wiener fiter")
+        group.addParam("pad", params.IntParam, default=2,
+                       label="Padding factor",
+                       condition="applyCTF", expertLevel=params.LEVEL_ADVANCED,
+                       help="Determines the padding factor to be applied before computing "
+                            "the Fourier Transform of the images to increase the frequency "
+                            "content")
+        group = form.addGroup("Memory Parameters (Advanced)",
+                              expertLevel=params.LEVEL_ADVANCED)
+        group.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="If true, images stored in the metadata will be unstacked to save GPU "
+                            "memory during the training steps. This will make the training slightly "
+                            "slower.")
         form.addSection(label='Network')
         form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                       expertLevel=params.LEVEL_ADVANCED,
@@ -166,6 +185,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         self._insertFunctionStep(self.writeMetaDataStep)
         self._insertFunctionStep(self.convertMetaDataStep)
         self._insertFunctionStep(self.trainingStep)
+        self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions ---------------------------------------------------
@@ -248,13 +268,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
             os.mkdir(out_path)
         L1 = self.l1.get()
         L2 = self.l2.get()
+        pad = self.pad.get()
         batch_size = self.batch_size.get()
         step = self.step.get()
         split_train = self.split_train.get()
         epochs = self.epochs.get()
         args = "--h5_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d" \
-               % (h5_file, out_path, L1, L2, batch_size, split_train, epochs)
+               "--shuffle --split_train %f --epochs %d --pad %d" \
+               % (h5_file, out_path, L1, L2, batch_size, split_train, epochs, pad)
 
         if self.referenceType.get() == 0:
             args += " --step %d" % step
@@ -276,11 +297,45 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if self.ctfType.get() == 0:
+            args += " --ctf_type apply"
+        elif self.ctfType.get() == 1:
+            args += " --ctf_type wiener"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
         program = flexutils.Plugin.getTensorflowProgram("train_zernike3deep.py", python=False)
+        self.runJob(program, args, numberOfMpi=1)
+
+    def predictStep(self):
+        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
+        weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        L1 = self.l1.get()
+        L2 = self.l2.get()
+        pad = self.pad.get()
+        args = "--h5_file %s --weigths_file %s --L1 %d --L2 %d --pad %d" \
+               % (h5_file, weigths_file, L1, L2, pad)
+
+        if self.refinePose.get():
+            args += " --refine_pose"
+
+        if self.ctfType.get() == 0:
+            args += " --ctf_type apply"
+        elif self.ctfType.get() == 1:
+            args += " --ctf_type wiener"
+
+        if self.architecture.get() == 0:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 1:
+            args += " --architecture mlpnn"
+
+        if self.useGpu.get():
+            gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
+            args += " --gpu %s" % gpu_list
+
+        program = flexutils.Plugin.getTensorflowProgram("predict_zernike3deep.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
 
     def createOutputStep(self):
@@ -301,10 +356,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
-
-        if self.referenceType.get() == 0:
-            inputMask = self.inputVolumeMask.get().getFileName()
-            inputVolume = self.inputVolume.get().getFileName()
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -333,8 +384,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
                 angles[2] += delta_psi[idx]
 
                 # Apply delta shifts
-                shifts[0] += delta_shift_x[idx]
-                shifts[1] += delta_shift_y[idx]
+                shifts[0] += correctionFactor * delta_shift_x[idx]
+                shifts[1] += correctionFactor * delta_shift_y[idx]
 
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
@@ -344,12 +395,33 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
         partSet.L1 = Integer(self.l1.get())
         partSet.L2 = Integer(self.l2.get())
+        partSet.pad = Integer(self.pad.get())
         partSet.Rmax = Float(Xdim / 2)
         partSet.modelPath = String(model_path)
 
         if self.referenceType.get() == 0:
+            inputMask = self.inputVolumeMask.get().getFileName()
+            inputVolume = self.inputVolume.get().getFileName()
             partSet.refMask = String(inputMask)
             partSet.refMap = String(inputVolume)
+        else:
+            structure = self.inputStruct.get().getFileName()
+            partSet.refStruct = String(structure)
+
+        if self.refinePose.get():
+            partSet.refPose = Boolean(True)
+        else:
+            partSet.refPose = Boolean(False)
+
+        if self.architecture.get() == 0:
+            partSet.architecture = String("convnn")
+        elif self.architecture.get() == 1:
+            partSet.architecture = String("mlpnn")
+
+        if self.ctfType.get() == 0:
+            partSet.ctfType = String("apply")
+        elif self.ctfType.get() == 1:
+            partSet.ctfType = String("wiener")
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
@@ -373,7 +445,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
     def PDB2List(self, lines):
         newlines = []
         for line in lines:
-            eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) if self.onlyBackbone.get() else line.startswith("ATOM ")
+            eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) if self.onlyBackbone.get() else line.startswith(
+                "ATOM ")
             if eval:
                 try:
                     x = float(line[30:38])

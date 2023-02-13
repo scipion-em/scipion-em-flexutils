@@ -675,6 +675,9 @@ def euler_from_matrix(matrix):
         ax, az = az, ax
     return ax, ay, az
 
+def xmippEulerFromMatrix(matrix):
+    return -np.rad2deg(euler_from_matrix(matrix))
+
 def euler_matrix_row(alpha, beta, gamma, row, batch_size):
     A = []
 
@@ -728,7 +731,7 @@ def euler_matrix_batch(alpha, beta, gamma):
 
     return row_1, row_2, row_3
 
-def ctf_freqs(shape, d=1.0, full=True):
+def ctf_freqs(shape, d=1.0, full=False):
     """
     :param shape: Shape tuple.
     :param d: Frequency spacing in inverse Å (1 / pixel size).
@@ -784,7 +787,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
         ctf *= tf.exp(-k4 * s_2)
     return ctf
 
-def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, img_shape, batch_size, applyCTF):
+def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, pad_factor, img_shape, batch_size, applyCTF):
     if applyCTF[0] == 1:
         # s, a = ctf_freqs([img_shape[0], img_shape[0]], 1 / sr)
         # ctf = []
@@ -794,11 +797,32 @@ def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, img_shape, batch_si
         #     ctf.append(tf.signal.fftshift(ctf_img[:, :img_shape[1]]))
         # return tf.stack(ctf)
 
-        s, a = ctf_freqs([img_shape[0], img_shape[0]], 1 / sr)
+        s, a = ctf_freqs([pad_factor * img_shape[0], pad_factor * img_shape[0]], 1 / sr)
         s, a = tf.tile(s[None, :, :], [batch_size, 1, 1]), tf.tile(a[None, :, :], [batch_size, 1, 1])
         ctf = eval_ctf(s, a, defocusU, defocusV, angast=defocusAngle, cs=cs, kv=kv)
-        ctf = tf.signal.fftshift(ctf[:, :, :img_shape[1]])
+        ctf = tf.signal.fftshift(ctf)
         return ctf
 
     else:
-        return tf.ones([batch_size, img_shape[0], img_shape[1]], dtype=tf.float32)
+        # size_aux = int(0.5 * pad_factor * img_shape[0] + 1)
+        return tf.ones([batch_size, pad_factor * img_shape[0], pad_factor * img_shape[1] - (pad_factor - 1)], dtype=tf.float32)
+        # return tf.ones([batch_size, img_shape[0], img_shape[1]], dtype=tf.float32)
+
+def fft_pad(imgs, size_x, size_y):
+    padded_imgs = tf.image.resize_with_crop_or_pad(imgs, size_x, size_y)
+    ft_images = tf.signal.fftshift(tf.signal.rfft2d(padded_imgs[:, :, :, 0]))
+    return ft_images
+
+def ifft_pad(ft_imgs, size_x, size_y):
+    padded_imgs = tf.signal.irfft2d(tf.signal.ifftshift(ft_imgs))[..., None]
+    imgs = tf.image.resize_with_crop_or_pad(padded_imgs, size_x, size_y)
+    return imgs
+
+def gramSchmidt(r):
+    c1 = tf.nn.l2_normalize(r[:, :3], axis=-1)
+    c2 = tf.nn.l2_normalize(r[:, 3:] - dot(c1, r[:, 3:]) * c1, axis=-1)
+    c3 = tf.linalg.cross(c1, c2)
+    return tf.stack([c1, c2, c3], axis=2)
+
+def dot(a, b):
+    return tf.reduce_sum(a * b, axis=-1, keepdims=True)

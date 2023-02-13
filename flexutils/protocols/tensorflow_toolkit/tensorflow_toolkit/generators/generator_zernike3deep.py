@@ -89,11 +89,14 @@ class Generator(DataGeneratorBase):
         return tf.add(tf.subtract(c[0], shifts_batch[None, :]), self.xmipp_origin[axis])
 
     def scatterImgByPass(self, c):
-        c_x = tf.reshape(tf.transpose(c[0]), [self.batch_size, -1, 1])
-        c_y = tf.reshape(tf.transpose(c[1]), [self.batch_size, -1, 1])
+        # Get current batch size (function scope)
+        batch_size_scope = tf.shape(c[0])[1]
+
+        c_x = tf.reshape(tf.transpose(c[0]), [batch_size_scope, -1, 1])
+        c_y = tf.reshape(tf.transpose(c[1]), [batch_size_scope, -1, 1])
         c_sampling = tf.concat([c_y, c_x], axis=2)
 
-        imgs = tf.zeros((self.batch_size, self.xsize, self.xsize), dtype=tf.float32)
+        imgs = tf.zeros((batch_size_scope, self.xsize, self.xsize), dtype=tf.float32)
 
         bamp = tf.constant(self.values, dtype=tf.float32)
 
@@ -108,7 +111,11 @@ class Generator(DataGeneratorBase):
         bamp3 = bamp[None, :] * (1.0 - bposf[:, :, 0]) * (bposf[:, :, 1])
         bampall = tf.concat([bamp0, bamp1, bamp2, bamp3], axis=1)
         bposall = tf.concat([bposi, bposi + (1, 0), bposi + (1, 1), bposi + (0, 1)], 1)
-        images = tf.stack([tf.tensor_scatter_nd_add(imgs[i], bposall[i], bampall[i]) for i in range(imgs.shape[0])])
+        # images = tf.stack([tf.tensor_scatter_nd_add(imgs[i], bposall[i], bampall[i]) for i in range(imgs.shape[0])])
+
+        fn = lambda inp: tf.tensor_scatter_nd_add(inp[0], inp[1], inp[2])
+        images = tf.map_fn(fn, [imgs, bposall, bampall], fn_output_signature=tf.float32)
+        # images = tf.vectorized_map(fn, [imgs, bposall, bampall])
 
         images = tf.reshape(images, [-1, self.xsize, self.xsize, 1])
 

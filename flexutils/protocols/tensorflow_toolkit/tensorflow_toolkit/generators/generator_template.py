@@ -35,17 +35,18 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 
-from tensorflow_toolkit.utils import getXmippOrigin
+from tensorflow_toolkit.utils import getXmippOrigin, fft_pad, ifft_pad
 
 
 class DataGeneratorBase(tf.keras.utils.Sequence):
     def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8,
-                 radius_mask=2, smooth_mask=True, cost="corr", keepMap=False):
+                 radius_mask=2, smooth_mask=True, cost="corr", keepMap=False, pad_factor=2):
         # Attributes
         self.step = step
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.indexes = np.arange(self.batch_size)
+        self.pad_factor = pad_factor
         # self.cap_def = 3.
 
         # Read metadata
@@ -77,7 +78,10 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
             self.getTrainDataset(splitTrain)
 
         # Prepare CTF
-        self.ctf = np.zeros([self.batch_size, self.xsize, int(0.5 * self.xsize + 1)])
+        self.ctf = np.zeros([self.batch_size, self.pad_factor * self.xsize,
+                             int(0.5 * self.pad_factor * self.xsize + 1)])
+        # self.ctf = np.zeros([self.batch_size, self.xsize,
+        #                      int(0.5 * self.xsize + 1)])
 
         # Prepare alignment
         self.r = [np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3]), np.zeros([self.batch_size, 3])]
@@ -89,6 +93,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         circular_mask = tf.constant(circular_mask, dtype=tf.float32)
         circular_mask = tf.signal.ifftshift(circular_mask[None, :, :])
         size = int(0.5 * self.xsize + 1)
+        # size = int(0.5 * self.pad_factor * self.xsize + 1)
         circular_mask = tf.signal.fftshift(circular_mask[:, :, :size])
         self.circular_mask = circular_mask[0, :, :]
 
@@ -203,7 +208,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
             images = np.vstack(images)
 
         # self.current_img = images
-        return images.reshape(-1, self.xsize, self.xsize, 1), self.indexes
+        return images.reshape([-1, self.xsize, self.xsize, 1]), self.indexes
 
     def __getitem__(self, index):
         # Generate indexes of the batch
@@ -213,7 +218,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         return X, y
 
     def __len__(self):
-        return int(np.floor(len(self.file_idx) / self.batch_size))
+        return int(np.ceil(len(self.file_idx) / self.batch_size))
 
     # ----- -------- -----#
 
@@ -226,13 +231,41 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         images = tfa.image.gaussian_filter2d(images, 3 * self.step, self.step)
         return images
 
+    def wiener2DFilter(self, images):
+        # Get current batch size (function scope)
+        batch_size_scope = tf.shape(images)[0]
+
+        # Sizes
+        pad_size = tf.constant(int(self.pad_factor * self.xsize), dtype=tf.int32)
+        size = tf.constant(int(self.xsize), dtype=tf.int32)
+
+        ctf_2 = self.ctf * self.ctf
+        # epsilon = 1e-5
+        epsilon = 0.1 * tf.reduce_mean(ctf_2)
+
+        ft_images = fft_pad(images, pad_size, pad_size)
+        ft_w_images_real = tf.math.real(ft_images) * self.ctf / (ctf_2 + epsilon)
+        ft_w_images_imag = tf.math.imag(ft_images) * self.ctf / (ctf_2 + epsilon)
+        ft_w_images = tf.complex(ft_w_images_real, ft_w_images_imag)
+        w_images = ifft_pad(ft_w_images, size, size)
+        return tf.reshape(w_images, [batch_size_scope, self.xsize, self.xsize, 1])
+
     def ctfFilterImage(self, images):
-        ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
+        # Get current batch size (function scope)
+        batch_size_scope = tf.shape(images)[0]
+
+        # Sizes
+        pad_size = tf.constant(int(self.pad_factor * self.xsize), dtype=tf.int32)
+        size = tf.constant(int(self.xsize), dtype=tf.int32)
+
+        # ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
+        ft_images = fft_pad(images, pad_size, pad_size)
         ft_ctf_images_real = tf.multiply(tf.math.real(ft_images), self.ctf)
         ft_ctf_images_imag = tf.multiply(tf.math.imag(ft_images), self.ctf)
         ft_ctf_images = tf.complex(ft_ctf_images_real, ft_ctf_images_imag)
-        ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
-        return tf.reshape(ctf_images, [self.batch_size, self.xsize, self.xsize, 1])
+        # ctf_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_ctf_images))
+        ctf_images = ifft_pad(ft_ctf_images, size, size)
+        return tf.reshape(ctf_images, [batch_size_scope, self.xsize, self.xsize, 1])
 
     def create_circular_mask(self, h, w, center=None, radius_mask=None, smooth_mask=True):
 
@@ -252,12 +285,21 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         return mask
 
     def applyRealMask(self, images):
-        ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
+        # Get current batch size (function scope)
+        batch_size_scope = tf.shape(images)[0]
+
+        # Sizes
+        pad_size = tf.constant(int(self.pad_factor * self.xsize), dtype=tf.int32)
+        size = tf.constant(int(self.xsize), dtype=tf.int32)
+
+        # ft_images = tf.signal.fftshift(tf.signal.rfft2d(images[:, :, :, 0]))
+        ft_images = fft_pad(images, pad_size, pad_size)
         ft_masked_images_real = tf.multiply(tf.math.real(ft_images), self.circular_mask[None, :, :])
         ft_masked_images_imag = tf.multiply(tf.math.imag(ft_images), self.circular_mask[None, :, :])
         ft_masked_images = tf.complex(ft_masked_images_real, ft_masked_images_imag)
-        masked_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_masked_images))
-        return tf.reshape(masked_images, [self.batch_size, self.xsize, self.xsize, 1])
+        # masked_images = tf.signal.irfft2d(tf.signal.ifftshift(ft_masked_images))
+        masked_images = ifft_pad(ft_masked_images, size, size)
+        return tf.reshape(masked_images, [batch_size_scope, self.xsize, self.xsize, 1])
 
     def applyFourierMask(self, ft_images):
         # FT images must be shifted with tf.signal.fftshift
@@ -339,11 +381,12 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         x = self.applyFourierMask(x)
         y = self.applyFourierMask(y)
 
+        epsilon = 10e-5
         num = tf.abs(tf.reduce_sum(x * tf.math.conj(y), axis=(1, 2)))
         d_1 = tf.reduce_sum(tf.abs(x) ** 2, axis=(1, 2))
         d_2 = tf.reduce_sum(tf.abs(y) ** 2, axis=(1, 2))
         den = tf.sqrt(d_1 * d_2)
-        cross_power_spectrum = num / den
+        cross_power_spectrum = num / (den + epsilon)
 
         return 1 - K.mean(cross_power_spectrum)
 
