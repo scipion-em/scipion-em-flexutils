@@ -29,7 +29,6 @@
 import os
 import numpy as np
 import h5py
-import mrcfile
 
 import tensorflow as tf
 
@@ -43,48 +42,22 @@ from tensorflow_toolkit.networks.zernike3deep import AutoEncoder
 
 
 def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs, cost,
-          radius_mask, smooth_mask):
+          radius_mask, smooth_mask, refinePose, architecture="convnn", ctfType="apply", pad=2):
     # Create data generator
     generator = Generator(L1, L2, h5_file=h5_file, shuffle=shuffle, batch_size=batch_size,
                           step=step, splitTrain=splitTrain, cost=cost, radius_mask=radius_mask,
-                          smooth_mask=smooth_mask)
+                          smooth_mask=smooth_mask, refinePose=refinePose, pad_factor=pad)
 
     # Train model
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        autoencoder = AutoEncoder(generator)
-        optimizer = tf.keras.optimizers.Adam(lr=1e-5)
-        autoencoder.compile(optimizer=optimizer)
+        autoencoder = AutoEncoder(generator, architecture=architecture, CTF=ctfType)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5)
+    autoencoder.compile(optimizer=optimizer)
     autoencoder.fit(generator, epochs=epochs)
 
     # Save model
     autoencoder.save_weights(os.path.join(outPath, "zernike3deep_model"))
-
-    # Get Zernike3DSpace
-    if generator.fitInMemory:
-        images = generator.mrc
-        # images = images.reshape(-1, generator.xsize, generator.xsize, 1)
-        zernike_space = []
-        for image in images:
-            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, None])
-            zernike_vec = np.hstack([z_x.numpy(), z_y.numpy(), z_z.numpy()])
-            zernike_space.append(zernike_vec)
-        zernike_space = np.vstack(zernike_space)
-    else:
-        zernike_space = []
-        images_id = np.arange(generator.angle_rot.numpy().size)
-
-        for index in images_id:
-            with mrcfile.open(os.path.join(generator.images_path[0], "theo_%d.mrc" % index)) as mrc:
-                image = mrc.data
-            z_x, z_y, z_z = autoencoder.encoder(image[None, :, :, None])
-            zernike_vec = np.hstack([z_x.numpy(), z_y.numpy(), z_z.numpy()])
-            zernike_space.append(zernike_vec)
-        zernike_space = np.vstack(zernike_space)
-
-    # Save space to metadata file
-    with h5py.File(h5_file, 'a') as hf:
-        hf.create_dataset('zernike_space', data=zernike_space)
 
 
 if __name__ == '__main__':
@@ -102,8 +75,12 @@ if __name__ == '__main__':
     parser.add_argument('--split_train', type=float, required=True)
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--cost', type=str, required=True)
+    parser.add_argument('--architecture', type=str, required=True)
+    parser.add_argument('--ctf_type', type=str, required=True)
+    parser.add_argument('--pad', type=int, required=False, default=2)
     parser.add_argument('--radius_mask', type=float, required=False, default=2)
     parser.add_argument('--smooth_mask', action='store_true')
+    parser.add_argument('--refine_pose', action='store_true')
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -117,7 +94,9 @@ if __name__ == '__main__':
     inputs = {"h5_file": args.h5_file, "outPath": args.out_path, "L1": args.L1,
               "L2": args.L2, "batch_size": args.batch_size, "shuffle": args.shuffle,
               "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs,
-              "cost": args.cost, "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask}
+              "cost": args.cost, "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask,
+              "refinePose": args.refine_pose, "architecture": args.architecture,
+              "ctfType": args.ctf_type, "pad": args.pad}
 
     # Initialize volume slicer
     train(**inputs)

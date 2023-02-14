@@ -66,9 +66,8 @@ def ConvertMDToH5(metadata_file, outPath, sr, applyCTF, unStack, volume, mask, s
         with Parallel(n_jobs=thr) as parallel:
             _ = parallel(delayed(unStackImages)(iid) for iid in tqdm(range(len(img_files))))
     else:
-        stack = img_files[0].split("@")[1]
         runJob(None, "xmipp_image_convert",
-               "-i %s -o %s " % (stack, os.path.join(outPath, "stack.mrc")),
+               "-i %s -o %s " % (metadata_file, os.path.join(outPath, "stack.mrc")),
                numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
     if volume != "":

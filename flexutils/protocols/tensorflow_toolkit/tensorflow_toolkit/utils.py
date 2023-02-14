@@ -29,7 +29,7 @@ import math
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.python.ops.numpy_ops import deg2rad
+# from tensorflow.python.ops.numpy_ops import deg2rad
 
 
 # axis sequences for Euler angles
@@ -675,16 +675,19 @@ def euler_from_matrix(matrix):
         ax, az = az, ax
     return ax, ay, az
 
+def xmippEulerFromMatrix(matrix):
+    return -np.rad2deg(euler_from_matrix(matrix))
+
 def euler_matrix_row(alpha, beta, gamma, row, batch_size):
     A = []
 
     for idx in range(batch_size):
-        ca = tf.cos(deg2rad(tf.gather(alpha, idx, axis=0)))
-        sa = tf.sin(deg2rad(tf.gather(alpha, idx, axis=0)))
-        cb = tf.cos(deg2rad(tf.gather(beta, idx, axis=0)))
-        sb = tf.sin(deg2rad(tf.gather(beta, idx, axis=0)))
-        cg = tf.cos(deg2rad(tf.gather(gamma, idx, axis=0)))
-        sg = tf.sin(deg2rad(tf.gather(gamma, idx, axis=0)))
+        ca = tf.cos(tf.gather(alpha, idx, axis=0) * (np.pi / 180.0))
+        sa = tf.sin(tf.gather(alpha, idx, axis=0) * (np.pi / 180.0))
+        cb = tf.cos(tf.gather(beta, idx, axis=0) * (np.pi / 180.0))
+        sb = tf.sin(tf.gather(beta, idx, axis=0) * (np.pi / 180.0))
+        cg = tf.cos(tf.gather(gamma, idx, axis=0) * (np.pi / 180.0))
+        sg = tf.sin(tf.gather(gamma, idx, axis=0) * (np.pi / 180.0))
 
         cc = cb * ca
         cs = cb * sa
@@ -703,8 +706,32 @@ def euler_matrix_row(alpha, beta, gamma, row, batch_size):
 
     return tf.stack(A)
 
+def euler_matrix_batch(alpha, beta, gamma):
 
-def ctf_freqs(shape, d=1.0, full=True):
+    ca = tf.cos(alpha * (np.pi / 180.0))[:, None]
+    sa = tf.sin(alpha * (np.pi / 180.0))[:, None]
+    cb = tf.cos(beta * (np.pi / 180.0))[:, None]
+    sb = tf.sin(beta * (np.pi / 180.0))[:, None]
+    cg = tf.cos(gamma * (np.pi / 180.0))[:, None]
+    sg = tf.sin(gamma * (np.pi / 180.0))[:, None]
+
+    cc = cb * ca
+    cs = cb * sa
+    sc = sb * ca
+    ss = sb * sa
+
+    row_1 = tf.concat([cg * cc - sg * sa, cg * cs + sg * ca, -cg * sb], axis=1)
+    # A.append([cg * cc - sg * sa, -sg * cc - cg, sc])
+
+    row_2 = tf.concat([-sg * cc - cg * sa, -sg * cs + cg * ca, sg * sb], axis=1)
+    # A.append([cg * cs + sg * ca, -sg * cs + cg * ca, sg * ss])
+
+    row_3 = tf.concat([sc, ss, cb], axis=1)
+    # A.append([-cg * sb, sg * ss, cb])
+
+    return row_1, row_2, row_3
+
+def ctf_freqs(shape, d=1.0, full=False):
     """
     :param shape: Shape tuple.
     :param d: Frequency spacing in inverse Å (1 / pixel size).
@@ -736,7 +763,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
     :param bf:  B-factor, divided by 4 in exponential, lowpass positive.
     :param lp:  Hard low-pass filter (Å), should usually be Nyquist.
     """
-    angast = deg2rad(angast)
+    angast = angast * (np.pi / 180.0)
     kv = kv * 1e3
     cs = cs * 1e7
     lamb = 12.2643247 / tf.sqrt(kv * (1. + kv * 0.978466e-6))
@@ -746,7 +773,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
     k2 = np.pi / 2. * cs * lamb ** 3.
     k3 = tf.sqrt(1. - ac ** 2.)
     k4 = bf / 4.  # B-factor, follows RELION convention.
-    k5 = deg2rad(phase)  # Phase shift.
+    k5 = phase * (np.pi / 180.0)  # Phase shift.
     if lp != 0:  # Hard low- or high-pass.
         s *= s <= (1. / lp)
     s_2 = s ** 2.
@@ -760,7 +787,7 @@ def eval_ctf(s, a, def1, def2, angast=0, phase=0, kv=300, ac=0.1, cs=2.0, bf=0, 
         ctf *= tf.exp(-k4 * s_2)
     return ctf
 
-def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, img_shape, batch_size, applyCTF):
+def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, pad_factor, img_shape, batch_size, applyCTF):
     if applyCTF[0] == 1:
         # s, a = ctf_freqs([img_shape[0], img_shape[0]], 1 / sr)
         # ctf = []
@@ -770,11 +797,32 @@ def computeCTF(defocusU, defocusV, defocusAngle, cs, kv, sr, img_shape, batch_si
         #     ctf.append(tf.signal.fftshift(ctf_img[:, :img_shape[1]]))
         # return tf.stack(ctf)
 
-        s, a = ctf_freqs([img_shape[0], img_shape[0]], 1 / sr)
+        s, a = ctf_freqs([pad_factor * img_shape[0], pad_factor * img_shape[0]], 1 / sr)
         s, a = tf.tile(s[None, :, :], [batch_size, 1, 1]), tf.tile(a[None, :, :], [batch_size, 1, 1])
         ctf = eval_ctf(s, a, defocusU, defocusV, angast=defocusAngle, cs=cs, kv=kv)
-        ctf = tf.signal.fftshift(ctf[:, :, :img_shape[1]])
+        ctf = tf.signal.fftshift(ctf)
         return ctf
 
     else:
-        return tf.ones([batch_size, img_shape[0], img_shape[1]], dtype=tf.float32)
+        # size_aux = int(0.5 * pad_factor * img_shape[0] + 1)
+        return tf.ones([batch_size, pad_factor * img_shape[0], pad_factor * img_shape[1] - (pad_factor - 1)], dtype=tf.float32)
+        # return tf.ones([batch_size, img_shape[0], img_shape[1]], dtype=tf.float32)
+
+def fft_pad(imgs, size_x, size_y):
+    padded_imgs = tf.image.resize_with_crop_or_pad(imgs, size_x, size_y)
+    ft_images = tf.signal.fftshift(tf.signal.rfft2d(padded_imgs[:, :, :, 0]))
+    return ft_images
+
+def ifft_pad(ft_imgs, size_x, size_y):
+    padded_imgs = tf.signal.irfft2d(tf.signal.ifftshift(ft_imgs))[..., None]
+    imgs = tf.image.resize_with_crop_or_pad(padded_imgs, size_x, size_y)
+    return imgs
+
+def gramSchmidt(r):
+    c1 = tf.nn.l2_normalize(r[:, :3], axis=-1)
+    c2 = tf.nn.l2_normalize(r[:, 3:] - dot(c1, r[:, 3:]) * c1, axis=-1)
+    c3 = tf.linalg.cross(c1, c2)
+    return tf.stack([c1, c2, c3], axis=2)
+
+def dot(a, b):
+    return tf.reduce_sum(a * b, axis=-1, keepdims=True)
