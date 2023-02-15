@@ -93,11 +93,11 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
         L2 = self.L2.get()
 
         z_clnm_vec = {}
-        deformation_vec = {}
+        # deformation_vec = {}
         for particle in particles.iterItems():
             z_clnm = np.fromstring(particle._xmipp_sphCoefficients.get(), sep=",")
             z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
-            deformation_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
+            # deformation_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
 
         def zernikeRow(part, partRow, **kwargs):
             imageToRow(part, partRow, md.MDL_IMAGE, **kwargs)
@@ -109,7 +109,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
             partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
-            partRow.setValue(md.MDL_SPH_DEFORMATION, deformation_vec[idx])
+            # partRow.setValue(md.MDL_SPH_DEFORMATION, deformation_vec[idx])
 
         writeSetOfImages(particles, imgsFn, zernikeRow)
 
