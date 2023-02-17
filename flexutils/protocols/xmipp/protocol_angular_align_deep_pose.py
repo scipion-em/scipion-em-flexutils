@@ -116,10 +116,11 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                             "memory during the training steps. This will make the training slightly "
                             "slower.")
         form.addSection(label='Network')
-        form.addParam('architecture', params.EnumParam, choices=['ResidConvNN'],
+        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                       expertLevel=params.LEVEL_ADVANCED,
-                      default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                      help="* *ResidConvNN*: residual convolutional neural network\n")
+                      default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                      help="* *ConvNN*: convolutional neural network\n"
+                           "* *MLPNN*: multiperceptron neural network")
         # form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
         #               help="If True, the neural network will be trained to refine the current pose "
         #                    "(shifts and alignments) according to the information of the reference map. "

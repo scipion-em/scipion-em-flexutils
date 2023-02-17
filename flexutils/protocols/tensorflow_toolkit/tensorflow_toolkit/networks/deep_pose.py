@@ -104,8 +104,6 @@ class Encoder(tf.keras.Model):
             z = tf.keras.layers.Dense(256, activation="relu")(z)
             z = tf.keras.layers.Dense(256, activation="relu")(z)
 
-
-
         alignnment = layers.Dense(3, activation="linear", name="alignnment")(y) if refine \
             else layers.Dense(6, activation="linear", name="alignnment")(y)
         shifts = layers.Dense(2, activation="linear", name="shifts")(z)
