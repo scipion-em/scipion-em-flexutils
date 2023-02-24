@@ -78,7 +78,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
                            "execution")
-        group = form.AddGroup("Memory Parameters (Advanced)",
+        group = form.addGroup("Memory Parameters (Advanced)",
                               expertLevel=params.LEVEL_ADVANCED)
         group.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
                       expertLevel=params.LEVEL_ADVANCED,
