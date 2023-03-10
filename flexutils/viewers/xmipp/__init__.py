@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from .viewer_angular_alignment import XmippAngularAlignmentViewer
+from .viewer_landscape import XmippLandscapeViewer
 from .viewer_reduced_space import XmippReducedSpaceViewer
 # from .viewer_pdb_deform_zernike3d import XmippPDBDeformViewer
 # from .viewer_volume_deform_zernike3d import XmippVolumeDeformZernike3DViewer
