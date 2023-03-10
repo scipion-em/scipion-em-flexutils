@@ -25,10 +25,10 @@
 # **************************************************************************
 
 
-import numpy as np
 import os
-import h5py
+import numpy as np
 import re
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, CsvList
@@ -68,31 +68,24 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         group = form.addGroup("Data")
         group.addParam('inputParticles', params.PointerParam, label="Input particles to predict",
                        pointerClass='SetOfParticles')
-        group.addParam('deepPoseParticles', params.PointerParam, label="deepPose particles",
-                       pointerClass='SetOfParticles',
-                       help="Particles coming out from the protocol: 'angular align - deepPose'. "
-                            "This particles store all the information needed to load the trained "
-                            "deepPose network")
+        group.addParam('deepPoseProtocol', params.PointerParam, label="DeepPose trained network",
+                       pointerClass='TensorflowProtAngularAlignmentDeepPose',
+                       help="Previously executed 'angular align - deepPose'. "
+                            "This will allow to load the network trained in that protocol to be used during "
+                            "the prediction")
         group.addParam('boxSize', params.IntParam, default=128,
                        label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                        help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
                             "execution")
-        group = form.addGroup("Memory Parameters (Advanced)",
-                              expertLevel=params.LEVEL_ADVANCED)
-        group.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help="If true, images stored in the metadata will be unstacked to save GPU "
-                            "memory during the training steps. This will make the training slightly "
-                            "slower.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
         myDict = {
             'imgsFn': self._getExtraPath('input_particles.xmd'),
-            'fnVol': self._getExtraPath('input_volume.vol'),
-            'fnVolMask': self._getExtraPath('input_volume_mask.vol'),
-            'fnStruct': self._getExtraPath('input_structure.txt'),
+            'fnVol': self._getExtraPath('volume.mrc'),
+            'fnVolMask': self._getExtraPath('mask.mrc'),
+            'fnStruct': self._getExtraPath('structure.txt'),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -101,7 +94,6 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
     def _insertAllSteps(self):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
-        self._insertFunctionStep(self.convertMetaDataStep)
         self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
 
@@ -113,28 +105,28 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         structure = self._getFileName('fnStruct')
 
         inputParticles = self.inputParticles.get()
-        deepPoseParticles = self.deepPoseParticles.get()
+        deepPoseProtocol = self.deepPoseProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
-        if deepPoseParticles.refMap.get():
+        if deepPoseProtocol.referenceType.get() == 0:
             ih = ImageHandler()
-            inputVolume = deepPoseParticles.refMap.get()
+            inputVolume = deepPoseProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-            inputMask = deepPoseParticles.refMask.get()
+            inputMask = deepPoseProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
                 if Xdim != self.newXdim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
-        elif deepPoseParticles.refStruct.get():
-            pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
+        else:
+            pdb_lines = self.readPDB(deepPoseProtocol.inputStruct.get().getFileName())
             pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
             np.savetxt(structure, pdb_coordinates)
 
@@ -152,37 +144,27 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
                         env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
-    def convertMetaDataStep(self):
-        md_file = self._getFileName('imgsFn')
-        out_path = self._getExtraPath('h5_metadata')
-        if not os.path.isdir(out_path):
-            os.mkdir(out_path)
-        sr = self.inputParticles.get().getSamplingRate()
-        unStack = self.unStack.get()
-        volume = self._getFileName('fnVol')
-        mask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
-        thr = self.numberOfThreads.get()
-        args = "--md_file %s --out_path %s --sr %f --thr %d" \
-               % (md_file, out_path, sr, thr)
-        if unStack:
-            args += " --unStack"
-        if self.deepPoseParticles.get().refMap.get():
-            args += " --volume %s --mask %s" % (volume, mask)
-        else:
-            args += " --structure %s" % structure
-        program = os.path.join(const.XMIPP_SCRIPTS, "md_to_h5.py")
-        program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args, numberOfMpi=1)
-
     def predictStep(self):
-        deepPoseParticles = self.deepPoseParticles.get()
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
-        weigths_file = deepPoseParticles.modelPath.get()
-        pad = deepPoseParticles.pad.get()
-        args = "--h5_file %s --weigths_file %s --pad %d --architecture %s --ctf_type %s" \
-               % (h5_file, weigths_file, pad, deepPoseParticles.architecture.get(),
-                  deepPoseParticles.ctfType.get())
+        deepPoseProtocol = self.deepPoseProtocol.get()
+        md_file = self._getFileName('imgsFn')
+        weigths_file = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+        pad = deepPoseProtocol.pad.get()
+        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
+        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        applyCTF = deepPoseProtocol.ctfType.get()
+        args = "--md_file %s --weigths_file %s --pad %d " \
+               "--sr %f --apply_ctf %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF)
+
+        if deepPoseProtocol.ctfType.get() == 0:
+            args += " --ctf_type apply"
+        elif deepPoseProtocol.ctfType.get() == 1:
+            args += " --ctf_type wiener"
+
+        if deepPoseProtocol.architecture.get() == 0:
+            args += " --architecture convnn"
+        elif deepPoseProtocol.architecture.get() == 1:
+            args += " --architecture mlpnn"
 
         # if deepPoseParticles.refPose.get():
         #     args += " --refine_pose"
@@ -196,19 +178,18 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
-        deepPoseParticles = self.deepPoseParticles.get()
+        deepPoseProtocol = self.deepPoseProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = deepPoseParticles.modelPath.get()
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
-        with h5py.File(h5_file, 'r') as hf:
-            delta_rot = np.asarray(hf.get('delta_angle_rot'))
-            delta_tilt = np.asarray(hf.get('delta_angle_tilt'))
-            delta_psi = np.asarray(hf.get('delta_angle_psi'))
-            delta_shift_x = np.asarray(hf.get('delta_shift_x'))
-            delta_shift_y = np.asarray(hf.get('delta_shift_y'))
+        model_path = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+        md_file = self._getFileName('imgsFn')
 
-        refinePose = deepPoseParticles.refPose.get()
+        metadata = XmippMetaData(md_file)
+        delta_rot = metadata[:, 'delta_angle_rot']
+        delta_tilt = metadata[:, 'delta_angle_tilt']
+        delta_psi = metadata[:, 'delta_angle_psi']
+        delta_shift_x = metadata[:, 'delta_shift_x']
+        delta_shift_y = metadata[:, 'delta_shift_y']
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
@@ -261,16 +242,14 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
 
         partSet.modelPath = String(model_path)
 
-        if deepPoseParticles.refMap.get():
-            inputMask = deepPoseParticles.refMask.get()
-            inputVolume = deepPoseParticles.refMap.get()
+        if deepPoseProtocol.referenceType.get() == 0:
+            inputMask = deepPoseProtocol.inputVolumeMask.get().getFileName()
+            inputVolume = deepPoseProtocol.inputVolume.get().getFileName()
             partSet.refMask = String(inputMask)
             partSet.refMap = String(inputVolume)
         else:
-            structure = self.inputStruct.get().getFileName()
+            structure = deepPoseProtocol.inputStruct.get().getFileName()
             partSet.refStruct = String(structure)
-
-        partSet.refPose = refinePose
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

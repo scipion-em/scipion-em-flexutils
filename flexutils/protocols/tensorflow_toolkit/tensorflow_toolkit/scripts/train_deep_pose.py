@@ -45,14 +45,15 @@ from tensorflow_toolkit.utils import xmippEulerFromMatrix, computeCTF, euler_mat
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def train(outPath, h5_file, batch_size, shuffle, step, splitTrain, epochs, cost,
+def train(outPath, md_file, batch_size, shuffle, step, splitTrain, epochs, cost,
           radius_mask, smooth_mask, refinePose, architecture="convnn", weigths_file=None,
-          ctfType="apply", pad=2):
+          ctfType="apply", pad=2, sr=1.0, applyCTF=1):
 
     # Create data generator
-    generator = Generator(h5_file=h5_file, shuffle=shuffle, batch_size=batch_size,
+    generator = Generator(md_file=md_file, shuffle=shuffle, batch_size=batch_size,
                           step=step, splitTrain=splitTrain, cost=cost, radius_mask=radius_mask,
-                          smooth_mask=smooth_mask, refinePose=refinePose, pad_factor=pad)
+                          smooth_mask=smooth_mask, refinePose=refinePose, pad_factor=pad,
+                          sr=sr, applyCTF=applyCTF)
 
     # Train model
     # strategy = tf.distribute.MirroredStrategy()
@@ -83,7 +84,7 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--h5_file', type=str, required=True)
+    parser.add_argument('--md_file', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
     parser.add_argument('--batch_size', type=int, required=True)
     parser.add_argument('--shuffle', action='store_true')
@@ -98,6 +99,8 @@ if __name__ == '__main__':
     parser.add_argument('--smooth_mask', action='store_true')
     parser.add_argument('--refine_pose', action='store_true')
     parser.add_argument('--weigths_file', type=str, required=False, default=None)
+    parser.add_argument('--sr', type=float, required=True)
+    parser.add_argument('--apply_ctf', type=int, required=True)
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -108,12 +111,13 @@ if __name__ == '__main__':
     for gpu_instance in physical_devices:
         tf.config.experimental.set_memory_growth(gpu_instance, True)
 
-    inputs = {"h5_file": args.h5_file, "outPath": args.out_path,
+    inputs = {"md_file": args.md_file, "outPath": args.out_path,
               "batch_size": args.batch_size, "shuffle": args.shuffle,
               "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs,
               "cost": args.cost, "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask,
               "refinePose": args.refine_pose, "architecture": args.architecture,
-              "weigths_file": args.weigths_file, "ctfType": args.ctf_type, "pad": args.pad}
+              "weigths_file": args.weigths_file, "ctfType": args.ctf_type, "pad": args.pad,
+              "sr": args.sr, "applyCTF": args.apply_ctf}
 
     # Initialize volume slicer
     train(**inputs)

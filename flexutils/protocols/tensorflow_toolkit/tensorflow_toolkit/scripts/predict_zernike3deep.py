@@ -28,7 +28,6 @@
 
 import os
 import numpy as np
-import h5py
 
 import tensorflow as tf
 
@@ -41,10 +40,12 @@ from tensorflow_toolkit.networks.zernike3deep import AutoEncoder
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def predict(h5_file, weigths_file, L1, L2, refinePose, architecture, ctfType, pad=2):
+def predict(md_file, weigths_file, L1, L2, refinePose, architecture, ctfType, pad=2,
+            sr=1.0, applyCTF=1):
     # Create data generator
-    generator = Generator(L1, L2, h5_file=h5_file, shuffle=True, batch_size=32,
-                          step=1, splitTrain=1.0, refinePose=refinePose, pad_factor=pad)
+    generator = Generator(L1, L2, md_file=md_file, shuffle=True, batch_size=32,
+                          step=1, splitTrain=1.0, refinePose=refinePose, pad_factor=pad,
+                          sr=sr, applyCTF=applyCTF)
 
     # Load model
     autoencoder = AutoEncoder(generator, architecture=architecture, CTF=ctfType)
@@ -79,18 +80,19 @@ def predict(h5_file, weigths_file, L1, L2, refinePose, architecture, ctfType, pa
     # zernike_space = np.vstack(zernike_space)
 
     # Save space to metadata file
-    with h5py.File(h5_file, 'a') as hf:
-        hf.create_dataset('zernike_space', data=zernike_space)
+    generator.metadata[:, 'sphCoefficients'] = np.asarray([",".join(item) for item in zernike_space.astype(str)])
 
-        if refinePose:
-            delta_euler = np.vstack(delta_euler)
-            delta_shifts = np.vstack(delta_shifts)
+    if refinePose:
+        delta_euler = np.vstack(delta_euler)
+        delta_shifts = np.vstack(delta_shifts)
 
-            hf.create_dataset('delta_angle_rot', data=delta_euler[:, 0])
-            hf.create_dataset('delta_angle_tilt', data=delta_euler[:, 1])
-            hf.create_dataset('delta_angle_psi', data=delta_euler[:, 2])
-            hf.create_dataset('delta_shift_x', data=delta_shifts[:, 0])
-            hf.create_dataset('delta_shift_y', data=delta_shifts[:, 1])
+        generator.metadata[:, 'delta_angle_rot'] = delta_euler[:, 0]
+        generator.metadata[:, 'delta_angle_tilt'] = delta_euler[:, 1]
+        generator.metadata[:, 'delta_angle_psi'] = delta_euler[:, 2]
+        generator.metadata[:, 'delta_shift_x'] = delta_shifts[:, 0]
+        generator.metadata[:, 'delta_shift_y'] = delta_shifts[:, 1]
+
+    generator.metadata.write(md_file, overwrite=True)
 
 
 if __name__ == '__main__':
@@ -98,7 +100,7 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--h5_file', type=str, required=True)
+    parser.add_argument('--md_file', type=str, required=True)
     parser.add_argument('--weigths_file', type=str, required=True)
     parser.add_argument('--L1', type=int, required=True)
     parser.add_argument('--L2', type=int, required=True)
@@ -107,6 +109,8 @@ if __name__ == '__main__':
     parser.add_argument('--ctf_type', type=str, required=True)
     parser.add_argument('--pad', type=int, required=False, default=2)
     parser.add_argument('--gpu', type=str)
+    parser.add_argument('--sr', type=float, required=True)
+    parser.add_argument('--apply_ctf', type=int, required=True)
 
     args = parser.parse_args()
 
@@ -116,10 +120,10 @@ if __name__ == '__main__':
     for gpu_instance in physical_devices:
         tf.config.experimental.set_memory_growth(gpu_instance, True)
 
-    inputs = {"h5_file": args.h5_file, "weigths_file": args.weigths_file,
+    inputs = {"md_file": args.md_file, "weigths_file": args.weigths_file,
               "L1": args.L1, "L2": args.L2, "refinePose": args.refine_pose,
               "architecture": args.architecture, "ctfType": args.ctf_type,
-              "pad": args.pad}
+              "pad": args.pad, "sr": args.sr, "applyCTF": args.apply_ctf}
 
     # Initialize volume slicer
     predict(**inputs)

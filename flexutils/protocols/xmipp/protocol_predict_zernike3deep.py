@@ -25,10 +25,10 @@
 # **************************************************************************
 
 
-import numpy as np
 import os
-import h5py
+import numpy as np
 import re
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, CsvList
@@ -69,31 +69,24 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         group = form.addGroup("Data")
         group.addParam('inputParticles', params.PointerParam, label="Input particles to predict",
                       pointerClass='SetOfParticles')
-        group.addParam('zernikeParticles', params.PointerParam, label="Zernike3Deep particles",
-                      pointerClass='SetOfParticles',
-                      help="Particles coming out from the protocol: 'angular align - Zernike3Deep'. "
-                           "This particles store all the information needed to load the trained "
-                           "Zernike3Deep network")
+        group.addParam('zernikeProtocol', params.PointerParam, label="Zernike3Deep trained network",
+                       pointerClass='TensorflowProtAngularAlignmentZernike3Deep',
+                       help="Previously executed 'angular align - Zernike3Deep'. "
+                            "This will allow to load the network trained in that protocol to be used during "
+                            "the prediction")
         group.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
                            "execution")
-        group = form.addGroup("Memory Parameters (Advanced)",
-                              expertLevel=params.LEVEL_ADVANCED)
-        group.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help="If true, images stored in the metadata will be unstacked to save GPU "
-                           "memory during the training steps. This will make the training slightly "
-                           "slower.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
         myDict = {
             'imgsFn': self._getExtraPath('input_particles.xmd'),
-            'fnVol': self._getExtraPath('input_volume.vol'),
-            'fnVolMask': self._getExtraPath('input_volume_mask.vol'),
-            'fnStruct': self._getExtraPath('input_structure.txt'),
+            'fnVol': self._getExtraPath('volume.mrc'),
+            'fnVolMask': self._getExtraPath('mask.mrc'),
+            'fnStruct': self._getExtraPath('structure.txt'),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -102,7 +95,6 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
     def _insertAllSteps(self):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
-        self._insertFunctionStep(self.convertMetaDataStep)
         self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
 
@@ -114,28 +106,28 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         structure = self._getFileName('fnStruct')
 
         inputParticles = self.inputParticles.get()
-        zernikeParticles = self.zernikeParticles.get()
+        zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
-        if zernikeParticles.refMap.get():
+        if zernikeProtocol.referenceType.get() == 0:
             ih = ImageHandler()
-            inputVolume = zernikeParticles.refMap.get()
+            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-            inputMask = zernikeParticles.refMask.get()
+            inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
                 if Xdim != self.newXdim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
-        elif zernikeParticles.refStruct.get():
-            pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
+        else:
+            pdb_lines = self.readPDB(zernikeProtocol.inputStruct.get().getFileName())
             pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
             np.savetxt(structure, pdb_coordinates)
 
@@ -153,44 +145,34 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
                         env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
-    def convertMetaDataStep(self):
-        md_file = self._getFileName('imgsFn')
-        out_path = self._getExtraPath('h5_metadata')
-        if not os.path.isdir(out_path):
-            os.mkdir(out_path)
-        sr = self.inputParticles.get().getSamplingRate()
-        unStack = self.unStack.get()
-        volume = self._getFileName('fnVol')
-        mask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
-        thr = self.numberOfThreads.get()
-        args = "--md_file %s --out_path %s --sr %f --thr %d" \
-               % (md_file, out_path, sr, thr)
-        if unStack:
-            args += " --unStack"
-        if self.zernikeParticles.get().refMap.get():
-            args += " --volume %s --mask %s" % (volume, mask)
-        else:
-            args += " --structure %s" % structure
-        if self.zernikeParticles.get().ctfType.get() == "wiener":
-            args += " --applyCTF"
-        program = os.path.join(const.XMIPP_SCRIPTS, "md_to_h5.py")
-        program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args, numberOfMpi=1)
-
     def predictStep(self):
-        zernikeParticles = self.zernikeParticles.get()
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
-        weigths_file = zernikeParticles.modelPath.get()
-        L1 = zernikeParticles.L1.get()
-        L2 = zernikeParticles.L2.get()
-        pad = zernikeParticles.pad.get()
-        args = "--h5_file %s --weigths_file %s --L1 %d --L2 %d --architecture %s --ctf_type %s " \
-               "--pad %d" \
-               % (h5_file, weigths_file, L1, L2, zernikeParticles.architecture.get(),
-                  zernikeParticles.ctfType.get(), pad)
-        if zernikeParticles.refPose.get():
+        zernikeProtocol = self.zernikeProtocol.get()
+        md_file = self._getFileName('imgsFn')
+        weigths_file = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        L1 = zernikeProtocol.l1.get()
+        L2 = zernikeProtocol.l2.get()
+        pad = zernikeProtocol.pad.get()
+        correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
+        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        applyCTF = zernikeProtocol.ctfType.get()
+        args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
+               "--pad %d --sr %f --apply_ctf %d" \
+               % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
+
+        if zernikeProtocol.refinePose.get():
             args += " --refine_pose"
+
+        if zernikeProtocol.ctfType.get() == 0:
+            args += " --ctf_type apply"
+        elif zernikeProtocol.ctfType.get() == 1:
+            args += " --ctf_type wiener"
+
+        if zernikeProtocol.architecture.get() == 0:
+            args += " --architecture convnn"
+        elif zernikeProtocol.architecture.get() == 1:
+            args += " --architecture mlpnn"
+
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
@@ -199,22 +181,23 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
-        zernikeParticles = self.zernikeParticles.get()
+        zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = zernikeParticles.modelPath.get()
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
-        with h5py.File(h5_file, 'r') as hf:
-            zernike_space = np.asarray(hf.get('zernike_space'))
+        model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        md_file = self._getFileName('imgsFn')
 
-            if "delta_angle_rot" in hf.keys():
-                delta_rot = np.asarray(hf.get('delta_angle_rot'))
-                delta_tilt = np.asarray(hf.get('delta_angle_tilt'))
-                delta_psi = np.asarray(hf.get('delta_angle_psi'))
-                delta_shift_x = np.asarray(hf.get('delta_shift_x'))
-                delta_shift_y = np.asarray(hf.get('delta_shift_y'))
+        metadata = XmippMetaData(md_file)
+        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'sphCoefficients']])
 
-        refinePose = zernikeParticles.refPose.get()
+        if metadata.isMetaDataLabel('delta_angle_rot'):
+            delta_rot = metadata[:, 'delta_angle_rot']
+            delta_tilt = metadata[:, 'delta_angle_tilt']
+            delta_psi = metadata[:, 'delta_angle_psi']
+            delta_shift_x = metadata[:, 'delta_shift_x']
+            delta_shift_y = metadata[:, 'delta_shift_y']
+
+        refinePose = zernikeProtocol.refinePose.get()
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
@@ -255,18 +238,18 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
 
             partSet.append(particle)
 
-        partSet.L1 = Integer(zernikeParticles.L1.get())
-        partSet.L2 = Integer(zernikeParticles.L2.get())
+        partSet.L1 = Integer(zernikeProtocol.l1.get())
+        partSet.L2 = Integer(zernikeProtocol.l2.get())
         partSet.Rmax = Float(Xdim / 2)
         partSet.modelPath = String(model_path)
 
-        if zernikeParticles.refMap.get():
-            inputMask = zernikeParticles.refMask.get()
-            inputVolume = zernikeParticles.refMap.get()
+        if zernikeProtocol.referenceType.get() == 0:
+            inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
+            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
             partSet.refMask = String(inputMask)
             partSet.refMap = String(inputVolume)
         else:
-            structure = self.inputStruct.get().getFileName()
+            structure = zernikeProtocol.inputStruct.get().getFileName()
             partSet.refStruct = String(structure)
 
         partSet.refPose = refinePose
@@ -291,9 +274,11 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         return lines
 
     def PDB2List(self, lines):
+        zernikeProtocol = self.zernikeProtocol.get()
         newlines = []
         for line in lines:
-            eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) if self.onlyBackbone.get() else line.startswith("ATOM ")
+            eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) \
+                if zernikeProtocol.onlyBackbone.get() else line.startswith("ATOM ")
             if eval:
                 try:
                     x = float(line[30:38])
@@ -310,16 +295,4 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-        zernikeParticles = self.zernikeParticles.get()
-        if not hasattr(zernikeParticles, 'L1') and hasattr(zernikeParticles, 'L2'):
-            l1 = self.l1.get()
-            l2 = self.l2.get()
-            if (l1 - l2) < 0:
-                errors.append('Zernike degree must be higher than '
-                              'SPH degree.')
-
-        if not zernikeParticles.modelPath.get() or not "zernike3deep_model" in zernikeParticles.modelPath.get():
-            errors.append("Particles do not have associated a Zernike3Deep network. Please, "
-                          "provide a SetOfParticles coming from the protocol *'angular align - Zernike3Deep'*.")
-
         return errors

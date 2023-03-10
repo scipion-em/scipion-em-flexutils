@@ -37,18 +37,22 @@ from flexutils.protocols.xmipp.protocol_focus_zernike3d import XmippProtFocusZer
 from flexutils.protocols.xmipp.protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D
 from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep
+from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import TensorflowProtAngularAlignmentDeepNMA
+from flexutils.protocols.xmipp.protocol_predict_deep_nma import TensorflowProtPredictDeepNMA
+
 
 import flexutils.constants as const
 from flexutils.utils import computeNormRows
 import flexutils
 
 
-class XmippAngularAlignmentViewer(ProtocolViewer):
-    """ Visualize Zernike3D coefficient space """
-    _label = 'viewer angular align - Zernike3D'
+class XmippLandscapeViewer(ProtocolViewer):
+    """ Visualize conformational lanscapes """
+    _label = 'viewer conformational landscape'
     _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D,
                 XmippProtReassignReferenceZernike3D, TensorflowProtAngularAlignmentZernike3Deep,
-                TensorflowProtPredictZernike3Deep]
+                TensorflowProtPredictZernike3Deep, TensorflowProtAngularAlignmentDeepNMA,
+                TensorflowProtPredictDeepNMA]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
@@ -62,11 +66,11 @@ class XmippAngularAlignmentViewer(ProtocolViewer):
 
 
     def _defineParams(self, form):
-        form.addSection(label='Show Zernike3D coefficient space')
+        form.addSection(label='Show conformational landscape')
         form.addParam('mode', params.EnumParam, choices=['UMAP', 'PCA'],
                       default=0, display=params.EnumParam.DISPLAY_HLIST,
                       label="Dimensionality reduction method",
-                      help="\t * UMAP: usually leads to more meaningfull spaces, although execution "
+                      help="\t * UMAP: usually leads to more meaningful spaces, although execution "
                            "is higher\n"
                            "\t * PCA: faster but less meaningfull spaces \n"
                            "UMAP and PCA are only computed the first time the are used. Afterwards, they "
@@ -87,7 +91,7 @@ class XmippAngularAlignmentViewer(ProtocolViewer):
         form.addParam('threads', params.IntParam, label="Number of threads",
                       default=4, condition="mode==0")
         form.addParam('doShowSpace', params.LabelParam,
-                      label="Display the Zernike3D coefficient space")
+                      label="Display the conformational space")
 
     def _getVisualizeDict(self):
         # self.protocol._createFilenameTemplates()
@@ -95,8 +99,12 @@ class XmippAngularAlignmentViewer(ProtocolViewer):
 
     def _doShowSpace(self, param=None):
         z_clnm = []
-        for particle in self.protocol.outputParticles.iterItems():
-            z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+        if "Zernike3D" in type(self.protocol).__name__:
+            for particle in self.protocol.outputParticles.iterItems():
+                z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+        elif "NMA" in type(self.protocol).__name__:
+            for particle in self.protocol.outputParticles.iterItems():
+                z_clnm.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
         z_clnm = np.asarray(z_clnm)
 
         # Generate files to call command line
@@ -125,7 +133,11 @@ class XmippAngularAlignmentViewer(ProtocolViewer):
                 program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                 program = flexutils.Plugin.getProgram(program)
                 runJob(None, program, args)
-        deformation = computeNormRows(z_clnm)
+
+        if "Zernike3D" in type(self.protocol).__name__:
+            deformation = computeNormRows(z_clnm)
+        else:
+            deformation = np.zeros(z_clnm.shape)
 
         # Generate files to call command line
         np.savetxt(file_deformation, deformation)

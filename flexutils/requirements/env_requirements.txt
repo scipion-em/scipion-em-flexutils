@@ -17,3 +17,4 @@ watchdog==2.1.9
 tqdm==4.59.0
 pandas==1.2.3
 h5py
+xmipp-metadata

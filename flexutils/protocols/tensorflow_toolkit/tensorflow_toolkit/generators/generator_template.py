@@ -30,6 +30,8 @@ from scipy.ndimage import gaussian_filter
 import h5py
 import mrcfile
 import os
+from pathlib import Path
+from xmipp_metadata.metadata import XmippMetaData
 
 import tensorflow as tf
 from tensorflow.keras import backend as K
@@ -39,8 +41,9 @@ from tensorflow_toolkit.utils import getXmippOrigin, fft_pad, ifft_pad
 
 
 class DataGeneratorBase(tf.keras.utils.Sequence):
-    def __init__(self, h5_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8,
-                 radius_mask=2, smooth_mask=True, cost="corr", keepMap=False, pad_factor=2):
+    def __init__(self, md_file, batch_size=32, shuffle=True, step=1, splitTrain=0.8,
+                 radius_mask=2, smooth_mask=True, cost="corr", keepMap=False, pad_factor=2,
+                 sr=1., applyCTF=1):
         # Attributes
         self.step = step
         self.shuffle = shuffle
@@ -50,26 +53,16 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         # self.cap_def = 3.
 
         # Read metadata
-        mask, volume, structure = self.readH5Metadata(h5_file)
+        mask, volume, structure = self.readMetadata(md_file)
+        self.sr = tf.constant(sr, dtype=tf.float32)
+        self.applyCTF = applyCTF
+        self.xsize = self.metadata.getMetaDataImage(0).shape[1]
+        self.xmipp_origin = getXmippOrigin(self.xsize)
 
-        # Are images fitted in memory?
-        stack = os.path.join(self.images_path[0], "stack.mrc")
-        if os.path.isfile(stack):
-            with mrcfile.open(stack) as mrc:
-                self.mrc = mrc.data
-            self.xsize = self.mrc.shape[1]
-            self.xmipp_origin = getXmippOrigin(self.xsize)
-            self.fitInMemory = True
-        else:
-            with mrcfile.open(os.path.join(self.images_path[0], "theo_1.mrc")) as mrc:
-                self.xsize = mrc.data.shape[1]
-            self.xmipp_origin = getXmippOrigin(self.xsize)
-            self.fitInMemory = False
-
-        if volume[0] != "":
+        if os.path.isfile(volume):
             # Read volume data
             self.readVolumeData(mask, volume, keepMap)
-        elif structure[0] != "":
+        elif os.path.isfile(structure):
             # Read structure data
             self.readStructureData(structure)
 
@@ -114,38 +107,30 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
 
     #----- Initialization methods -----#
 
-    def readH5Metadata(self, h5_file):
-        hf = h5py.File(h5_file, 'r')
-        images_path = np.array(hf.get('images_path'))
-        self.images_path = [str(n) for n in images_path.astype(str)]
-        mask = np.array(hf.get('mask'))
-        mask = [str(n) for n in mask.astype(str)]
-        volume = np.array(hf.get('volume'))
-        volume = [str(n) for n in volume.astype(str)]
-        structure = np.array(hf.get('structure'))
-        structure = [str(n) for n in structure.astype(str)]
-        self.angle_rot = tf.constant(np.asarray(hf.get('angle_rot')), dtype=tf.float32)
-        self.angle_tilt = tf.constant(np.asarray(hf.get('angle_tilt')), dtype=tf.float32)
-        self.angle_psi = tf.constant(np.asarray(hf.get('angle_psi')), dtype=tf.float32)
-        shift_x = np.asarray(hf.get('shift_x'))
-        self.file_idx = np.arange(shift_x.size)
-        self.shift_x = tf.constant(shift_x, dtype=tf.float32)
-        self.shift_y = tf.constant(np.asarray(hf.get('shift_y')), dtype=tf.float32)
+    def readMetadata(self, filename):
+        filename = Path(filename)
+        self.metadata = XmippMetaData(file_name=filename)
+        mask = Path(filename.parent, 'mask.mrc')
+        volume = Path(filename.parent, 'volume.mrc')
+        structure = Path(filename.parent, 'structure.txt')
+        self.angle_rot = tf.constant(np.asarray(self.metadata[:, 'angleRot']), dtype=tf.float32)
+        self.angle_tilt = tf.constant(np.asarray(self.metadata[:, 'angleTilt']), dtype=tf.float32)
+        self.angle_psi = tf.constant(np.asarray(self.metadata[:, 'anglePsi']), dtype=tf.float32)
+        self.shift_x = tf.constant(self.metadata[:, 'shiftX'], dtype=tf.float32)
+        self.shift_y = tf.constant(np.asarray(self.metadata[:, 'shiftY']), dtype=tf.float32)
         self.shift_z = tf.constant(np.zeros(self.shift_x.shape), dtype=tf.float32)
         self.shifts = [self.shift_x, self.shift_y, self.shift_z]
-        self.defocusU = tf.constant(np.asarray(hf.get('defocusU')), dtype=tf.float32)
-        self.defocusV = tf.constant(np.asarray(hf.get('defocusV')), dtype=tf.float32)
-        self.defocusAngle = tf.constant(np.asarray(hf.get('defocusAngle')), dtype=tf.float32)
-        self.cs = tf.constant(np.asarray(hf.get('cs')), dtype=tf.float32)
-        self.kv = tf.constant(hf.get('kv')[0], dtype=tf.float32)
-        self.sr = tf.constant(np.asarray(hf.get('sr')), dtype=tf.float32)
-        self.applyCTF = np.asarray(hf.get('applyCTF'))
-        hf.close()
+        self.defocusU = tf.constant(self.metadata[:, 'ctfDefocusU'], dtype=tf.float32)
+        self.defocusV = tf.constant(self.metadata[:, 'ctfDefocusV'], dtype=tf.float32)
+        self.defocusAngle = tf.constant(self.metadata[:, 'ctfDefocusAngle'], dtype=tf.float32)
+        self.cs = tf.constant(self.metadata[:, 'ctfSphericalAberration'], dtype=tf.float32)
+        self.kv = tf.constant(self.metadata[:, 'ctfVoltage'][0], dtype=tf.float32)
+        self.file_idx = np.arange(len(self.metadata))
 
         return mask, volume, structure
 
     def readVolumeData(self, mask, volume, keepMap=False):
-        with mrcfile.open(mask[0]) as mrc:
+        with mrcfile.open(mask) as mrc:
             # self.xsize = mrc.data.shape[0]
             # self.xmipp_origin = getXmippOrigin(self.xsize)
             coords = np.asarray(np.where(mrc.data == 1))
@@ -159,7 +144,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         coords = coords[::self.step]
         self.coords = self.coords[::self.step]
 
-        with mrcfile.open(volume[0]) as mrc:
+        with mrcfile.open(volume) as mrc:
             self.values = mrc.data[coords[:, 2], coords[:, 1], coords[:, 0]]
 
             if keepMap:
@@ -169,7 +154,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
         self.ref_is_struct = False
 
     def readStructureData(self, structure):
-        pdb_info = np.loadtxt(structure[0])
+        pdb_info = np.loadtxt(structure)
 
         # Get structure coords
         self.coords = pdb_info[:, :-1]
@@ -198,16 +183,7 @@ class DataGeneratorBase(tf.keras.utils.Sequence):
             self.file_idx = self.file_idx[indexes]
 
     def __data_generation(self):
-        if self.fitInMemory:
-            images = self.mrc[self.indexes, :, :]
-        else:
-            images = []
-            for index in self.indexes:
-                with mrcfile.open(os.path.join(self.images_path[0], "theo_%d.mrc" % index)) as mrc:
-                    images.append(mrc.data)
-            images = np.vstack(images)
-
-        # self.current_img = images
+        images = self.metadata.getMetaDataImage(self.indexes)
         return images.reshape([-1, self.xsize, self.xsize, 1]), self.indexes
 
     def __getitem__(self, index):

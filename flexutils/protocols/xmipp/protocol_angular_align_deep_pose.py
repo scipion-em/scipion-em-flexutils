@@ -27,8 +27,8 @@
 
 import numpy as np
 import os
-import h5py
 import re
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import String, Boolean, Integer
@@ -108,13 +108,6 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                        help="Determines the padding factor to be applied before computing "
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
-        group = form.addGroup("Memory Parameters (Advanced)",
-                              expertLevel=params.LEVEL_ADVANCED)
-        group.addParam('unStack', params.BooleanParam, default=True, label='Unstack images?',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help="If true, images stored in the metadata will be unstacked to save GPU "
-                            "memory during the training steps. This will make the training slightly "
-                            "slower.")
         form.addSection(label='Network')
         form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                       expertLevel=params.LEVEL_ADVANCED,
@@ -171,9 +164,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         """ Centralize how files are called """
         myDict = {
             'imgsFn': self._getExtraPath('input_particles.xmd'),
-            'fnVol': self._getExtraPath('input_volume.vol'),
-            'fnVolMask': self._getExtraPath('input_volume_mask.vol'),
-            'fnStruct': self._getExtraPath('input_structure.txt'),
+            'fnVol': self._getExtraPath('volume.mrc'),
+            'fnVolMask': self._getExtraPath('mask.mrc'),
+            'fnStruct': self._getExtraPath('structure.txt'),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -182,7 +175,6 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
     def _insertAllSteps(self):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
-        self._insertFunctionStep(self.convertMetaDataStep)
         self._insertFunctionStep(self.trainingStep)
         self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -233,35 +225,8 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                         env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
-    def convertMetaDataStep(self):
-        md_file = self._getFileName('imgsFn')
-        out_path = self._getExtraPath('h5_metadata')
-        if not os.path.isdir(out_path):
-            os.mkdir(out_path)
-        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
-        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = self.applyCTF.get()
-        unStack = self.unStack.get()
-        volume = self._getFileName('fnVol')
-        mask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
-        thr = self.numberOfThreads.get()
-        args = "--md_file %s --out_path %s --sr %f --thr %d" \
-               % (md_file, out_path, sr, thr)
-        if applyCTF:
-            args += " --applyCTF"
-        if unStack:
-            args += " --unStack"
-        if self.referenceType.get() == 0:
-            args += " --volume %s --mask %s" % (volume, mask)
-        else:
-            args += " --structure %s" % structure
-        program = os.path.join(const.XMIPP_SCRIPTS, "md_to_h5.py")
-        program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args, numberOfMpi=1)
-
     def trainingStep(self):
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
+        md_file = self._getFileName('imgsFn')
         out_path = self._getExtraPath('network')
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
@@ -270,9 +235,13 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         step = self.step.get()
         split_train = self.split_train.get()
         epochs = self.epochs.get()
-        args = "--h5_file %s --out_path %s --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d --pad %d --refine_pose" \
-               % (h5_file, out_path, batch_size, split_train, epochs, pad)
+        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
+        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        applyCTF = self.applyCTF.get()
+        args = "--md_file %s --out_path %s --batch_size %d " \
+               "--shuffle --split_train %f --epochs %d --pad %d --refine_pose " \
+               "--sr %f --apply_ctf %d" \
+               % (md_file, out_path, batch_size, split_train, epochs, pad, sr, applyCTF)
 
         if self.referenceType.get() == 0:
             args += " --step %d" % step
@@ -310,11 +279,15 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         self.runJob(program, args, numberOfMpi=1)
 
     def predictStep(self):
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
+        md_file = self._getFileName('imgsFn')
         weigths_file = self._getExtraPath(os.path.join('network', 'deep_pose_model'))
         pad = self.pad.get()
-        args = "--h5_file %s --weigths_file %s --pad %d --refine_pose" \
-               % (h5_file, weigths_file, pad)
+        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
+        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        applyCTF = self.applyCTF.get()
+        args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
+               "--apply_ctf %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF)
 
         # if self.refinePose.get():
         #     args += " --refine_pose"
@@ -348,13 +321,14 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
         model_path = self._getExtraPath(os.path.join('network', 'deep_pose_model'))
-        h5_file = self._getExtraPath(os.path.join('h5_metadata', 'metadata.h5'))
-        with h5py.File(h5_file, 'r') as hf:
-            delta_rot = np.asarray(hf.get('delta_angle_rot'))
-            delta_tilt = np.asarray(hf.get('delta_angle_tilt'))
-            delta_psi = np.asarray(hf.get('delta_angle_psi'))
-            delta_shift_x = np.asarray(hf.get('delta_shift_x'))
-            delta_shift_y = np.asarray(hf.get('delta_shift_y'))
+        md_file = self._getFileName('imgsFn')
+
+        metadata = XmippMetaData(md_file)
+        delta_rot = metadata[:, 'delta_angle_rot']
+        delta_tilt = metadata[:, 'delta_angle_tilt']
+        delta_psi = metadata[:, 'delta_angle_psi']
+        delta_shift_x = metadata[:, 'delta_shift_x']
+        delta_shift_y = metadata[:, 'delta_shift_y']
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()

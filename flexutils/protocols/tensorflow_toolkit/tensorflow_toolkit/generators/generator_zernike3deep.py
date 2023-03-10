@@ -113,6 +113,13 @@ class Generator(DataGeneratorBase):
         bposall = tf.concat([bposi, bposi + (1, 0), bposi + (1, 1), bposi + (0, 1)], 1)
         # images = tf.stack([tf.tensor_scatter_nd_add(imgs[i], bposall[i], bampall[i]) for i in range(imgs.shape[0])])
 
+        # bposf = tf.round(c_sampling)
+        # bposall = tf.cast(bposf, tf.int32)
+        #
+        # num = tf.reduce_sum(((bposf - c_sampling) ** 2.), axis=-1)
+        # sigma = 1.
+        # bampall = bamp[None, :] * tf.exp(-num / (2. * sigma ** 2.))
+
         fn = lambda inp: tf.tensor_scatter_nd_add(inp[0], inp[1], inp[2])
         images = tf.map_fn(fn, [imgs, bposall, bampall], fn_output_signature=tf.float32)
         # images = tf.vectorized_map(fn, [imgs, bposall, bampall])

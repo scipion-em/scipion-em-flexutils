@@ -41,12 +41,14 @@ from tensorflow_toolkit.networks.zernike3deep import AutoEncoder
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def train(outPath, h5_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs, cost,
-          radius_mask, smooth_mask, refinePose, architecture="convnn", ctfType="apply", pad=2):
+def train(outPath, md_file, L1, L2, batch_size, shuffle, step, splitTrain, epochs, cost,
+          radius_mask, smooth_mask, refinePose, architecture="convnn", ctfType="apply", pad=2,
+          sr=1.0, applyCTF=1):
     # Create data generator
-    generator = Generator(L1, L2, h5_file=h5_file, shuffle=shuffle, batch_size=batch_size,
+    generator = Generator(L1, L2, md_file=md_file, shuffle=shuffle, batch_size=batch_size,
                           step=step, splitTrain=splitTrain, cost=cost, radius_mask=radius_mask,
-                          smooth_mask=smooth_mask, refinePose=refinePose, pad_factor=pad)
+                          smooth_mask=smooth_mask, refinePose=refinePose, pad_factor=pad,
+                          sr=sr, applyCTF=applyCTF)
 
     # Train model
     strategy = tf.distribute.MirroredStrategy()
@@ -65,7 +67,7 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--h5_file', type=str, required=True)
+    parser.add_argument('--md_file', type=str, required=True)
     parser.add_argument('--out_path', type=str, required=True)
     parser.add_argument('--L1', type=int, required=True)
     parser.add_argument('--L2', type=int, required=True)
@@ -81,6 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--radius_mask', type=float, required=False, default=2)
     parser.add_argument('--smooth_mask', action='store_true')
     parser.add_argument('--refine_pose', action='store_true')
+    parser.add_argument('--sr', type=float, required=True)
+    parser.add_argument('--apply_ctf', type=int, required=True)
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -91,12 +95,13 @@ if __name__ == '__main__':
     for gpu_instance in physical_devices:
         tf.config.experimental.set_memory_growth(gpu_instance, True)
 
-    inputs = {"h5_file": args.h5_file, "outPath": args.out_path, "L1": args.L1,
+    inputs = {"md_file": args.md_file, "outPath": args.out_path, "L1": args.L1,
               "L2": args.L2, "batch_size": args.batch_size, "shuffle": args.shuffle,
               "step": args.step, "splitTrain": args.split_train, "epochs": args.epochs,
               "cost": args.cost, "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask,
               "refinePose": args.refine_pose, "architecture": args.architecture,
-              "ctfType": args.ctf_type, "pad": args.pad}
+              "ctfType": args.ctf_type, "pad": args.pad, "sr": args.sr,
+              "applyCTF": args.apply_ctf}
 
     # Initialize volume slicer
     train(**inputs)

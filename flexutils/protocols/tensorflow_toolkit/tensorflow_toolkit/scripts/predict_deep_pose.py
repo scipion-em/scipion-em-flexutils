@@ -28,7 +28,6 @@
 
 import os
 import numpy as np
-import h5py
 
 import tensorflow as tf
 
@@ -42,13 +41,13 @@ from tensorflow_toolkit.utils import xmippEulerFromMatrix, computeCTF, euler_mat
 #     tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 
-def predict(h5_file, weigths_file, refinePose, cost, radius_mask, smooth_mask,
-            architecture, ctfType, pad=2):
+def predict(md_file, weigths_file, refinePose, cost, radius_mask, smooth_mask,
+            architecture, ctfType, pad=2, sr=1.0, applyCTF=1):
     # Create data generator
-    generator = Generator(h5_file=h5_file, shuffle=False, batch_size=16,
+    generator = Generator(md_file=md_file, shuffle=False, batch_size=16,
                           step=1, splitTrain=1.0, refinePose=refinePose, cost=cost,
                           radius_mask=radius_mask, smooth_mask=smooth_mask,
-                          pad_factor=pad)
+                          pad_factor=pad, sr=sr, applyCTF=applyCTF)
 
     # Load model
     autoencoder = AutoEncoder(generator, architecture=architecture, CTF=ctfType)
@@ -75,15 +74,16 @@ def predict(h5_file, weigths_file, refinePose, cost, radius_mask, smooth_mask,
     # shifts = pred_shifts
 
     # Save space to metadata file
-    with h5py.File(h5_file, 'a') as hf:
-        alignment = np.vstack(alignment)
-        shifts = np.vstack(shifts)
+    alignment = np.vstack(alignment)
+    shifts = np.vstack(shifts)
 
-        hf.create_dataset('delta_angle_rot', data=alignment[:, 0])
-        hf.create_dataset('delta_angle_tilt', data=alignment[:, 1])
-        hf.create_dataset('delta_angle_psi', data=alignment[:, 2])
-        hf.create_dataset('delta_shift_x', data=shifts[:, 0])
-        hf.create_dataset('delta_shift_y', data=shifts[:, 1])
+    generator.metadata[:, 'delta_angle_rot'] = alignment[:, 0]
+    generator.metadata[:, 'delta_angle_tilt'] = alignment[:, 1]
+    generator.metadata[:, 'delta_angle_psi'] = alignment[:, 2]
+    generator.metadata[:, 'delta_shift_x'] = shifts[:, 0]
+    generator.metadata[:, 'delta_shift_y'] = shifts[:, 1]
+
+    generator.metadata.write(md_file, overwrite=True)
 
 
 if __name__ == '__main__':
@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
     # Input parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--h5_file', type=str, required=True)
+    parser.add_argument('--md_file', type=str, required=True)
     parser.add_argument('--weigths_file', type=str, required=True)
     parser.add_argument('--refine_pose', action='store_true')
     parser.add_argument('--architecture', type=str, required=True)
@@ -100,6 +100,8 @@ if __name__ == '__main__':
     parser.add_argument('--cost', type=str, required=True)
     parser.add_argument('--radius_mask', type=float, required=False, default=2)
     parser.add_argument('--smooth_mask', action='store_true')
+    parser.add_argument('--sr', type=float, required=True)
+    parser.add_argument('--apply_ctf', type=int, required=True)
     parser.add_argument('--gpu', type=str)
 
     args = parser.parse_args()
@@ -110,11 +112,11 @@ if __name__ == '__main__':
     for gpu_instance in physical_devices:
         tf.config.experimental.set_memory_growth(gpu_instance, True)
 
-    inputs = {"h5_file": args.h5_file, "weigths_file": args.weigths_file,
+    inputs = {"md_file": args.md_file, "weigths_file": args.weigths_file,
               "refinePose": args.refine_pose, "cost": args.cost,
               "radius_mask": args.radius_mask, "smooth_mask": args.smooth_mask,
               "architecture": args.architecture, "ctfType": args.ctf_type,
-              "pad": args.pad}
+              "pad": args.pad, "sr": args.sr, "applyCTF": args.apply_ctf}
 
     # Initialize volume slicer
     predict(**inputs)
