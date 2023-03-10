@@ -76,6 +76,12 @@ class ProtFlexDimRedSpace(ProtAnalysis3D):
                                 "and not hasattr(particles,'L2')",
                       expertLevel=LEVEL_ADVANCED,
                       help='Degree Spherical Harmonics of the deformation=1,2,3,...')
+        form.addParam('n_modes', IntParam, default=2,
+                      label='Harmonical Degree',
+                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_nmaCoefficients')"
+                                "and not hasattr(particles,'n_modes')",
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA', 'deepElastic'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Dimensionality reduction method",
@@ -177,6 +183,10 @@ class ProtFlexDimRedSpace(ProtAnalysis3D):
         elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
             for particle in particles.iterItems():
                 z_space.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
+            z_space = np.asarray(z_space)
+        elif hasattr(particles.getFirstItem(), "_xmipp_nmaCoefficients"):
+            for particle in particles.iterItems():
+                z_space.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
             z_space = np.asarray(z_space)
 
         # ********************

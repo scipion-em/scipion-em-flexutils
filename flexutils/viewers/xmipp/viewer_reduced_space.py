@@ -68,9 +68,19 @@ class XmippReducedSpaceViewer(ProtocolViewer):
     def _doShowSpace(self, param=None):
         red_space = []
         z_clnm = []
-        for particle in self.protocol.outputParticles.iterItems():
-            z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-            red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+        particles = self.protocol.outputParticles
+        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+            for particle in particles.iterItems():
+                z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
+            for particle in particles.iterItems():
+                z_clnm.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
+                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+        elif hasattr(particles.getFirstItem(), "_xmipp_nmaCoefficients"):
+            for particle in particles.iterItems():
+                z_clnm.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
+                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
         z_clnm = np.asarray(z_clnm)
         red_space = np.asarray(red_space)
 
@@ -79,7 +89,10 @@ class XmippReducedSpaceViewer(ProtocolViewer):
         file_deformation = self.protocol._getExtraPath("deformation.txt")
         np.savetxt(file_red_space, red_space)
 
-        deformation = computeNormRows(z_clnm)
+        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+            deformation = computeNormRows(z_clnm)
+        else:
+            deformation = np.zeros(z_clnm.shape)
 
         # Generate files to call command line
         np.savetxt(file_deformation, deformation)
