@@ -124,39 +124,7 @@ class Plugin(pwplugin.Plugin):
             return installationCmd
 
         def getCondaInstallationTensorflow():
-            installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda create -y -n flexutils-tensorflow python=3.8 && '
-            installationCmd += "conda activate flexutils-tensorflow && "
-                               # "pip install nvidia-ml-py3 && " \
-                               # "python " + CHECK_GPU_MODEL + " && "
-
-            # Get all GPUs and models
-            from pynvml import nvmlDeviceGetName, nvmlDeviceGetHandleByIndex, nvmlDeviceGetCount, nvmlInit, nvmlShutdown
-            import re
-            nvmlInit()
-            number_devices = nvmlDeviceGetCount()
-            gpu_models = [nvmlDeviceGetName(nvmlDeviceGetHandleByIndex(i)).decode("utf-8") for i in
-                          range(number_devices)]
-            nvmlShutdown()
-
-            # Default values compatible with Series 2000 and below
-            cuda_version = "10"
-
-            # If at least one GPU is series 3000 and above, change installation requirements
-            for gpu_model in gpu_models:
-                if re.findall(r"30[0-9]+", gpu_model):
-                    cuda_version = "11"
-                    break
-
-            if cuda_version == "11":
-                installationCmd += "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 cudatoolkit-dev -y && " \
-                                   "pip install -r " + TENSORFLOW_2_11_REQ + " && "
-            else:
-                installationCmd += "conda install -c conda-forge cudatoolkit=10.1 cudnn=7 -y && " \
-                                   "pip install -r " + TENSORFLOW_2_3_REQ + " && "
-            # "conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 -y && " \
-            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0],
-                                                                   "protocols", "tensorflow_toolkit"))
+            installationCmd = "pip install -e /home/davidherreros/Softwares/plugins_scipion3/tensorflow_toolkit -v"
             return installationCmd
 
         commands = []
