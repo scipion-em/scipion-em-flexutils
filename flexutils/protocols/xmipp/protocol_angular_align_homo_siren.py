@@ -277,7 +277,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+            modelPath = netProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
             args += " --weigths_file %s" % modelPath
 
         if self.superConv.get():
