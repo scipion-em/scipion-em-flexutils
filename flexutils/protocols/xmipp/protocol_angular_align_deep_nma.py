@@ -152,7 +152,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D):
         }
         self._updateFilenamesDict(myDict)
 
-    # --------------------------- INSERT steps functions --------------------------------------------
+    # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
@@ -160,7 +160,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D):
         self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    # --------------------------- STEPS functions ---------------------------------------------------
+    # --------------------------- STEPS functions -----------------------
     def writeMetaDataStep(self):
         imgsFn = self._getFileName('imgsFn')
         structure = self._getFileName('fnStruct')
@@ -345,7 +345,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D):
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
-    # --------------------------- UTILS functions --------------------------------------------
+    # --------------------------- UTILS functions -----------------------
     def _updateParticle(self, item, row):
         setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
                            md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
@@ -378,7 +378,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D):
                     pass
         return newlines
 
-    # ----------------------- VALIDATE functions ----------------------------------------
+    # ----------------------- VALIDATE functions -----------------------
     def validate(self):
         """ Try to find errors on define params. """
         errors = []

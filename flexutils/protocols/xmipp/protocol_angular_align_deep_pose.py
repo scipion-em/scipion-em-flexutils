@@ -123,7 +123,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                            "new input parameters. Note that when this option is set, the input particles "
                            "must have a trained deepPose network associated (i.e. particles must come from "
                            "a **'angular align - deepPose'** protocol.")
-        form.addParam('netParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles',
+        form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
+                      pointerClass='TensorflowProtAngularAlignmentDeepPose',
+                      allowsNull=True,
                       condition="fineTune")
         form.addParam('epochs', params.IntParam, default=50, label='Number of training epochs',
                       help="When training in refinenment mode, the number of epochs might be decreased to "
@@ -269,7 +271,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
             args += " --ctf_type wiener"
 
         if self.fineTune.get():
-            args += " --weigths_file %s" % self.netParticles.get().modelPath.get()
+            netProtocol = self.netProtocol.get()
+            modelPath = netProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+            args += " --weigths_file %s" % modelPath
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -301,13 +305,6 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
-
-        if self.costFunction.get() == 0:
-            args += " --cost corr"
-        elif self.costFunction.get() == 1:
-            args += " --cost corr-fpc --radius_mask %f" % self.maskRadius.get()
-            if self.smoothMask.get():
-                args += " --smooth_mask"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -446,14 +443,4 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-
-        netParticles = self.netParticles.get()
-
-        if self.fineTune.get():
-            modelPath = netParticles.modelPath.get()
-            if not modelPath or not "deep_pose_model" in modelPath:
-                errors.append("Particles do not have associated a deepPose network. Please, "
-                              "provide a SetOfParticles coming from the protocol *'angular align - deepPose'* when "
-                              "fine tuning is activated.")
-
         return errors

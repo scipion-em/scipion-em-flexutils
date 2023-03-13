@@ -55,7 +55,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
     _label = 'predict - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
 
-    # --------------------------- DEFINE param functions --------------------------------------------
+    # --------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
@@ -91,14 +91,14 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         }
         self._updateFilenamesDict(myDict)
 
-    # --------------------------- INSERT steps functions --------------------------------------------
+    # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
         self._insertFunctionStep(self.predictStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    # --------------------------- STEPS functions ---------------------------------------------------
+    # --------------------------- STEPS functions -----------------------
     def writeMetaDataStep(self):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
@@ -257,7 +257,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
-    # --------------------------- UTILS functions --------------------------------------------
+    # --------------------------- UTILS functions -----------------------
     def _updateParticle(self, item, row):
         setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
                            md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
@@ -291,7 +291,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
                     pass
         return newlines
 
-    # ----------------------- VALIDATE functions ----------------------------------------
+    # ----------------------- VALIDATE functions -----------------------
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
