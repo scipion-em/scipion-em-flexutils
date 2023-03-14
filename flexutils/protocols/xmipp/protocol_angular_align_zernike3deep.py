@@ -319,7 +319,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
-        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'sphCoefficients']])
+        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zernikeCoefficients']])
 
         if self.refinePose.get():
             delta_rot = metadata[:, 'delta_angle_rot']

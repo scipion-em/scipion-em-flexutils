@@ -188,7 +188,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
-        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'sphCoefficients']])
+        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zernikeCoefficients']])
 
         if metadata.isMetaDataLabel('delta_angle_rot'):
             delta_rot = metadata[:, 'delta_angle_rot']
