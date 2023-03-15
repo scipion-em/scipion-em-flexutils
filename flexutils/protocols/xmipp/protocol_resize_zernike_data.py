@@ -28,14 +28,17 @@
 
 import numpy as np
 
-import pyworkflow.protocol.constants as const
-from pyworkflow.object import Float, String, CsvList
-from pyworkflow.protocol.params import (BooleanParam, EnumParam, FloatParam,
-                                        IntParam)
+import pyworkflow.utils as pwutils
+from pyworkflow.object import Float, CsvList
+from pyworkflow.protocol import params
 from pwem.objects import Volume
 
 from xmipp3.protocols.protocol_preprocess import XmippResizeHelper
 from xmipp3.protocols.protocol_preprocess.protocol_preprocess import XmippProcessParticles, XmippProcessVolumes
+
+from flexutils.objects import SetOfFlexParticles
+from flexutils.protocols.protocol_base import ProtFlexBase
+import flexutils.constants as const
 
 
 def _getSize(imgSet):
@@ -52,7 +55,7 @@ def _getSampling(imgSet):
     return samplingRate
 
 
-class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
+class XmippProtCropResizeZernikeParticles(XmippProcessParticles, ProtFlexBase):
     """ Crop or resize a set of particles with Zernike3D coefficients associated """
     _label = 'crop/resize zernike particles'
     _inputLabel = 'particles'
@@ -61,6 +64,19 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
         XmippProcessParticles.__init__(self, **kwargs)
 
     # --------------------------- DEFINE param functions --------------------------------------------
+    def _defineParams(self, form):
+        form.addSection(label=pwutils.Message.LABEL_INPUT)
+
+        form.addParam('inputParticles', params.PointerParam,
+                      pointerClass='SetOfFlexParticles',
+                      label=pwutils.Message.LABEL_INPUT_PART, important=True)
+        # Hook that should be implemented in subclasses
+        self._defineProcessParams(form)
+
+        __threads, __mpi = self._getDefaultParallel()
+
+        form.addParallelSection(threads=__threads, mpi=__mpi)
+
     def _defineProcessParams(self, form):
         XmippResizeHelper._defineProcessParams(self, form)
         form.addParallelSection(threads=0, mpi=8)
@@ -85,11 +101,11 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
         inputParticles = self.inputParticles.get()
         self.inputHasAlign = inputParticles.hasAlignment()
 
-        output.L1 = inputParticles.L1
-        output.L2 = inputParticles.L2
+        output.L1 = inputParticles.getFlexInfo().L1
+        output.L2 = inputParticles.getFlexInfo().L2
         if self.doResize:
             output.setSamplingRate(self.samplingRate)
-            output.Rmax = Float(self.factor * self.inputParticles.get().Rmax.get())
+            output.getFlexInfo().Rmax = Float(self.factor * self.inputParticles.get().getFlexInfo().Rmax.get())
 
     def _updateItem(self, item, row):
         """ Update also the sampling rate and
@@ -104,11 +120,12 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
                 item.getTransform().scaleShifts(self.factor)
 
             # Scale Zernike3D information
-            z_clnm = self.factor * np.fromstring(item._xmipp_sphCoefficients.get(), dtype=float, sep=',')
-            csv_z_clnm = CsvList()
-            for c in z_clnm:
-                csv_z_clnm.append(c)
-            item._xmipp_sphCoefficients = csv_z_clnm
+            z_clnm = self.factor * item.getZFlex()
+            item.setZFlex(z_clnm)
+
+            if hasattr(item.getFlexInfo(), "deformation"):
+                deformation = item.getFlexInfo().deformation.get()
+                item.getFlexInfo().deformation = Float(self.factor * deformation)
 
 
     # --------------------------- INFO functions ----------------------------------------------------
@@ -162,7 +179,18 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles):
         return [str]
 
     def _validate(self):
-        return XmippResizeHelper._validate(self)
+        errors = XmippResizeHelper._validate(self)
+
+        inputParticles = self.inputParticles.get()
+
+        inputParticles = self.inputParticles.get()
+        if isinstance(inputParticles, SetOfFlexParticles):
+            if inputParticles.getFlexInfo().getProgName() != const.ZERNIKE3D:
+                errors.append("The flexibility information associated with the particles is not "
+                              "coming from the Zernike3D algorithm. Please, provide a set of particles "
+                              "with the correct flexibility information.")
+
+        return errors
 
     # --------------------------- UTILS functions ---------------------------------------------------
     def _ioArgs(self, isFirstStep):
