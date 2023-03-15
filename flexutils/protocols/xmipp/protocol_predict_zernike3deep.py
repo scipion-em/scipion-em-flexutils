@@ -237,7 +237,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
                 outParticle.getTransform().setMatrix(tr)
 
-            partSet.append(particle)
+            partSet.append(outParticle)
 
         partSet.getFlexInfo().L1 = Integer(zernikeProtocol.l1.get())
         partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
