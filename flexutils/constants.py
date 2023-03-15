@@ -32,10 +32,13 @@ import flexutils
 
 # Conda environment requirements
 CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
-TENSORFLOW_2_3_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_2_3_requirements.txt')
-TENSORFLOW_2_4_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_2_4_requirements.txt')
-TENSORFLOW_2_11_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'tensorflow_2_11_requirements.txt')
 
 # Location inside plugin
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
 XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
+
+# Program labels
+ZERNIKE3D = "Zernike3D"
+HETSIREN = "HetSIREN"
+NMA = "NMA"
+CRYODRGN = "CryoDRGN"
