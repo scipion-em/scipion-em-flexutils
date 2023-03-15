@@ -46,10 +46,12 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import FlexParticle
 from flexutils.utils import getXmippFileName
 
 
-class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
+class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with the Zernike3Deep algortihm. """
     _label = 'angular align - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
@@ -329,7 +331,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
             delta_shift_y = metadata[:, 'delta_shift_y']
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -342,11 +344,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
         for idx, particle in enumerate(inputSet.iterItems()):
             # z = correctionFactor * zernike_space[idx]
 
-            csv_z_space = CsvList()
-            for c in zernike_space[idx]:
-                csv_z_space.append(c)
+            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
 
-            particle._xmipp_sphCoefficients = csv_z_space
+            outParticle.setZFlex(zernike_space[idx])
 
             if self.refinePose.get():
                 tr_ori = particle.getTransform().getMatrix()
@@ -363,39 +364,39 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D):
 
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
-                particle.getTransform().setMatrix(tr)
+                outParticle.getTransform().setMatrix(tr)
 
-            partSet.append(particle)
+            partSet.append(outParticle)
 
-        partSet.L1 = Integer(self.l1.get())
-        partSet.L2 = Integer(self.l2.get())
-        partSet.pad = Integer(self.pad.get())
-        partSet.Rmax = Float(Xdim / 2)
-        partSet.modelPath = String(model_path)
+        partSet.getFlexInfo().L1 = Integer(self.l1.get())
+        partSet.getFlexInfo().L2 = Integer(self.l2.get())
+        partSet.getFlexInfo().pad = Integer(self.pad.get())
+        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet.getFlexInfo().modelPath = String(model_path)
 
         if self.referenceType.get() == 0:
             inputMask = self.inputVolumeMask.get().getFileName()
             inputVolume = self.inputVolume.get().getFileName()
-            partSet.refMask = String(inputMask)
-            partSet.refMap = String(inputVolume)
+            partSet.getFlexInfo().refMask = String(inputMask)
+            partSet.getFlexInfo().refMap = String(inputVolume)
         else:
             structure = self.inputStruct.get().getFileName()
-            partSet.refStruct = String(structure)
+            partSet.getFlexInfo().refStruct = String(structure)
 
         if self.refinePose.get():
-            partSet.refPose = Boolean(True)
+            partSet.getFlexInfo().refPose = Boolean(True)
         else:
-            partSet.refPose = Boolean(False)
+            partSet.getFlexInfo().refPose = Boolean(False)
 
         if self.architecture.get() == 0:
-            partSet.architecture = String("convnn")
+            partSet.getFlexInfo().architecture = String("convnn")
         elif self.architecture.get() == 1:
-            partSet.architecture = String("mlpnn")
+            partSet.getFlexInfo().architecture = String("mlpnn")
 
         if self.ctfType.get() == 0:
-            partSet.ctfType = String("apply")
+            partSet.getFlexInfo().ctfType = String("apply")
         elif self.ctfType.get() == 1:
-            partSet.ctfType = String("wiener")
+            partSet.getFlexInfo().ctfType = String("wiener")
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

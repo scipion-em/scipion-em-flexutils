@@ -46,10 +46,12 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import FlexParticle
 from flexutils.utils import getXmippFileName
 
 
-class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
+class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     """ Predict Zernike3D coefficents for a set of particles based on a trained
      Zernike3Deep network. """
     _label = 'predict - Zernike3Deep'
@@ -200,7 +202,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         refinePose = zernikeProtocol.refinePose.get()
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -213,11 +215,10 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
         for idx, particle in enumerate(inputSet.iterItems()):
             # z = correctionFactor * zernike_space[idx]
 
-            csv_z_space = CsvList()
-            for c in zernike_space[idx]:
-                csv_z_space.append(c)
+            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
 
-            particle._xmipp_sphCoefficients = csv_z_space
+            outParticle.setZFlex(zernike_space[idx])
 
             if refinePose:
                 tr_ori = particle.getTransform().getMatrix()
@@ -234,25 +235,25 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D):
 
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
-                particle.getTransform().setMatrix(tr)
+                outParticle.getTransform().setMatrix(tr)
 
             partSet.append(particle)
 
-        partSet.L1 = Integer(zernikeProtocol.l1.get())
-        partSet.L2 = Integer(zernikeProtocol.l2.get())
-        partSet.Rmax = Float(Xdim / 2)
-        partSet.modelPath = String(model_path)
+        partSet.getFlexInfo().L1 = Integer(zernikeProtocol.l1.get())
+        partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
+        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet.getFlexInfo().modelPath = String(model_path)
 
         if zernikeProtocol.referenceType.get() == 0:
             inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
             inputVolume = zernikeProtocol.inputVolume.get().getFileName()
-            partSet.refMask = String(inputMask)
-            partSet.refMap = String(inputVolume)
+            partSet.getFlexInfo().refMask = String(inputMask)
+            partSet.getFlexInfo().refMap = String(inputVolume)
         else:
             structure = zernikeProtocol.inputStruct.get().getFileName()
-            partSet.refStruct = String(structure)
+            partSet.getFlexInfo().refStruct = String(structure)
 
-        partSet.refPose = refinePose
+        partSet.getFlexInfo().refPose = refinePose
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
