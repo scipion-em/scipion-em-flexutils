@@ -61,7 +61,7 @@ class FlexParticle(Particle):
     def getZRed(self):
         return np.fromstring(self._zRed.get(), sep=",")
 
-    def setZRef(self, zRed):
+    def setZRed(self, zRed):
         csvZRed = CsvList()
         for c in zRed:
             csvZRed.append(c)
