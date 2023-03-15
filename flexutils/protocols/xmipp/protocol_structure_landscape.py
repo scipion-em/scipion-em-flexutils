@@ -37,10 +37,12 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, Boolea
 from pwem.protocols import ProtAnalysis3D
 
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import FlexParticle, SetOfFlexParticles
 import flexutils.constants as const
 
 
-class XmippProtStructureLanscapes(ProtAnalysis3D):
+class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
     """ Reduced structure based conformational landscape """
 
     _label = 'structure landscape'
@@ -63,22 +65,12 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Input particles",
-                      pointerClass='SetOfParticles', important=True,
+                      pointerClass='SetOfFlexParticles', important=True,
                       help="Particles must have a Zernike3D flexibility information associated")
         form.addParam('structure', PointerParam, label="Input structures",
                       pointerClass='AtomStruct',
                       help="This structure must be traced (or at least fitted) to the reference "
                            "map used to compute the input particles' Zernike3D coefficients.")
-        form.addParam('l1', IntParam, default=3,
-                      label='Zernike Degree',
-                      expertLevel=LEVEL_ADVANCED,
-                      condition="particles and not hasattr(particles,'L1')",
-                      help='Degree Zernike Polynomials of the deformation=1,2,3,...')
-        form.addParam('l2', IntParam, default=2,
-                      label='Harmonical Degree',
-                      condition="particles and not hasattr(particles,'L2')",
-                      expertLevel=LEVEL_ADVANCED,
-                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         form.addParam('save', EnumParam, choices=['Structures', 'Residuals'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Space based on: ",
@@ -156,19 +148,20 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
         red_space = np.loadtxt(file_coords)
 
         inputSet = self.particles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
+            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
 
-            csv_z_space = CsvList()
-            for c in red_space[idx]:
-                csv_z_space.append(c)
+            outParticle.setZRed(red_space[idx])
 
-            particle._red_space = csv_z_space
+            partSet.append(outParticle)
 
-            partSet.append(particle)
+            idx += 1
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.particles, partSet)
@@ -177,13 +170,13 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
     def computeAtomTheshold(self):
         particles = self.particles.get()
         structure = self.structure.get()
-        l1 = particles.L1.get() if hasattr(particles, "L1") else self.l1.get()
-        l2 = particles.L2.get() if hasattr(particles, "L2") else self.l2.get()
+        l1 = particles.getFlexInfo().L1.get()
+        l2 = particles.getFlexInfo().L2.get()
 
         # ********* Get Z space *********
         z_space = []
         for particle in particles.iterItems():
-            z_space.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+            z_space.append(particle.getZFlex())
         z_space = np.asarray(z_space)
 
         # ********************
@@ -205,13 +198,13 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
     def computeReducedSpace(self):
         particles = self.particles.get()
         structure = self.structure.get()
-        l1 = particles.L1.get() if hasattr(particles, "L1") else self.l1.get()
-        l2 = particles.L2.get() if hasattr(particles, "L2") else self.l2.get()
+        l1 = particles.getFlexInfo().L1.get()
+        l2 = particles.getFlexInfo().L2.get()
 
         # ********* Get Z space *********
         z_space = []
         for particle in particles.iterItems():
-            z_space.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
+            z_space.append(particle.getZFlex())
         z_space = np.asarray(z_space)
 
         # ********************
@@ -275,11 +268,14 @@ class XmippProtStructureLanscapes(ProtAnalysis3D):
             "Dimensionality reduction of spaces based on different methods",
         ]
 
-    def _validate(self):
+    # ----------------------- VALIDATE functions ----------------------------------------
+    def validate(self):
+        """ Try to find errors on define params. """
         errors = []
-
-        particle = self.particles.get().getFirstItem()
-        if not hasattr(particle, "_xmipp_sphCoefficients"):
-            errors.append("Particles must have Zernike3D information associated")
-
+        particles = self.particles.get()
+        if isinstance(particles, SetOfFlexParticles):
+            if particles.getFlexInfo().getProgName() != const.ZERNIKE3D:
+                errors.append("The flexibility information associated with the particles is not "
+                              "coming from the Zernike3D algorithm. Please, provide a set of particles "
+                              "with the correct flexibility information.")
         return errors
