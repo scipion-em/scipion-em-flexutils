@@ -43,6 +43,12 @@ class FlexParticle(Particle):
         self._zRed = CsvList()
         self._transform = Transform()
 
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
+
     def getZFlex(self):
         return np.fromstring(self._zFlex.get(), sep=",")
 
