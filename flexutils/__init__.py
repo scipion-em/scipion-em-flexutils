@@ -38,7 +38,7 @@ import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
 import flexutils
-from flexutils.constants import CONDA_REQ, TENSORFLOW_2_3_REQ, TENSORFLOW_2_11_REQ
+from flexutils.constants import CONDA_REQ
 
 
 __version__ = "3.0.1"
