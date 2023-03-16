@@ -69,27 +69,20 @@ class XmippReducedSpaceViewer(ProtocolViewer):
         red_space = []
         z_clnm = []
         particles = self.protocol.outputParticles
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
-            for particle in particles.iterItems():
-                z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
-            for particle in particles.iterItems():
-                z_clnm.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
-                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
-        elif hasattr(particles.getFirstItem(), "_xmipp_nmaCoefficients"):
-            for particle in particles.iterItems():
-                z_clnm.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
-                red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+        for particle in particles.iterItems():
+            z_clnm.append(particle.getZFlex())
+            red_space.append(particle.getZRed())
         z_clnm = np.asarray(z_clnm)
         red_space = np.asarray(red_space)
+        if red_space.shape[1] < 3:
+            raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
         # Generate files to call command line
         file_red_space = self.protocol._getExtraPath("red_coords.txt")
         file_deformation = self.protocol._getExtraPath("deformation.txt")
         np.savetxt(file_red_space, red_space)
 
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             deformation = computeNormRows(z_clnm)
         else:
             deformation = np.zeros(z_clnm.shape)
