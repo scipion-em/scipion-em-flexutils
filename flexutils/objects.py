@@ -114,7 +114,7 @@ class VolumeFlex(Volume):
 
     def __init__(self, progName="", **kwargs):
         Volume.__init__(self, **kwargs)
-        self._flexInfo = FlexInfo(progName="")
+        self._flexInfo = FlexInfo(progName=progName)
         self._zFlex = CsvList()
         self._zRed = CsvList()
 
