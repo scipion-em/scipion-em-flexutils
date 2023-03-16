@@ -42,12 +42,14 @@ from pwem.objects import SetOfClasses3D, Class3D, Volume, SetOfVolumes
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ClassFlex, VolumeFlex, SetOfClassesFlex, SetOfVolumesFlex
 import flexutils.constants as const
 
 import xmipp3
 
 
-class ProtFlexClusterSpace(ProtAnalysis3D):
+class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
     """ Interactive clustering of conformational spaces """
 
     _label = 'cluster space'
@@ -58,44 +60,22 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Particles to annotate",
-                      pointerClass='SetOfParticles', important=True,
+                      pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
-        form.addParam('reference', PointerParam, label="Reference map",
-                      pointerClass='Volume', important=True,
-                      condition="particles and not hasattr(particles,'refMap') "
-                                "and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
-                      help='Map used as reference during the Zernike3D execution')
-        form.addParam('mask', PointerParam, label="Zernike3D mask",
-                      pointerClass='VolumeMask', important=True,
-                      condition="particles and not hasattr(particles,'refMask') "
-                                "and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
-                      help="Mask determining where to compute the Zernike3D deformation field")
         form.addHidden('volumes', PointerParam, label="Priors", allowsNull=True,
-                       pointerClass="SetOfVolumes, Volume",
-                       condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
+                       pointerClass="SetOfVolumesFlex, VolumeFlex",
+                       condition="particles and particles.getFlexInfo().getProgName() == 'Zernike3D'",
                        help='A set of volumes with Zernike3D coefficients associated (computed using '
                             '"Reference map" as reference) to add as prior information to the Zernike3D '
                             'space')
         form.addParam('priors', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumes, Volume",
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')",
+                      condition="particles and particles.getFlexInfo().getProgName() == 'Zernike3D'",
                       help='Volumes with Zernike3D coefficients associated (computed using '
                            '"Refernce map" as reference) to add as prior information to the Zernike3D '
                            'space')
-        form.addParam('l1', IntParam, default=3,
-                      label='Zernike Degree',
-                      expertLevel=LEVEL_ADVANCED,
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
-                                "and not hasattr(particles,'L1')",
-                      help='Degree Zernike Polynomials of the deformation=1,2,3,...')
-        form.addParam('l2', IntParam, default=2,
-                      label='Harmonical Degree',
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
-                                "and not hasattr(particles,'L2')",
-                      expertLevel=LEVEL_ADVANCED,
-                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         form.addParam('boxSize', IntParam, label="Box size",
-                      condition="particles and hasattr(particles.getFirstItem(),'_cryodrgnZValues')",
+                      condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN'",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
 
@@ -123,45 +103,28 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
         # Create SetOfClasses3D
         suffix = getOutputSuffix(self, SetOfClasses3D)
-        classes3D = self._createSetOfClasses3D(particles, suffix)
+        flexClasses = self._createSetOfClassesFlex(particles, suffix)
 
         # Popoulate SetOfClasses3D with KMean particles
         for clInx in range(z_space_vw.shape[0]):
             currIds = np.where(km_labels == clInx)[0]
 
-            newClass = Class3D()
+            newClass = ClassFlex()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
-            representative = Volume()
-            csv_z_space = CsvList()
-            for c in z_space_vw[clInx]:
-                csv_z_space.append(c)
+            representative = VolumeFlex()
 
             # ****** Fill representative information *******
-            if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
-                reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
-                mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
+            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                reference = particles.getFlexInfo().refMap.get()
 
                 # Resize coefficients
                 factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
-                for idx in range(len(csv_z_space)):
-                    csv_z_space[idx] *= factor
-
-                L1 = particles.L1.get() if hasattr(particles, 'L1') else self.l1.get()
-                L2 = particles.L2.get() if hasattr(particles, 'L2') else self.l2.get()
-                # Rmax = particles.Rmax
-                reference_file = String(reference)
-                mask_file = String(mask)
+                z_space_vw[clInx] *= factor
 
                 representative.setLocation(reference)
-                representative.L1 = L1
-                representative.L2 = L2
-                # representative.Rmax = Rmax
-                representative.refMap = reference_file
-                representative.refMask = mask_file
-                representative._xmipp_sphCoefficients = csv_z_space
 
-            elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
+            elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
                 from cryodrgn.utils import generateVolumes
                 generateVolumes(z_space_vw[clInx], particles._cryodrgnWeights.get(),
                                 particles._cryodrgnConfig.get(), self._getExtraPath(), downsample=self.boxSize.get(),
@@ -170,30 +133,39 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                                             self._getExtraPath('class_%d.mrc') % clInx, 1,
                                             finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
-                representative._cryodrgnZValues = csv_z_space
 
+            elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                from flexutils.utils import generateVolumes
+                generateVolumes(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
+                                self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
+                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_1.mrc'),
+                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
+                                            finalDimension=particles.getXDim())
+                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+
+            representative.setZFlex(z_space_vw[clInx])
+            representative.getFlexInfo().copyInfo(particles.getFlexInfo())
             # ********************
 
             representative.setSamplingRate(sr)
             newClass.setRepresentative(representative)
 
-            classes3D.append(newClass)
+            flexClasses.append(newClass)
 
-            enabledClass = classes3D[newClass.getObjId()]
+            enabledClass = flexClasses[newClass.getObjId()]
             enabledClass.enableAppend()
             for itemId in currIds:
                 item = particles[partIds[itemId]]
                 enabledClass.append(item)
 
-            classes3D.update(enabledClass)
+            flexClasses.update(enabledClass)
 
         # Save new output
         name = self.OUTPUT_PREFIX + suffix
         args = {}
-        args[name] = classes3D
+        args[name] = flexClasses
         self._defineOutputs(**args)
-        self._defineSourceRelation(particles, classes3D)
-        self._updateOutputSet(name, classes3D, state=classes3D.STREAM_CLOSED)
+        self._defineSourceRelation(particles, flexClasses)
 
     # --------------------------- STEPS functions -----------------------------
     def launchInteractiveClustering(self):
@@ -202,9 +174,15 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
 
         # ********* Get Z space *********
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
-            reference = particles.refMap.get() if hasattr(particles, "refMap") else self.reference.get().getFileName()
-            mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
+        z_space = []
+        for particle in particles.iterItems():
+            z_space.append(particle.getZFlex())
+        z_space = np.asarray(z_space)
+        print(z_space.shape)
+
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            reference = particles.getFlexInfo().refMap.get()
+            mask = particles.getFlexInfo().refMask.get()
             volumes = self.priors
 
             # Copy original reference and mask to extra
@@ -235,35 +213,18 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
                                                        64), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
                 self.runJob("xmipp_transform_threshold",
                             "-i %s -o %s --select below 0.01 "
-                            "--substitute binarize " % (outFile, outFile), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "--substitute binarize " % (outFile, outFile), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
 
-
-            # Get image coefficients and scale them to reference size
-            # FIXME: Can we do the for loop with the aggregate? (follow ID order)
-            # factor = 64 / particles.getXDim()
-            # z_clnm_part = particles.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
-            # z_clnm_part = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_part])
-            z_space = []
-            for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-            z_space = np.asarray(z_space)
-
-            # Get volume coefficients (if exist) and scale them to reference size
-            # FIXME: Can we do the for loop with the aggregate? (follow ID order)
-            # z_clnm_vol = np.asarray([np.zeros(z_clnm_part.shape[1])])
-            # if volumes:
-            #     z_clnm_aux = volumes.aggregate(["MAX"], "_index", ["_xmipp_sphCoefficients", "_index"])
-            #     z_clnm_aux = factor * np.asarray([np.fromstring(d['_xmipp_sphCoefficients'], sep=",") for d in z_clnm_aux])
-            #     z_clnm_vol = factor * np.vstack([z_clnm_vol, z_clnm_aux])
             z_space_vol = []
             if volumes:
                 for pointer in volumes:
                     item = pointer.get()
-                    if isinstance(item, Volume):
-                        z_space_vol.append(np.fromstring(item._xmipp_sphCoefficients.get(), sep=","))
-                    elif isinstance(item, SetOfVolumes):
+                    if isinstance(item, VolumeFlex):
+                        z_space_vol.append(item.getZFlex())
+                    elif isinstance(item, SetOfVolumesFlex):
                         for volume in item.iterItems():
-                            z_space_vol.append(np.fromstring(volume._xmipp_sphCoefficients.get(), sep=","))
+                            z_space_vol.append(volume.getZFlex())
             z_space_vol = np.asarray(z_space_vol)
 
             # Get useful parameters
@@ -273,13 +234,6 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
 
             # Resize coefficients
             z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
-
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
-            z_space = []
-            for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
-            z_space = np.asarray(z_space)
-
         # ********************
 
         # Generate files to call command line
@@ -291,16 +245,15 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         file_coords = self._getExtraPath("red_coords.txt")
         red_space = []
         for particle in particles.iterItems():
-            red_space.append(np.fromstring(particle._red_space.get(), sep=","))
+            red_space.append(particle.getZRed())
         red_space = np.asarray(red_space)
         np.savetxt(file_coords, red_space)
 
         # ********* Get interpolation value for coloring the space *********
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             interp_val = computeNormRows(z_space)
         else:
             interp_val = np.ones([1, z_space.shape[0]])
-
         # *********
 
         # Generate files to call command line
@@ -309,19 +262,28 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
         path = self._getExtraPath()
 
         # ********* Run viewer *********
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
-            L1 = particles.L1.get() if hasattr(particles, 'L1') else self.l1.get()
-            L2 = particles.L2.get() if hasattr(particles, 'L2') else self.l2.get()
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            L1 = particles.getFlexInfo().L1.get()
+            L2 = particles.getFlexInfo().L2.get()
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--L1 %d --L2 %d --n_vol %d --mode Zernike3D" \
                    % (file_coords, file_z_space, file_interp_val, path, L1, L2,
                       self.num_vol)
 
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
+        elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
                    % (file_coords, file_z_space, file_interp_val, path,
-                      particles._cryodrgnWeights.get(), particles._cryodrgnConfig.get(), self.boxSize.get(),
+                      particles.getFlexInfo()._cryodrgnWeights.get(),
+                      particles.getFlexInfo()._cryodrgnConfig.get(), self.boxSize.get(),
+                      particles.getSamplingRate())
+
+        elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+            args = "--data %s --z_space %s --interp_val %s --path %s " \
+                   "--weights %s --step %d --sr %f --mode HetSIREN" \
+                   % (file_coords, file_z_space, file_interp_val, path,
+                      particles.getFlexInfo().modelPath.get(),
+                      particles.getFlexInfo().coordStep.get(),
                       particles.getSamplingRate())
 
         program = os.path.join(const.VIEWERS, "viewer_3d_pc.py")
@@ -350,12 +312,17 @@ class ProtFlexClusterSpace(ProtAnalysis3D):
             "Interactive automatic clustering of conformational spaces",
         ]
 
-    def _validate(self):
+    # ----------------------- VALIDATE functions ----------------------------------------
+    def validate(self):
+        """ Try to find errors on define params. """
         errors = []
-        red_c = np.fromstring(self.particles.get().getFirstItem()._red_space.get(), sep=",")
-        dim = red_c.size
-
-        if dim < 3:
-            errors.append("This protocols has been implemented only for reduced spaces of three dimensions")
-
+        particles = self.particles.get()
+        if particles.getFirstItem().getZRed().size == 0:
+            errors.append("Particles do not have any dimensionality reduced version of the flexibility information "
+                          "they store. Please, used the dimensionality reduction protocol available "
+                          "in Flexutils Plugin to generate a valid set of particles")
+        elif particles.getFirstItem().getZRed().size != 3:
+            errors.append("Cluster space is only implemented for reduced spaces of 3 dimensions. Please, used the "
+                          "dimensionality reduction protocol available in Flexutils Plugin to generate a valid "
+                          "set of particles")
         return errors
