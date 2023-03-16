@@ -39,6 +39,7 @@ from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import Tensor
 from flexutils.protocols.xmipp.protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep
 from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import TensorflowProtAngularAlignmentDeepNMA
 from flexutils.protocols.xmipp.protocol_predict_deep_nma import TensorflowProtPredictDeepNMA
+from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
 
 
 import flexutils.constants as const
@@ -52,7 +53,7 @@ class XmippLandscapeViewer(ProtocolViewer):
     _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D,
                 XmippProtReassignReferenceZernike3D, TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtPredictZernike3Deep, TensorflowProtAngularAlignmentDeepNMA,
-                TensorflowProtPredictDeepNMA]
+                TensorflowProtPredictDeepNMA, TensorflowProtAngularAlignmentHetSiren]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
@@ -99,13 +100,11 @@ class XmippLandscapeViewer(ProtocolViewer):
 
     def _doShowSpace(self, param=None):
         z_clnm = []
-        if "Zernike3D" in type(self.protocol).__name__:
-            for particle in self.protocol.outputParticles.iterItems():
-                z_clnm.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-        elif "NMA" in type(self.protocol).__name__:
-            for particle in self.protocol.outputParticles.iterItems():
-                z_clnm.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
+        for particle in self.protocol.outputParticles.iterItems():
+            z_clnm.append(particle.getZFlex())
         z_clnm = np.asarray(z_clnm)
+        if z_clnm.shape[1] < 3:
+            raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
         # Generate files to call command line
         file_z_clnm = self.protocol._getExtraPath("z_clnm.txt")
@@ -134,7 +133,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                 program = flexutils.Plugin.getProgram(program)
                 runJob(None, program, args)
 
-        if "Zernike3D" in type(self.protocol).__name__:
+        if self.protocol.outputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             deformation = computeNormRows(z_clnm)
         else:
             deformation = np.zeros(z_clnm.shape)
