@@ -45,15 +45,14 @@ class ProtFlexBase:
         setObj = SetClass(filename=setFn, **kwargs)
         return setObj
 
-    def _createSetOfFlexParticles(self, suffix='', **kwargs):
-        return self._createSet(flexutils.objects.SetOfFlexParticles,
+    def _createSetOfParticlesFlex(self, suffix='', **kwargs):
+        return self._createSet(flexutils.objects.SetOfParticlesFlex,
                                'flexparticles%s.sqlite', suffix, **kwargs)
 
-    def _createSetOfFlexClasses(self, flexParticles, suffix='', **kwargs):
-        classes = self._createSet(flexutils.objects.SetOfFlexParticles,
+    def _createSetOfClassesFlex(self, flexParticles, suffix='', **kwargs):
+        classes = self._createSet(flexutils.objects.SetOfClassesFlex,
                                   'flexClasses%s.sqlite', suffix, **kwargs)
         classes.setImages(flexParticles)
-
         return classes
 
     def _getOutputSuffix(self, cls):
