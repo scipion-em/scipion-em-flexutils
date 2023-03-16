@@ -170,6 +170,9 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         if self.filterDecoded.get():
             args += " --apply_filter"
 
+        if homoSirenProtocol.refinePose.get():
+            args += " --refine_pose"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
