@@ -37,10 +37,12 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, Boolea
 from pwem.protocols import ProtAnalysis3D
 
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 
 
-class ProtFlexDimRedSpace(ProtAnalysis3D):
+class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
     """ Dimensionality reduction of spaces based on different methods """
 
     _label = 'dimred space'
@@ -62,26 +64,8 @@ class ProtFlexDimRedSpace(ProtAnalysis3D):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Input particles",
-                      pointerClass='SetOfParticles', important=True,
+                      pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
-        form.addParam('l1', IntParam, default=3,
-                      label='Zernike Degree',
-                      expertLevel=LEVEL_ADVANCED,
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
-                                "and not hasattr(particles,'L1')",
-                      help='Degree Zernike Polynomials of the deformation=1,2,3,...')
-        form.addParam('l2', IntParam, default=2,
-                      label='Harmonical Degree',
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_sphCoefficients')"
-                                "and not hasattr(particles,'L2')",
-                      expertLevel=LEVEL_ADVANCED,
-                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
-        form.addParam('n_modes', IntParam, default=2,
-                      label='Harmonical Degree',
-                      condition="particles and hasattr(particles.getFirstItem(),'_xmipp_nmaCoefficients')"
-                                "and not hasattr(particles,'n_modes')",
-                      expertLevel=LEVEL_ADVANCED,
-                      help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         form.addParam('mode', EnumParam, choices=['UMAP', 'PCA', 'deepElastic'],
                       default=0, display=EnumParam.DISPLAY_HLIST,
                       label="Dimensionality reduction method",
@@ -151,20 +135,21 @@ class ProtFlexDimRedSpace(ProtAnalysis3D):
         red_space = np.loadtxt(file_coords)
 
         inputSet = self.particles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
 
-            csv_z_space = CsvList()
-            for c in red_space[idx]:
-                csv_z_space.append(c)
+            outParticle.setZRed(red_space[idx])
 
-            particle._red_space = csv_z_space
+            partSet.append(outParticle)
 
-            partSet.append(particle)
+            idx += 1
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.particles, partSet)
@@ -176,19 +161,9 @@ class ProtFlexDimRedSpace(ProtAnalysis3D):
 
         # ********* Get Z space *********
         z_space = []
-        if hasattr(particles.getFirstItem(), "_xmipp_sphCoefficients"):
-            for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._xmipp_sphCoefficients.get(), sep=","))
-            z_space = np.asarray(z_space)
-        elif hasattr(particles.getFirstItem(), "_cryodrgnZValues"):
-            for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._cryodrgnZValues.get(), sep=","))
-            z_space = np.asarray(z_space)
-        elif hasattr(particles.getFirstItem(), "_xmipp_nmaCoefficients"):
-            for particle in particles.iterItems():
-                z_space.append(np.fromstring(particle._xmipp_nmaCoefficients.get(), sep=","))
-            z_space = np.asarray(z_space)
-
+        for particle in particles.iterItems():
+            z_space.append(particle.getZFlex())
+        z_space = np.asarray(z_space)
         # ********************
 
         # Generate files to call command line
