@@ -28,6 +28,7 @@
 
 import numpy as np
 import os
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String
@@ -40,16 +41,18 @@ from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import (writeSetOfParticles, createItemMatrix,
-                            setXmippAttributes)
+                            setXmippAttributes, matrixFromGeometry)
 from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils.constants as const
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
-class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
+class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Assignation of heterogeneity priors based on the Zernike3D basis. """
     _label = 'assign heterogeneity priors - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
@@ -235,14 +238,12 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
 
 
     def createOutputStep(self):
-        Xdim = self.inputParticles.get().getXDim()
-        # self.Ts = inputParticles.getSamplingRate()
-        # newTs = self.targetResolution.get() * 1.0 / 3.0
-        # self.newTs = max(self.Ts, newTs)
-        # self.newXdim = int(Xdim * self.Ts / newTs)
+        inputParticles = self.getInputParticles()
+        Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        correctionFactor = Xdim / self.newXdim
         fnOut = self._getFileName('fnOut')
-        mdOut = md.MetaData(fnOut)
+        mdOut = XmippMetaData(fnOut)
 
         # Zernike3D info
         inputPriors = self.inputPriors.get()
@@ -252,40 +253,39 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get()
         inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolume.get()
 
-        newMdOut = md.MetaData()
-        i = 0
-        for row in md.iterRows(mdOut):
-            newRow = row
-            if self.newXdim != Xdim:
-                coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
-                deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
-                correctionFactor = Xdim / self.newXdim
-                coeffs = [correctionFactor * coeff for coeff in coeffs]
-                newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
-                newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
-                shiftX = correctionFactor * mdOut.getValue(md.MDL_SHIFT_X, row.getObjId())
-                shiftY = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Y, row.getObjId())
-                shiftZ = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Z, row.getObjId())
-                newRow.setValue(md.MDL_SHIFT_X, shiftX)
-                newRow.setValue(md.MDL_SHIFT_Y, shiftY)
-                newRow.setValue(md.MDL_SHIFT_Z, shiftZ)
-            newRow.addToMd(newMdOut)
-            i += 1
-        newMdOut.write(fnOut)
+        coeffs = correctionFactor * np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
+        deformation = correctionFactor * mdOut[:, "sphDeformation"]
+        shifts = correctionFactor * mdOut[:, ["shiftX", "shiftY", "shiftZ"]]
+        angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
 
-        inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
-        partSet.copyInfo(inputSet)
+        partSet.copyInfo(inputParticles)
         partSet.setAlignmentProj()
-        partSet.copyItems(inputSet,
-                          updateItemCallback=self._updateParticle,
-                          itemDataIterator=md.iterRows(fnOut, sortByLabel=md.MDL_ITEM_ID))
-        partSet.L1 = Integer(L1)
-        partSet.L2 = Integer(L2)
-        partSet.Rmax = Float(Rmax)
-        partSet.refMask = String(inputMask)
-        partSet.refMap = String(inputVolume)
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
+        idx = 0
+        for particle in inputParticles.iterItems():
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
+
+            outParticle.setZFlex(coeffs[idx])
+            outParticle.getFlexInfo().deformation = Float(deformation[idx])
+
+            # Set new transformation matrix
+            tr = matrixFromGeometry(shifts[idx], angles[idx], inverseTransform)
+            outParticle.getTransform().setMatrix(tr)
+
+            partSet.append(outParticle)
+
+            idx += 1
+
+        partSet.getFlexInfo().L1 = Integer(L1)
+        partSet.getFlexInfo().L2 = Integer(L2)
+        partSet.getFlexInfo().Rmax = Float(Rmax)
+        partSet.getFlexInfo().refMask = String(inputMask)
+        partSet.getFlexInfo().refMap = String(inputVolume)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

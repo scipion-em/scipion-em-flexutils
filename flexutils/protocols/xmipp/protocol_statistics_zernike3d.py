@@ -38,7 +38,7 @@ import flexutils.constants as const
 import pwem.emlib.metadata as md
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 
-from flexutils.objects import SetOfFlexParticles
+from flexutils.objects import SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -53,7 +53,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Zernike3D particles",
-                      pointerClass='SetOfFlexParticles', important=True,
+                      pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a set of Zernike3D coefficients associated")
         form.addParam('structure', PointerParam, label="Atomic structure",
                       pointerClass="AtomStruct", allowsNull=True,
@@ -119,7 +119,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
         """ Try to find errors on define params. """
         errors = []
         particles = self.particles.get()
-        if isinstance(particles, SetOfFlexParticles):
+        if isinstance(particles, SetOfParticlesFlex):
             if particles.getFlexInfo().getProgName() != const.ZERNIKE3D:
                 errors.append("The flexibility information associated with the particles is not "
                               "coming from the Zernike3D algorithm. Please, provide a set of particles "

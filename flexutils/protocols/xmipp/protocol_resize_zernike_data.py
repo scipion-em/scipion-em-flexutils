@@ -36,7 +36,7 @@ from pwem.objects import Volume
 from xmipp3.protocols.protocol_preprocess import XmippResizeHelper
 from xmipp3.protocols.protocol_preprocess.protocol_preprocess import XmippProcessParticles, XmippProcessVolumes
 
-from flexutils.objects import SetOfFlexParticles
+from flexutils.objects import SetOfParticlesFlex
 from flexutils.protocols.protocol_base import ProtFlexBase
 import flexutils.constants as const
 
@@ -68,7 +68,7 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles, ProtFlexBase):
         form.addSection(label=pwutils.Message.LABEL_INPUT)
 
         form.addParam('inputParticles', params.PointerParam,
-                      pointerClass='SetOfFlexParticles',
+                      pointerClass='SetOfParticlesFlex',
                       label=pwutils.Message.LABEL_INPUT_PART, important=True)
         # Hook that should be implemented in subclasses
         self._defineProcessParams(form)
@@ -184,7 +184,7 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles, ProtFlexBase):
         inputParticles = self.inputParticles.get()
 
         inputParticles = self.inputParticles.get()
-        if isinstance(inputParticles, SetOfFlexParticles):
+        if isinstance(inputParticles, SetOfParticlesFlex):
             if inputParticles.getFlexInfo().getProgName() != const.ZERNIKE3D:
                 errors.append("The flexibility information associated with the particles is not "
                               "coming from the Zernike3D algorithm. Please, provide a set of particles "

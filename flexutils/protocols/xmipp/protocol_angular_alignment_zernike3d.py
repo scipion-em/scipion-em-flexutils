@@ -29,6 +29,7 @@
 
 import numpy as np
 import os
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String
@@ -40,16 +41,18 @@ import pwem.emlib.metadata as md
 from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
-from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfImages, imageToRow, coordinateToRow
+from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, matrixFromGeometry
 from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils
 import flexutils.constants as const
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
-class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
+class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment based on Zernike3D basis. """
     _label = 'angular align - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
@@ -65,11 +68,12 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         #                expertLevel=params.LEVEL_ADVANCED,
         #                label="Choose GPU IDs",
         #                help="Add a list of GPU devices that can be used")
-        form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
+        form.addParam('inputParticles', params.PointerParam, label="Input particles",
+                      pointerClass='SetOfParticles, SetOfParticlesFlex')
         form.addParam('inputVolume', params.PointerParam, label="Input volume", pointerClass='Volume',
-                      condition="inputParticles and not hasattr(inputParticles,'refMap')")
+                      condition="inputParticles and not isinstance(inputParticles, SetOfParticlesFlex)")
         form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask',
-                      condition="inputParticles and not hasattr(inputParticles,'refMask')")
+                      condition="inputParticles and not isinstance(inputParticles, SetOfParticlesFlex)")
         form.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help='In general, downsampling the particles will increase performance without compromising '
@@ -79,11 +83,11 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         form.addParam('l1', params.IntParam, default=3,
                       label='Zernike Degree',
                       expertLevel=params.LEVEL_ADVANCED,
-                      condition="inputParticles and not hasattr(inputParticles,'L1')",
+                      condition="inputParticles and not isinstance(inputParticles, SetOfParticlesFlex)",
                       help='Degree Zernike Polynomials of the deformation=1,2,3,...')
         form.addParam('l2', params.IntParam, default=2,
                       label='Harmonical Degree',
-                      condition="inputParticles and not hasattr(inputParticles,'L2')",
+                      condition="inputParticles and not isinstance(inputParticles, SetOfParticlesFlex)",
                       expertLevel=params.LEVEL_ADVANCED,
                       help='Degree Spherical Harmonics of the deformation=1,2,3,...')
         # form.addParam('maxShift', params.FloatParam, default=-1,
@@ -144,13 +148,13 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         newTs = inputParticles.getSamplingRate() / correctionFactor
 
         ih = ImageHandler()
-        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get().getFileName()
+        inputVolume = inputParticles.getFlexInfo().refMap.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolume.get().getFileName()
         ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputVolume.get().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get().getFileName()
+        inputMask = inputParticles.getFlexInfo().refMask.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolumeMask.get().getFileName()
         if inputMask:
             ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
@@ -158,16 +162,16 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
                             "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                             env=xmipp3.Plugin.getEnviron())
 
-        if hasattr(inputParticles.getFirstItem(), '_xmipp_sphCoefficients'):
-            L1 = inputParticles.L1.get()
-            L2 = inputParticles.L2.get()
-            Rmax = correctionFactor * inputParticles.Rmax.get()
+        if isinstance(inputParticles, SetOfParticlesFlex):
+            L1 = inputParticles.getFlexInfo().L1.get()
+            L2 = inputParticles.getFlexInfo().L2.get()
+            Rmax = correctionFactor * inputParticles.getFlexInfo().Rmax.get()
             z_clnm_vec = {}
 
             with open(fnPriors, 'w') as f:
                 f.write(' '.join(map(str, [L1, L2, Rmax])) + "\n")
                 for particle in inputParticles.iterItems():
-                    z_clnm = np.fromstring(particle._xmipp_sphCoefficients.get(), sep=",")
+                    z_clnm = particle.getZFlex()
                     f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
                     z_clnm *= correctionFactor
                     z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
@@ -217,8 +221,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         fnVolMask = self._getFileName('fnVolMask')
         fnOutDir = self._getFileName('fnOutDir')
         Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
-        L1 = inputParticles.L1.get() if hasattr(inputParticles, 'L1') else self.l1.get()
-        L2 = inputParticles.L2.get() if hasattr(inputParticles, 'L2') else self.l2.get()
+        L1 = inputParticles.getFlexInfo().L1.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.l1.get()
+        L2 = inputParticles.getFlexInfo().L2.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.l2.get()
         maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts
         params = ' -i %s --ref %s -o %s --optimizeDeformation ' \
                  '--l1 %d --l2 %d --sampling %f ' \
@@ -244,63 +248,53 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
-        # self.Ts = inputParticles.getSamplingRate()
-        # newTs = self.targetResolution.get() * 1.0 / 3.0
-        # self.newTs = max(self.Ts, newTs)
-        # self.newXdim = int(Xdim * self.Ts / newTs)
         self.newXdim = self.boxSize.get()
+        correctionFactor = Xdim / self.newXdim
         fnOut = self._getFileName('fnOut')
-        mdOut = md.MetaData(fnOut)
+        mdOut = XmippMetaData(fnOut)
 
-        newMdOut = md.MetaData()
-        i = 0
-        for row in md.iterRows(mdOut):
-            newRow = row
-            if self.newXdim != Xdim:
-                coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
-                correctionFactor = Xdim / self.newXdim
-                deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
-                coeffs = [correctionFactor * coeff for coeff in coeffs]
-                newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
-                newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
-                shiftX = correctionFactor * mdOut.getValue(md.MDL_SHIFT_X, row.getObjId())
-                shiftY = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Y, row.getObjId())
-                shiftZ = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Z, row.getObjId())
-                newRow.setValue(md.MDL_SHIFT_X, shiftX)
-                newRow.setValue(md.MDL_SHIFT_Y, shiftY)
-                newRow.setValue(md.MDL_SHIFT_Z, shiftZ)
-            newRow.addToMd(newMdOut)
-            i += 1
-        newMdOut.write(fnOut)
+        coeffs = correctionFactor * np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
+        deformation = correctionFactor * mdOut[:, "sphDeformation"]
+        shifts = correctionFactor * mdOut[:, ["shiftX", "shiftY", "shiftZ"]]
+        angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
 
-        inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
-        inputMask = inputParticles.refMask.get() if hasattr(inputParticles, 'refMask') else self.inputVolumeMask.get().getFileName()
-        inputVolume = inputParticles.refMap.get() if hasattr(inputParticles, 'refMap') else self.inputVolume.get().getFileName()
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        inputMask = inputParticles.getFlexInfo().refMask.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolumeMask.get().getFileName()
+        inputVolume = inputParticles.getFlexInfo().refMap.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolume.get().getFileName()
 
-        partSet.copyInfo(inputSet)
+        partSet.copyInfo(inputParticles)
         partSet.setAlignmentProj()
-        partSet.copyItems(inputSet,
-                          updateItemCallback=self._updateParticle,
-                          itemDataIterator=md.iterRows(fnOut, sortByLabel=md.MDL_ITEM_ID))
-        partSet.L1 = Integer(self.l1.get())
-        partSet.L2 = Integer(self.l2.get())
-        partSet.Rmax = Float(Xdim / 2)
-        partSet.refMask = String(inputMask)
-        partSet.refMap = String(inputVolume)
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
+        idx = 0
+        for particle in inputParticles.iterItems():
+
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
+
+            outParticle.setZFlex(coeffs[idx])
+            outParticle.getFlexInfo().deformation = Float(deformation[idx])
+
+            # Set new transformation matrix
+            tr = matrixFromGeometry(shifts[idx], angles[idx], inverseTransform)
+            outParticle.getTransform().setMatrix(tr)
+
+            partSet.append(outParticle)
+
+            idx += 1
+
+        partSet.getFlexInfo().L1 = Integer(self.l1.get())
+        partSet.getFlexInfo().L2 = Integer(self.l2.get())
+        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet.getFlexInfo().refMask = String(inputMask)
+        partSet.getFlexInfo().refMap = String(inputVolume)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
 
-# --------------------------- UTILS functions --------------------------------------------
-    def _updateParticle(self, item, row):
-        setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
-                           md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
-                           md.MDL_FLIP, md.MDL_SPH_DEFORMATION,
-                           md.MDL_SPH_COEFFICIENTS)
-        createItemMatrix(item, row, align=ALIGN_PROJ)
-
+    # --------------------------- UTILS functions --------------------------------------------
     def getInputParticles(self):
         return self.inputParticles.get()
 
@@ -309,10 +303,9 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D):
         """ Try to find errors on define params. """
         errors = []
         inputParticles = self.inputParticles.get()
-        if not hasattr(inputParticles, 'L1') and hasattr(inputParticles, 'L2'):
-            l1 = self.l1.get()
-            l2 = self.l2.get()
-            if (l1 - l2) < 0:
-                errors.append('Zernike degree must be higher than '
-                              'SPH degree.')
+        if isinstance(inputParticles, SetOfParticlesFlex):
+            if inputParticles.getFlexInfo().getProgName() != const.ZERNIKE3D:
+                errors.append("The flexibility information associated with the particles is not "
+                              "coming from the Zernike3D algorithm. Please, provide a set of particles "
+                              "with the correct flexibility information.")
         return errors

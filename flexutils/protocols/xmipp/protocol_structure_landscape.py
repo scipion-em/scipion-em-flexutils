@@ -38,7 +38,7 @@ from pwem.protocols import ProtAnalysis3D
 
 import flexutils
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import FlexParticle, SetOfFlexParticles
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 import flexutils.constants as const
 
 
@@ -65,7 +65,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Input particles",
-                      pointerClass='SetOfFlexParticles', important=True,
+                      pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a Zernike3D flexibility information associated")
         form.addParam('structure', PointerParam, label="Input structures",
                       pointerClass='AtomStruct',
@@ -148,13 +148,13 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
         red_space = np.loadtxt(file_coords)
 
         inputSet = self.particles.get()
-        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
 
         idx = 0
         for particle in inputSet.iterItems():
-            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
 
             outParticle.setZRed(red_space[idx])
@@ -273,7 +273,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
         """ Try to find errors on define params. """
         errors = []
         particles = self.particles.get()
-        if isinstance(particles, SetOfFlexParticles):
+        if isinstance(particles, SetOfParticlesFlex):
             if particles.getFlexInfo().getProgName() != const.ZERNIKE3D:
                 errors.append("The flexibility information associated with the particles is not "
                               "coming from the Zernike3D algorithm. Please, provide a set of particles "
