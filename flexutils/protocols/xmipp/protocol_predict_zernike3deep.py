@@ -47,7 +47,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import FlexParticle
+from flexutils.objects import ParticleFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -202,7 +202,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         refinePose = zernikeProtocol.refinePose.get()
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -212,10 +212,11 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
             # z = correctionFactor * zernike_space[idx]
 
-            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
 
             outParticle.setZFlex(zernike_space[idx])
@@ -238,6 +239,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                 outParticle.getTransform().setMatrix(tr)
 
             partSet.append(outParticle)
+
+            idx += 1
 
         partSet.getFlexInfo().L1 = Integer(zernikeProtocol.l1.get())
         partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())

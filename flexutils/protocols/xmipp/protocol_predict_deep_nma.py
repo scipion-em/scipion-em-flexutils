@@ -37,7 +37,6 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
@@ -45,11 +44,12 @@ from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParti
 import xmipp3
 
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex
 import flexutils.constants as const
-from flexutils.utils import getXmippFileName
 
 
-class TensorflowProtPredictDeepNMA(ProtAnalysis3D):
+class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
     """ Predict NMA coefficents for a set of particles based on a trained
      DeepNMA network. """
     _label = 'predict - DeepNMA'
@@ -180,7 +180,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D):
         refinePose = deepNMAProtocol.refinePose.get()
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfParticlesFlex(progName=const.NMA)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -190,13 +190,11 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D):
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
         for idx, particle in enumerate(inputSet.iterItems()):
-            # z = correctionFactor * zernike_space[idx]
 
-            csv_z_space = CsvList()
-            for c in nma_space[idx]:
-                csv_z_space.append(c)
+            outParticle = ParticleFlex(progName=const.NMA)
+            outParticle.copyInfo(particle)
 
-            particle._xmipp_nmaCoefficients = csv_z_space
+            outParticle.setZFlex(nma_space[idx])
 
             if refinePose:
                 tr_ori = particle.getTransform().getMatrix()
@@ -213,18 +211,17 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D):
 
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
-                particle.getTransform().setMatrix(tr)
+                outParticle.getTransform().setMatrix(tr)
 
-            partSet.append(particle)
+            partSet.append(outParticle)
 
-        partSet.n_modes = Integer(deepNMAProtocol.n_modes.get())
-        partSet.Rmax = Float(Xdim / 2)
-        partSet.modelPath = String(model_path)
+        partSet.getFlexInfo().n_modes = Integer(deepNMAProtocol.n_modes.get())
+        partSet.getFlexInfo().modelPath = String(model_path)
 
         structure = deepNMAProtocol.inputStruct.get().getFileName()
-        partSet.refStruct = String(structure)
+        partSet.getFlexInfo().refStruct = String(structure)
 
-        partSet.refPose = refinePose
+        partSet.getFlexInfo().refPose = refinePose
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
@@ -233,8 +230,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D):
     def _updateParticle(self, item, row):
         setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
                            md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
-                           md.MDL_FLIP, md.MDL_SPH_DEFORMATION,
-                           md.MDL_SPH_COEFFICIENTS)
+                           md.MDL_FLIP)
         createItemMatrix(item, row, align=ALIGN_PROJ)
 
     def getInputParticles(self):

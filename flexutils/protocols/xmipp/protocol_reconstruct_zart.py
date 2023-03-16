@@ -46,7 +46,7 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.objects import FlexParticle, SetOfFlexParticles
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -75,7 +75,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
 
         form.addSection(label='Input')
 
-        form.addParam('inputParticles', params.PointerParam, pointerClass='SetOfParticles, SetOfFlexParticles',
+        form.addParam('inputParticles', params.PointerParam, pointerClass='SetOfParticles, SetOfParticlesFlex',
                       pointerCondition='hasAlignmentProj',
                       label="Input particles",  
                       help='Select the input images from the project.')
@@ -89,7 +89,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       help='If provided, this map will be used as the initialization of the reconstruction '
                            'process. Otherwise, an empty volume will be used')
         form.addParam('useZernike', params.BooleanParam, default=False,
-                      condition="inputParticles and isinstance(inputParticles, SetOfFlexParticles)",
+                      condition="inputParticles and isinstance(inputParticles, SetOfParticlesFlex)",
                       label="Correct motion blurred artifacts?",
                       help="Correct the conformation of the particles during the reconstruct process "
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
@@ -293,7 +293,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             if part.hasMicId():
                 partRow.setValue(emlib.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(emlib.MDL_MICROGRAPH, str(part.getMicId()))
-            if isinstance(part, FlexParticle) and self.useZernike.get():
+            if isinstance(part, ParticleFlex) and self.useZernike.get():
                 z_clnm = part.getZFlex()
                 partRow.setValue(emlib.MDL_SPH_COEFFICIENTS, z_clnm.tolist())
 
@@ -365,7 +365,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             params += ' --sigma "1.5"'
         params += ' --niter %d' % niter
 
-        if isinstance(self.inputParticles.get(), SetOfFlexParticles) and self.useZernike.get():
+        if isinstance(self.inputParticles.get(), SetOfParticlesFlex) and self.useZernike.get():
             particles = self.inputParticles.get()
             params += " --useZernike --l1 %d --l2 %d" % (particles.getFlexInfo().L1.get(),
                                                          particles.getFlexInfo().L2.get())

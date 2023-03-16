@@ -206,7 +206,8 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
 
             tr_ori = particle.getTransform().getMatrix()
             shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
@@ -244,6 +245,8 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
             particle.getTransform().setMatrix(tr)
 
             partSet.append(particle)
+
+            idx += 1
 
         partSet.modelPath = String(model_path)
 

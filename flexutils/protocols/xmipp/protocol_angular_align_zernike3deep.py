@@ -47,7 +47,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import FlexParticle
+from flexutils.objects import ParticleFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -331,7 +331,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             delta_shift_y = metadata[:, 'delta_shift_y']
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfFlexParticles(progName=const.ZERNIKE3D)
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
@@ -341,10 +341,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
             # z = correctionFactor * zernike_space[idx]
 
-            outParticle = FlexParticle(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
 
             outParticle.setZFlex(zernike_space[idx])
@@ -365,6 +366,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
                 outParticle.getTransform().setMatrix(tr)
+
+                idx += 1
 
             partSet.append(outParticle)
 
@@ -438,11 +441,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-        inputParticles = self.inputParticles.get()
-        if not hasattr(inputParticles, 'L1') and hasattr(inputParticles, 'L2'):
-            l1 = self.l1.get()
-            l2 = self.l2.get()
-            if (l1 - l2) < 0:
-                errors.append('Zernike degree must be higher than '
-                              'SPH degree.')
+        l1 = self.l1.get()
+        l2 = self.l2.get()
+        if (l1 - l2) < 0:
+            errors.append('Zernike degree must be higher than '
+                          'SPH degree.')
         return errors
