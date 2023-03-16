@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
@@ -24,11 +23,45 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .viewers_data import FlexDataViewer
 
-# from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from .viewer_show_maps import FlexShowMapsViewer
 
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
+import pyworkflow.viewer as pwviewer
+
+import pwem.viewers.views as vi
+from pwem.viewers import DataViewer, MODE, MODE_MD
+
+import flexutils.objects
+
+
+class FlexDataViewer(pwviewer.Viewer):
+    """
+    Wrapper to visualize different type of objects
+    with the Xmipp program xmipp_showj
+    """
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [
+        flexutils.objects.SetOfClassesFlex
+    ]
+
+    def __init__(self, **kwargs):
+        pwviewer.Viewer.__init__(self, **kwargs)
+        self._views = []
+
+    def _getObjView(self, obj, fn, viewParams={}):
+        return vi.ObjectView(
+            self._project, obj.strId(), fn, viewParams=viewParams)
+
+    def _visualize(self, obj, **kwargs):
+        views = []
+        cls = type(obj)
+
+        if issubclass(cls, flexutils.objects.SetOfClassesFlex):
+            views.append(vi.Classes3DView(self._project, obj.strId(),
+                                          obj.getFileName()))
+
+        return views
+
+
+# Register specific sets in pwem dataviewer.
+DataViewer.registerConfig(flexutils.objects.SetOfParticlesFlex,
+                          config={MODE: MODE_MD})
