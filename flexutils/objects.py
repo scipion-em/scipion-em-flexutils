@@ -28,7 +28,7 @@
 import numpy as np
 
 from pwem import EMObject
-from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform
+from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages
 
 from pyworkflow.object import String, CsvList
 
@@ -112,9 +112,9 @@ class FlexInfo(EMObject):
 class VolumeFlex(Volume):
     """Volume with flexibility information stored"""
 
-    def __init__(self, **kwargs):
+    def __init__(self, progName="", **kwargs):
         Volume.__init__(self, **kwargs)
-        self._flexInfo = FlexInfo()
+        self._flexInfo = FlexInfo(progName="")
         self._zFlex = CsvList()
         self._zRed = CsvList()
 
@@ -144,6 +144,25 @@ class VolumeFlex(Volume):
 
     def copyInfo(self, other):
         self.copy(other, copyId=False)
+
+
+class SetOfVolumesFlex(SetOfImages):
+    """Represents a set of Volumes with flexibility information stored"""
+    ITEM_TYPE = VolumeFlex
+    REP_TYPE = VolumeFlex
+
+    # Hint to GUI components to expose internal items for direct selection
+    EXPOSE_ITEMS = True
+
+    def __init__(self, progName="", **kwargs):
+        SetOfImages.__init__(self, **kwargs)
+        self._flexInfo = FlexInfo(progName=progName)
+
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
 
 
 class ClassFlex(SetOfParticlesFlex):
