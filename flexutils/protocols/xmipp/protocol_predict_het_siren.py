@@ -287,6 +287,10 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
             outVols.append(outVol)
 
+            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
+                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)), 1,
+                                        finalDimension=inputParticles.getXDim())
+
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 

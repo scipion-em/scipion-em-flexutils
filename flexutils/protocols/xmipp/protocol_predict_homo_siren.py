@@ -253,8 +253,12 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
             partSet.refMap = String(inputVolume)
 
         outVol = Volume()
-        outVol.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
+        outVol.setSamplingRate(inputParticles.getSamplingRate())
         outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
+
+        ImageHandler().scaleSplines(self._getExtraPath('decoded_map.mrc'),
+                                    self._getExtraPath('decoded_map.mrc'), 1,
+                                    finalDimension=inputParticles.getXDim())
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
