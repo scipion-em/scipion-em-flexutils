@@ -177,6 +177,11 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase)
 
         zernikeVols = self._createSetOfVolumesFlex(progName=const.ZERNIKE3D)
         zernikeVols.setSamplingRate(sr)
+        zernikeVols.getFlexInfo().L1 = L1
+        zernikeVols.getFlexInfo().L2 = L2
+        zernikeVols.getFlexInfo().Rmax = Rmax
+        zernikeVols.getFlexInfo().refMap = reference_filename
+        zernikeVols.getFlexInfo().refMask = mask_filename
 
         input_files = len(glob.glob(self._getExtraPath("*_aligned.mrc")))
         for idf in range(input_files):
