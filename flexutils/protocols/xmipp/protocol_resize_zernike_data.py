@@ -235,6 +235,16 @@ class XmippProtCropResizeZernikeVolumes(XmippProcessVolumes):
         XmippProcessVolumes.__init__(self, **kwargs)
 
     # --------------------------- DEFINE param functions --------------------------------------------
+    def _defineParams(self, form):
+        form.addSection(label=pwutils.Message.LABEL_INPUT)
+
+        form.addParam('inputVolumes', params.PointerParam, important=True,
+                      label=pwutils.Message.LABEL_INPUT_VOLS, pointerClass='VolumeFlex, SetOfVolumesFlex',
+                      help='Can be a density volume or a SetOfVolumesFlex')
+        # Hook that should be implemented in subclasses
+        self._defineProcessParams(form)
+        form.addParallelSection(threads=2, mpi=1)
+
     def _defineProcessParams(self, form):
         XmippResizeHelper._defineProcessParams(self, form)
 
@@ -279,13 +289,11 @@ class XmippProtCropResizeZernikeVolumes(XmippProcessVolumes):
                 volumes.setSamplingRate(oSampling)
 
                 # Scale Zernike3D information
+                # FIXME: Esto HAY que arreglarlo (no guarda los valores)
                 for item in volumes.iterItems(iterate=False):
-                    item.Rmax = Float(self.factor * item.Rmax.get())
-                    z_clnm = self.factor * np.fromstring(item._xmipp_sphCoefficients.get(), dtype=float, sep=',')
-                    csv_z_clnm = CsvList()
-                    for c in z_clnm:
-                        csv_z_clnm.append(c)
-                    item._xmipp_sphCoefficients = csv_z_clnm
+                    item.getFlexInfo().Rmax = Float(self.factor * item.getFlexInfo().Rmax.get())
+                    z_clnm = self.factor * item.getZFlex()
+                    item.setZFlex(z_clnm)
 
     # --------------------------- INFO functions ----------------------------------------------------
     def _summary(self):
