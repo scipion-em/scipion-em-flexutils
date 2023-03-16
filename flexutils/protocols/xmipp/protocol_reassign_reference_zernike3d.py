@@ -57,7 +57,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticlesFlex')
-        form.addParam('inputVolume', params.PointerParam, label="New reference", pointerClass='Volume',
+        form.addParam('inputVolume', params.PointerParam, label="New reference", pointerClass='VolumeFlex',
                       help="Particles will be reassigned so this map is their new reference")
         form.addParam('mask', params.PointerParam, label="Reference mask", pointerClass='VolumeMask',
                       help="Mask associated to the new reference map")
@@ -112,8 +112,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         # Write Zernike3D priors to file
         file_zclnm_r = self._getExtraPath('z_clnm_r,txt')
         with open(file_zclnm_r, 'w') as f:
-            f.write(' '.join(map(str, [L1, L2, newRefMap.Rmax.get()])) + "\n")
-            z_clnm = np.fromstring(newRefMap._xmipp_sphCoefficients.get(), sep=",")
+            f.write(' '.join(map(str, [L1, L2, newRefMap.getFlexInfo().Rmax.get()])) + "\n")
+            z_clnm = newRefMap.getZFlex()
             f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
         args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
@@ -174,8 +174,6 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
                 errors.append("The flexibility information associated with the particles is not "
                               "coming from the Zernike3D algorithm. Please, provide a set of particles "
                               "with the correct flexibility information.")
-        if not hasattr(self.inputVolume.get(), "_xmipp_sphCoefficients"):
-            errors.append("New reference map must have Zernike3D coefficients associated to it")
         return errors
 
 
