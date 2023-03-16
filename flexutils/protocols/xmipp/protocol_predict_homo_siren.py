@@ -250,8 +250,8 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         partSet.modelPath = String(model_path)
 
         if homoSirenProtocol.inputVolume.get():
-            inputMask = self.inputVolumeMask.get().getFileName()
-            inputVolume = self.inputVolume.get().getFileName()
+            inputMask = homoSirenProtocol.inputVolumeMask.get().getFileName()
+            inputVolume = homoSirenProtocol.inputVolume.get().getFileName()
             partSet.refMask = String(inputMask)
             partSet.refMap = String(inputVolume)
 
