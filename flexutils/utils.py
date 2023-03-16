@@ -27,8 +27,13 @@
 
 
 import numpy as np
+from pathlib import Path
+import os
 
 from pyworkflow.utils import getExt
+from pyworkflow.utils.process import runJob
+
+import flexutils
 
 
 def getOutputSuffix(protocol, cls):
@@ -72,3 +77,22 @@ def getXmippFileName(filename):
     if getExt(filename) == ".mrc":
         filename += ":mrc"
     return filename
+
+def generateVolumes(weigths_file, x_het, outdir, step):
+    args = _getEvalVolArgs(x_het, weigths_file, outdir, step)
+    program = flexutils.Plugin.getTensorflowProgram("predict_map_het_siren.py", python=False)
+    runJob(None, program, ' '.join(args), numberOfMpi=1)
+
+def _getEvalVolArgs(x_het, weigths_file, outdir, step):
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+
+    hetFilePath = Path(outdir, "zfile.txt")
+    np.savetxt(hetFilePath, x_het)
+    hetFilePath = os.path.abspath(os.path.join(outdir, 'zfile.txt'))
+
+    return ['--weigths_file %s' % weigths_file,
+            '--het_file %s' % hetFilePath,
+            '--out_path %s' % outdir,
+            '--step %d' % step
+            ]
