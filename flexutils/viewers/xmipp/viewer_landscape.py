@@ -100,7 +100,8 @@ class XmippLandscapeViewer(ProtocolViewer):
 
     def _doShowSpace(self, param=None):
         z_clnm = []
-        for particle in self.protocol.outputParticles.iterItems():
+        particles = self.protocol.outputParticles
+        for particle in particles.iterItems():
             z_clnm.append(particle.getZFlex())
         z_clnm = np.asarray(z_clnm)
         if z_clnm.shape[1] < 3:
@@ -133,7 +134,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                 program = flexutils.Plugin.getProgram(program)
                 runJob(None, program, args)
 
-        if self.protocol.outputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             deformation = computeNormRows(z_clnm)
         else:
             deformation = np.zeros(z_clnm.shape)
