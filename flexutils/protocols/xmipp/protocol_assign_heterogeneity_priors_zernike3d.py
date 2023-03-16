@@ -69,13 +69,9 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         #                label="Choose GPU IDs",
         #                help="Add a list of GPU devices that can be used")
         form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
-        form.addParam('inputPriors', params.PointerParam, label="Input priors", pointerClass="SetOfVolumes",
+        form.addParam('inputPriors', params.PointerParam, label="Input priors", pointerClass="SetOfVolumesFlex",
                       help="A set of volumes with Zernike3D coefficients associated to be used as priors for "
                            "the input particles")
-        form.addParam('inputVolume', params.PointerParam, label="Input volume", pointerClass='Volume',
-                      condition="inputPriors and not hasattr(inputPriors,'refMap')")
-        form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask',
-                      condition="inputPriors and not hasattr(inputPriors,'refMask')")
         form.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help='In general, downsampling the particles will increase performance without compromising '
@@ -151,14 +147,14 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         ih = ImageHandler()
-        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get().getFileName()
+        inputVolume = inputPriors.getFlexInfo().refMap.get()
         ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputParticles.get().getFirstItem().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1,
                         env=xmipp3.Plugin.getEnviron())
-        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolumeMask.get().getFileName()
+        inputMask = inputPriors.getFlexInfo().refMask.get()
         if inputMask:
             ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
@@ -186,15 +182,15 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.newXdim / Xdim
 
         # Zernike3D parameters
-        L1 = inputPriors.L1.get()
-        L2 = inputPriors.L2.get()
-        Rmax = correctionFactor * inputPriors.Rmax.get()
+        L1 = inputPriors.getFlexInfo().L1.get()
+        L2 = inputPriors.getFlexInfo().L2.get()
+        Rmax = correctionFactor * inputPriors.getFlexInfo().Rmax.get()
 
         # Write Zernike3D priors to file
         with open(fnPriors, 'w') as f:
             f.write(' '.join(map(str, [L1, L2, Rmax])) + "\n")
             for item in inputPriors.iterItems():
-                z_clnm = np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")
+                z_clnm = item.getZFlex()
                 z_clnm *= correctionFactor
                 f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
@@ -213,7 +209,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
             else:
                 f.write(' '.join(map(str, [L1, L2, Rmax] + deformations.tolist())) + "\n")
             for item in inputPriors.iterItems():
-                z_clnm = np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")
+                z_clnm = item.getZFlex()
                 z_clnm *= correctionFactor
                 f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
@@ -247,11 +243,11 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         # Zernike3D info
         inputPriors = self.inputPriors.get()
-        L1 = inputPriors.L1.get()
-        L2 = inputPriors.L2.get()
-        Rmax = inputPriors.Rmax.get()
-        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get()
-        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolume.get()
+        L1 = inputPriors.getFlexInfo().L1.get()
+        L2 = inputPriors.getFlexInfo().L2.get()
+        Rmax = inputPriors.getFlexInfo().Rmax.get()
+        inputVolume = inputPriors.getFlexInfo().refMap.get()
+        inputMask = inputPriors.getFlexInfo().refMask.get()
 
         coeffs = correctionFactor * np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
         deformation = correctionFactor * mdOut[:, "sphDeformation"]
@@ -306,9 +302,11 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-        if not hasattr(self.inputPriors.get().getFirstItem(), "_xmipp_sphCoefficients"):
-            errors.append("Priors provided do not contain any Zernike3D prior that can "
-                          "be used")
+        inputPriors = self.inputPriors.get()
+        if inputPriors.getFlexInfo().getProgName() != const.ZERNIKE3D:
+            errors.append("The flexibility information associated with the priors is not "
+                          "coming from the Zernike3D algorithm. Please, provide a set of priors "
+                          "with the correct flexibility information.")
         return errors
 
 
