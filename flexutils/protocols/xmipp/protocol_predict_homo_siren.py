@@ -116,7 +116,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-        if self.inputVolumeMask.get():  # Mask reference
+        if homoSirenProtocol.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = homoSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
