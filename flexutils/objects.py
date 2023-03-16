@@ -28,7 +28,7 @@
 import numpy as np
 
 from pwem import EMObject
-from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages
+from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, AtomStruct, EMSet
 
 from pyworkflow.object import String, CsvList
 
@@ -191,3 +191,59 @@ class SetOfClassesFlex(SetOfClasses):
 
     pass
 
+
+class AtomStructFlex(AtomStruct):
+    """ AtomStruct with flexibility information stored"""
+
+    def __init__(self, progName="", **kwargs):
+        AtomStruct.__init__(self, **kwargs)
+        self._flexInfo = FlexInfo(progName)
+        self._zFlex = CsvList()
+        self._zRed = CsvList()
+
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
+
+    def getZFlex(self):
+        return np.fromstring(self._zFlex.get(), sep=",")
+
+    def setZFlex(self, zFlex):
+        csvZFlex = CsvList()
+        for c in zFlex:
+            csvZFlex.append(c)
+        self._zFlex = csvZFlex
+
+    def getZRed(self):
+        return np.fromstring(self._zRed.get(), sep=",")
+
+    def setZRed(self, zRed):
+        csvZRed = CsvList()
+        for c in zRed:
+            csvZRed.append(c)
+        self._zRed = csvZRed
+
+    def copyInfo(self, other):
+        self.copy(other, copyId=False)
+
+class SetOfAtomStructFlex(EMSet):
+    """ Set containing AtomStructFlex items. """
+    ITEM_TYPE = AtomStructFlex
+    EXPOSE_ITEMS = True
+
+    def __init__(self, progName="", **kwargs):
+        EMSet.__init__(self, **kwargs)
+        self._flexInfo = FlexInfo(progName)
+
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
+
+    def copyInfo(self, other):
+        super(SetOfParticles, self).copyInfo(other)
+        if hasattr(other, "_flexInfo"):
+            self._flexInfo.copyInfo(other._flexInfo)
