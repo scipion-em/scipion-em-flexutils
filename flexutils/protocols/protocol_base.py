@@ -55,6 +55,10 @@ class ProtFlexBase:
         classes.setImages(flexParticles)
         return classes
 
+    def _createSetOfVolumesFlex(self, suffix='', **kwargs):
+        return self._createSet(flexutils.objects.SetOfVolumesFlex,
+                               'flexvolumes%s.sqlite', suffix, **kwargs)
+
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.
