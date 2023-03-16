@@ -73,10 +73,6 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
                        help="Previously executed 'angular align - deepPose'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
-        group.addParam('boxSize', params.IntParam, default=128,
-                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
-                       help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
-                            "execution")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -107,7 +103,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         deepPoseProtocol = self.deepPoseProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = deepPoseProtocol.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
         if deepPoseProtocol.referenceType.get() == 0:
@@ -180,7 +176,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         deepPoseProtocol = self.deepPoseProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = deepPoseProtocol.boxSize.get()
         model_path = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
         md_file = self._getFileName('imgsFn')
 

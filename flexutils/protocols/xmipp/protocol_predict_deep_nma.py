@@ -74,10 +74,6 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
                        help="Previously executed 'angular align - DeepNMA'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
-        group.addParam('boxSize', params.IntParam, default=128,
-                      label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
-                      help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
-                           "execution")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -106,7 +102,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         deepNMAProtocol = self.deepNMAProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = deepNMAProtocol.boxSize.get()
 
         pdb_lines = self.readPDB(deepNMAProtocol.inputStruct.get().getFileName())
         pdb_coordinates = np.array(self.PDB2List(pdb_lines))
@@ -132,7 +128,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         weigths_file = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model'))
         n_modes = deepNMAProtocol.n_modes.get()
         pad = deepNMAProtocol.pad.get()
-        correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
+        correctionFactor = self.inputParticles.get().getXDim() / deepNMAProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = deepNMAProtocol.ctfType.get()
         args = "--md_file %s --weigths_file %s --n_modes %d " \
@@ -163,7 +159,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         deepNMAProtocol = self.deepNMAProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = deepNMAProtocol.boxSize.get()
         model_path = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model'))
         md_file = self._getFileName('imgsFn')
 

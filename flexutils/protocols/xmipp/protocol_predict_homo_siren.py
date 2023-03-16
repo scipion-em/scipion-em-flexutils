@@ -73,10 +73,6 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
                        help="Previously executed 'angular align - HomoSIREN'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
-        group.addParam('boxSize', params.IntParam, default=128,
-                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
-                       help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
-                            "execution")
         form.addSection(label='Output')
         form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
                       help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
@@ -110,7 +106,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         homoSirenProtocol = self.homoSirenProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = homoSirenProtocol.boxSize.get()
 
         if homoSirenProtocol.inputVolume.get():  # Map reference
             ih = ImageHandler()
@@ -185,7 +181,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         homoSirenProtocol = self.homoSirenProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = homoSirenProtocol.boxSize.get()
         model_path = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
         md_file = self._getFileName('imgsFn')
 

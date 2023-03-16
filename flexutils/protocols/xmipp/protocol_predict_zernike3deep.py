@@ -76,10 +76,6 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="Previously executed 'angular align - Zernike3Deep'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
-        group.addParam('boxSize', params.IntParam, default=128,
-                      label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
-                      help="Should match the boxSize applied during the 'angular align - Zernike3Deep' "
-                           "execution")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -110,7 +106,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = zernikeProtocol.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
         if zernikeProtocol.referenceType.get() == 0:
@@ -154,7 +150,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         L1 = zernikeProtocol.l1.get()
         L2 = zernikeProtocol.l2.get()
         pad = zernikeProtocol.pad.get()
-        correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
+        correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = zernikeProtocol.ctfType.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
@@ -185,7 +181,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = self.boxSize.get()
+        self.newXdim = zernikeProtocol.boxSize.get()
         model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model'))
         md_file = self._getFileName('imgsFn')
 
