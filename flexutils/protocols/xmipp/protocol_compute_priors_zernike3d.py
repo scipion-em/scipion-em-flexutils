@@ -44,10 +44,12 @@ import xmipp3
 
 import flexutils.constants as const
 from flexutils.utils import readZernikeFile, getXmippFileName
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import VolumeFlex
 import flexutils
 
 
-class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
+class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Compute Zernike3D priors and assign them to a SetOfVolumes """
     _label = 'compute heterogeneity priors - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
@@ -173,13 +175,8 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         reference_filename = String(reference.getFileName())
         mask_filename = String(mask.getFileName()) if mask else String("")
 
-        zernikeVols = self._createSetOfVolumes()
+        zernikeVols = self._createSetOfVolumesFlex(progName=const.ZERNIKE3D)
         zernikeVols.setSamplingRate(sr)
-        zernikeVols.L1 = L1
-        zernikeVols.L2 = L2
-        zernikeVols.Rmax = Rmax
-        zernikeVols.refMap = reference_filename
-        zernikeVols.refMask = mask_filename
 
         input_files = len(glob.glob(self._getExtraPath("*_aligned.mrc")))
         for idf in range(input_files):
@@ -194,16 +191,16 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             z_clnm = factor * z_clnm
             # Rmax = Float(factor * basis_params[2])
 
-            zernikeVol = Volume()
+            zernikeVol = VolumeFlex(progName=const.ZERNIKE3D)
             zernikeVol.setFileName(reference.getFileName())
             zernikeVol.setSamplingRate(sr)
-            zernikeVol._xmipp_sphCoefficients = String(','.join(['%f' % c for c in z_clnm.reshape(-1)]))
-            zernikeVol._xmipp_sphDeformation = deformation
-            zernikeVol.L1 = L1
-            zernikeVol.L2 = L2
-            zernikeVol.Rmax = Rmax
-            zernikeVol.refMap = reference_filename
-            zernikeVol.refMask = mask_filename
+            zernikeVol.setZFlex(z_clnm.reshape(-1))
+            zernikeVol.getFlexInfo().deformation = deformation
+            zernikeVol.getFlexInfo().L1 = L1
+            zernikeVol.getFlexInfo().L2 = L2
+            zernikeVol.getFlexInfo().Rmax = Rmax
+            zernikeVol.getFlexInfo().refMap = reference_filename
+            zernikeVol.getFlexInfo().refMask = mask_filename
 
             zernikeVols.append(zernikeVol)
 
@@ -213,7 +210,6 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         args[name] = zernikeVols
         self._defineOutputs(**args)
         self._defineSourceRelation(reference, zernikeVols)
-        self._updateOutputSet(name, zernikeVols, state=zernikeVols.STREAM_CLOSED)
 
     # ------------------------- VALIDATE functions -----------------------------
     def validate(self):
