@@ -188,6 +188,7 @@ class SetOfClassesFlex(SetOfClasses):
     """ SetOfClasses3D with flexibility information stored"""
     ITEM_TYPE = ClassFlex
     REP_TYPE = VolumeFlex
+    REP_SET_TYPE = SetOfVolumesFlex
 
     pass
 
