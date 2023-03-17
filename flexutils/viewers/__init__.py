@@ -30,5 +30,5 @@ from .viewers_data import FlexDataViewer
 from .viewer_show_structures import FlexShowStructuresViewer
 from .viewer_show_maps import FlexShowMapsViewer
 
-# Zernike3D Xmipp viewers (offered here due to strong package dependency)
+# Flexibility Xmipp viewers (offered here due to strong package dependency)
 from .xmipp import *

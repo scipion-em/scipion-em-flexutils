@@ -35,7 +35,7 @@ from .protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZer
 from .protocol_compute_priors_zernike3d import XmippProtComputeHeterogeneityPriorsZernike3D
 from .protocol_statistics_zernike3d import XmippProtStatisticsZernike3D
 from .protocol_structure_landscape import XmippProtStructureLanscapes
-# from .protocol_apply_zernike3d import XmippApplyZernike3D
+from .protocol_apply_field_zernike3d import XmippApplyFieldZernike3D
 # from .protocol_deform_map_zernike3d import XmippProtVolumeDeformZernike3D
 # from .protocol_structure_map_zernike3d import XmippProtStructureMapZernike3D
 
