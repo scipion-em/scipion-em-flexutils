@@ -42,7 +42,7 @@ from pwem.protocols import ProtAnalysis3D
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ClassFlex, VolumeFlex, SetOfClassesFlex, SetOfVolumesFlex
+from flexutils.objects import SetOfVolumesFlex, VolumeFlex
 import flexutils.constants as const
 
 import xmipp3
@@ -85,6 +85,19 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         neighbors = self.neighbors.get()
         num_part = particles.getSize()
         sr = particles.getSamplingRate()
+        progName = particles.getFlexInfo().getProgName()
+
+        # Get right imports
+        if progName == const.NMA:
+            createFn = self._createSetOfClassesStructFlex
+            from flexutils.objects import ClassStructFlex as Class
+            from flexutils.objects import AtomStructFlex as Rep
+            from flexutils.objects import SetOfClassesStructFlex as SetOfClasses
+        else:
+            createFn = self._createSetOfClassesFlex
+            from flexutils.objects import ClassFlex as Class
+            from flexutils.objects import VolumeFlex as Rep
+            from flexutils.objects import SetOfClassesFlex as SetOfClasses
 
         # Read selected coefficients
         z_space_vw = []
@@ -101,19 +114,20 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         kdtree = KDTree(z_space)
 
         # Create SetOfFlexClasses
-        suffix = getOutputSuffix(self, SetOfClassesFlex)
-        flexClasses = self._createSetOfClassesFlex(particles, suffix)
+        suffix = getOutputSuffix(self, SetOfClasses)
+        flexClasses = createFn(particles, suffix)
 
         # Popoulate SetOfClasses3D with KMean particles
         for clInx in range(z_space_vw.shape[0]):
             _, currIds = kdtree.query(z_space_vw[clInx].reshape(1, -1), k=neighbors+10)
             currIds = currIds[0]
 
-            newClass = ClassFlex()
+            newClass = Class()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
-            representative = VolumeFlex()
-            representative.setSamplingRate(sr)
+            representative = Rep()
+            if hasattr(representative, "setSamplingRate"):
+                representative.setSamplingRate(sr)
 
             # ****** Fill representative information *******
             if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
@@ -144,6 +158,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                                             finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
+            elif particles.getFlexInfo().getProgName() == const.NMA:
+                reference = particles.getFlexInfo().refStruct.get()
+
+                representative.setLocation(reference)
+
             representative.setZFlex(z_space_vw[clInx])
             representative.getFlexInfo().copyInfo(particles.getFlexInfo())
             # ********************
@@ -170,7 +189,6 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         args[name] = flexClasses
         self._defineOutputs(**args)
         self._defineSourceRelation(particles, flexClasses)
-        self._updateOutputSet(name, flexClasses, state=flexClasses.STREAM_CLOSED)
 
     # --------------------------- STEPS functions -----------------------------
     def launchVolumeSlicer(self):
@@ -285,6 +303,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
+                      particles.getSamplingRate())
+
+        elif particles.getFlexInfo().getProgName() == const.NMA:
+            args = "--data %s --z_space %s --interp_val %s --path %s " \
+                   "--weights %s --sr %f --mode NMA" \
+                   % (file_coords, file_z_space, file_interp_val, path,
+                      particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate())
 
         dimensions = red_space.shape[1]

@@ -29,21 +29,18 @@ import os
 import numpy as np
 
 from pyworkflow import BETA
-from pyworkflow.object import String, CsvList
-from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, MultiPointerParam
+from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
-from pwem.objects import SetOfClasses3D, Class3D, Volume, SetOfVolumes
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ClassFlex, VolumeFlex, SetOfClassesFlex, SetOfVolumesFlex
+from flexutils.objects import SetOfVolumesFlex, VolumeFlex
 import flexutils.constants as const
 
 import xmipp3
@@ -87,6 +84,19 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
         particles = self.particles.get()
         partIds = list(particles.getIdSet())
         sr = particles.getSamplingRate()
+        progName = particles.getFlexInfo().getProgName()
+
+        # Get right imports
+        if progName == const.NMA:
+            createFn = self._createSetOfClassesStructFlex
+            from flexutils.objects import ClassStructFlex as Class
+            from flexutils.objects import AtomStructFlex as Rep
+            from flexutils.objects import SetOfClassesStructFlex as SetOfClasses
+        else:
+            createFn = self._createSetOfClassesFlex
+            from flexutils.objects import ClassFlex as Class
+            from flexutils.objects import VolumeFlex as Rep
+            from flexutils.objects import SetOfClassesFlex as SetOfClasses
 
         # Read KMean coefficients
         z_space_vw = []
@@ -102,17 +112,17 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
             km_labels = km_labels[:-self.num_vol]
 
         # Create SetOfClasses3D
-        suffix = getOutputSuffix(self, SetOfClasses3D)
-        flexClasses = self._createSetOfClassesFlex(particles, suffix)
+        suffix = getOutputSuffix(self, SetOfClasses)
+        flexClasses = createFn(particles, suffix)
 
         # Popoulate SetOfClasses3D with KMean particles
         for clInx in range(z_space_vw.shape[0]):
             currIds = np.where(km_labels == clInx)[0]
 
-            newClass = ClassFlex()
+            newClass = Class()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
-            representative = VolumeFlex()
+            representative = Rep()
 
             # ****** Fill representative information *******
             if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
@@ -143,11 +153,17 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                                             finalDimension=particles.getXDim())
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
+            elif particles.getFlexInfo().getProgName() == const.NMA:
+                reference = particles.getFlexInfo().refStruct.get()
+
+                representative.setLocation(reference)
+
             representative.setZFlex(z_space_vw[clInx])
             representative.getFlexInfo().copyInfo(particles.getFlexInfo())
             # ********************
 
-            representative.setSamplingRate(sr)
+            if hasattr(representative, "setSamplingRate"):
+                representative.setSamplingRate(sr)
             newClass.setRepresentative(representative)
 
             flexClasses.append(newClass)
@@ -178,7 +194,6 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
         for particle in particles.iterItems():
             z_space.append(particle.getZFlex())
         z_space = np.asarray(z_space)
-        print(z_space.shape)
 
         if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             reference = particles.getFlexInfo().refMap.get()
@@ -284,6 +299,13 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
+                      particles.getSamplingRate())
+
+        elif particles.getFlexInfo().getProgName() == const.NMA:
+            args = "--data %s --z_space %s --interp_val %s --path %s " \
+                   "--weights %s --sr %f --mode NMA" \
+                   % (file_coords, file_z_space, file_interp_val, path,
+                      particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate())
 
         program = os.path.join(const.VIEWERS, "viewer_3d_pc.py")

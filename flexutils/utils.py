@@ -53,6 +53,7 @@ def getOutputSuffix(protocol, cls):
 
     return str(maxCounter + 1) if maxCounter > 0 else ''  # empty if not output
 
+
 def readZernikeFile(filename):
     with open(filename, 'r') as fid:
         lines = fid.readlines()
@@ -65,6 +66,7 @@ def readZernikeFile(filename):
 
     return basis_params, z_clnm
 
+
 def computeNormRows(array):
     norm = []
     size = int(array.shape[1] / 3)
@@ -73,17 +75,26 @@ def computeNormRows(array):
         norm.append(np.linalg.norm(np.linalg.norm(c_3d, axis=1)))
     return np.vstack(norm).flatten()
 
+
 def getXmippFileName(filename):
     if getExt(filename) == ".mrc":
         filename += ":mrc"
     return filename
 
+
 def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):
-    args = _getEvalVolArgs(x_het, weigths_file, outdir, step)
+    args = _getEvalVolArgs(x_het, weigths_file, "het_file", outdir, step=step)
     program = flexutils.Plugin.getTensorflowProgram("predict_map_het_siren.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
-def _getEvalVolArgs(x_het, weigths_file, outdir, step):
+
+def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr):
+    args = _getEvalVolArgs(c_nma, weigths_file, "nma_file", outdir, sr=sr)
+    program = flexutils.Plugin.getTensorflowProgram("predict_map_deep_nma.py", python=False)
+    runJob(None, program, ' '.join(args), numberOfMpi=1)
+
+
+def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None):
     if not os.path.exists(outdir):
         os.mkdir(outdir)
 
@@ -91,8 +102,15 @@ def _getEvalVolArgs(x_het, weigths_file, outdir, step):
     np.savetxt(hetFilePath, x_het)
     hetFilePath = os.path.abspath(os.path.join(outdir, 'zfile.txt'))
 
-    return ['--weigths_file %s' % weigths_file,
-            '--het_file %s' % hetFilePath,
+    args = ['--weigths_file %s' % weigths_file,
+            '--%s %s' % (x_het_param, hetFilePath),
             '--out_path %s' % outdir,
-            '--step %d' % step
             ]
+
+    if step:
+        args.append('--step %d' % step)
+
+    if sr:
+        args.append('--sr %f' % sr)
+
+    return args

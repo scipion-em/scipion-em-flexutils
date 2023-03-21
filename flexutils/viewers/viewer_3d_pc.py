@@ -162,6 +162,9 @@ class PointCloudView(HasTraits):
         elif self.mode == "HetSIREN":
             from flexutils.utils import generateVolumesHetSIREN
             self.generate_map = generateVolumesHetSIREN
+        elif self.mode == "NMA":
+            from flexutils.utils import generateVolumesDeepNMA
+            self.generate_map = generateVolumesDeepNMA
 
         # Selections
         self.selections = dict()
@@ -455,6 +458,10 @@ class PointCloudView(HasTraits):
             elif self.mode == "HetSIREN":
                 self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
                                   self.path, step=self.class_inputs["step"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+            elif self.mode == "NMA":
+                self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
+                                  self.path, sr=self.class_inputs["sr"])
                 self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
 
             volume = getattr(self, 'ipw_map')
