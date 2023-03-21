@@ -198,7 +198,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
 
                     vols.append(vol)
 
-                    idx += 1
+                idx += 1
 
             if self.applyPDB.get():
                 self._defineOutputs(deformed=pdbs)
