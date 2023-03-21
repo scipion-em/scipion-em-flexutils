@@ -113,7 +113,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Create SetOfClasses3D
         suffix = getOutputSuffix(self, SetOfClasses)
-        flexClasses = createFn(particles, suffix)
+        flexClasses = createFn(particles, suffix, progName=progName)
 
         # Popoulate SetOfClasses3D with KMean particles
         for clInx in range(z_space_vw.shape[0]):
@@ -122,7 +122,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
             newClass = Class()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
-            representative = Rep()
+            representative = Rep(progName=progName)
 
             # ****** Fill representative information *******
             if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:

@@ -115,7 +115,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Create SetOfFlexClasses
         suffix = getOutputSuffix(self, SetOfClasses)
-        flexClasses = createFn(particles, suffix)
+        flexClasses = createFn(particles, suffix, progName=progName)
 
         # Popoulate SetOfClasses3D with KMean particles
         for clInx in range(z_space_vw.shape[0]):
@@ -125,7 +125,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             newClass = Class()
             newClass.copyInfo(particles)
             newClass.setAcquisition(particles.getAcquisition())
-            representative = Rep()
+            representative = Rep(progName=progName)
             if hasattr(representative, "setSamplingRate"):
                 representative.setSamplingRate(sr)
 
