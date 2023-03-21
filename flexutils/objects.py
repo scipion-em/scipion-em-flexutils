@@ -27,7 +27,7 @@
 
 import numpy as np
 
-from pwem import EMObject
+from pwem import EMObject, NO_INDEX
 from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, AtomStruct, EMSet
 
 from pyworkflow.object import String, CsvList
@@ -229,6 +229,28 @@ class AtomStructFlex(AtomStruct):
     def copyInfo(self, other):
         self.copy(other, copyId=False)
 
+    def setLocation(self, *args):
+        """ Set the image location, see getLocation.
+        Params:
+            First argument can be:
+             1. a tuple with (index, filename)
+             2. a index, this implies a second argument with filename
+             3. a filename, this implies index=NO_INDEX
+        """
+        first = args[0]
+        t = type(first)
+        if t == tuple:
+            _, filename = first
+        elif t == int:
+            _, filename = first, args[1]
+        elif t == str:
+            _, filename = NO_INDEX, first
+        else:
+            raise Exception('setLocation: unsupported type %s as input.' % t)
+
+        self.setFileName(filename)
+
+
 class SetOfAtomStructFlex(EMSet):
     """ Set containing AtomStructFlex items. """
     ITEM_TYPE = AtomStructFlex
@@ -248,3 +270,30 @@ class SetOfAtomStructFlex(EMSet):
         super(SetOfParticles, self).copyInfo(other)
         if hasattr(other, "_flexInfo"):
             self._flexInfo.copyInfo(other._flexInfo)
+
+
+class ClassStructFlex(SetOfParticlesFlex):
+    """Class3D with flexibility information stored for structures"""
+    REP_TYPE = AtomStructFlex
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not
+        _mapperPath or _size from other set of micrographs to current one.
+        """
+        self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        return clone
+
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfClasses
+        pass
+
+class SetOfClassesStructFlex(SetOfClasses):
+    """ SetOfClasses3D with flexibility information stored for structures"""
+    ITEM_TYPE = ClassStructFlex
+    REP_TYPE = AtomStructFlex
+    REP_SET_TYPE = SetOfAtomStructFlex
+
+    pass
