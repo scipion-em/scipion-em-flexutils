@@ -72,3 +72,5 @@ DataViewer.registerConfig(flexutils.objects.SetOfParticlesFlex,
                           config={MODE: MODE_MD})
 DataViewer.registerConfig(flexutils.objects.SetOfVolumesFlex,
                           config={MODE: MODE_MD})
+DataViewer.registerConfig(flexutils.objects.SetOfAtomStructFlex,
+                          config={MODE: MODE_MD})
