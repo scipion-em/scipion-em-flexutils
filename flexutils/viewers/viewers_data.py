@@ -40,7 +40,8 @@ class FlexDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        flexutils.objects.SetOfClassesFlex
+        flexutils.objects.SetOfClassesFlex,
+        flexutils.objects.SetOfClassesStructFlex
     ]
 
     def __init__(self, **kwargs):
@@ -56,6 +57,10 @@ class FlexDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         if issubclass(cls, flexutils.objects.SetOfClassesFlex):
+            views.append(vi.Classes3DView(self._project, obj.strId(),
+                                          obj.getFileName()))
+
+        elif issubclass(cls, flexutils.objects.SetOfClassesStructFlex):
             views.append(vi.Classes3DView(self._project, obj.strId(),
                                           obj.getFileName()))
 
