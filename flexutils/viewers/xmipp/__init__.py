@@ -26,5 +26,6 @@
 
 from .viewer_landscape import XmippLandscapeViewer
 from .viewer_reduced_space import XmippReducedSpaceViewer
-from .viewer_apply_field_zernike3d import XmippApplyFieldZernike3D
+from .viewer_apply_field_zernike3d import XmippApplyFieldZernike3DView
+from .viewer_apply_field_nma import XmippApplyFieldNMAView
 # from .viewer_structure_map_zernike3d import XmippProtStructureMapZernike3DViewer
