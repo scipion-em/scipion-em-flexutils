@@ -155,7 +155,9 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
             elif particles.getFlexInfo().getProgName() == const.NMA:
                 reference = particles.getFlexInfo().refStruct.get()
+                subset = particles.getFlexInfo().atomSubset
 
+                representative.getFlexInfo().atomSubset = subset
                 representative.setLocation(reference)
 
             representative.setZFlex(z_space_vw[clInx])

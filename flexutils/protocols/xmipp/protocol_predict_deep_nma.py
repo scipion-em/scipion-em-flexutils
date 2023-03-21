@@ -29,6 +29,7 @@ import os
 import numpy as np
 import re
 from xmipp_metadata.metadata import XmippMetaData
+import prody as pd
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, CsvList
@@ -54,6 +55,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
      DeepNMA network. """
     _label = 'predict - DeepNMA'
     _lastUpdateVersion = VERSION_2_0
+    _subset = ["ca", "bb", None]
 
     # --------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -103,9 +105,14 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         deepNMAProtocol = self.deepNMAProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = deepNMAProtocol.boxSize.get()
+        refStruct = deepNMAProtocol.inputStruct.get().getFileName()
+        subset = self._subset[deepNMAProtocol.atomSubset.get()]
 
-        pdb_lines = self.readPDB(deepNMAProtocol.inputStruct.get().getFileName())
-        pdb_coordinates = np.array(self.PDB2List(pdb_lines))
+        pd_struct = pd.parsePDB(refStruct, subset=subset, compressed=False)
+        pdb_coordinates = pd_struct.getCoords()
+        pdb_coordinates = np.c_[pdb_coordinates, np.ones(pdb_coordinates.shape[0])]
+        # pdb_lines = self.readPDB(deepNMAProtocol.inputStruct.get().getFileName())
+        # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
         np.savetxt(structure, pdb_coordinates)
 
         writeSetOfParticles(inputParticles, imgsFn)
@@ -213,6 +220,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().n_modes = Integer(deepNMAProtocol.n_modes.get())
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().atomSubset = String(self._subset[deepNMAProtocol.atomSubset.get()])
 
         structure = deepNMAProtocol.inputStruct.get().getFileName()
         partSet.getFlexInfo().refStruct = String(structure)

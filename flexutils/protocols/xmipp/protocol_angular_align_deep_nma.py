@@ -29,9 +29,10 @@ import numpy as np
 import os
 import re
 from xmipp_metadata.metadata import XmippMetaData
+import prody as pd
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList, Boolean
+from pyworkflow.object import Integer, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -52,6 +53,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with automatic NMA selection. """
     _label = 'angular align - DeepNMA'
     _lastUpdateVersion = VERSION_2_0
+    _subset = ["ca", "bb", None]
 
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
@@ -71,9 +73,12 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
                        help="Reference structure should be aligned within Scipion to the map reconstructed "
                             "from the input particles. This will ensure that the structure coordinates are "
                             "properly placed in the expected reference frame.")
-        group.addParam("onlyBackbone", params.BooleanParam, default=False, label="Use only backbone atoms?",
-                       help="If yes, only backbone atoms will be considered during the estimation to speed up "
-                            "computations. It might decrease the accuracy of the estimations.")
+        group.addParam("atomSubset", params.EnumParam, label="Atoms considered",
+                       choices=['CA', 'Backbone', 'Full'], default=0,
+                       help="Atoms to be considered for the computation of the normal modes. Options include: \n"
+                            "\t **CA**: Use carbon alpha only\n"
+                            "\t **Backbone**: Use protein backbone only\n"
+                            "\t **Full**: Use all the atomic structure")
         group.addParam('boxSize', params.IntParam, default=128,
                        label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                        help='In general, downsampling the particles will increase performance without compromising '
@@ -169,8 +174,12 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
 
         # Structure reference
-        pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
-        pdb_coordinates = np.array(self.PDB2List(pdb_lines))
+        pd_struct = pd.parsePDB(self.inputStruct.get().getFileName(), subset=self._subset[self.atomSubset.get()],
+                                compressed=False)
+        pdb_coordinates = pd_struct.getCoords()
+        pdb_coordinates = np.c_[pdb_coordinates, np.ones(pdb_coordinates.shape[0])]
+        # pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
+        # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
         np.savetxt(structure, pdb_coordinates)
 
         writeSetOfParticles(inputParticles, imgsFn)
@@ -323,6 +332,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().n_modes = Integer(self.n_modes.get())
         partSet.getFlexInfo().pad = Integer(self.pad.get())
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().atomSubset = String(self._subset[self.atomSubset.get()])
 
         structure = self.inputStruct.get().getFileName()
         partSet.getFlexInfo().refStruct = String(structure)
