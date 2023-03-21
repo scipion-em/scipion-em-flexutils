@@ -69,7 +69,7 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         form.addSection(label='Show deformation')
         form.addParam('idChoice', params.EnumParam,
                       condition='have_set',
-                      choices=self.choices, default=0,
+                      choices=[str(idx) for idx in self.choices], default=0,
                       label=f'{self.mode} to display', display=params.EnumParam.DISPLAY_COMBO,
                       help=f'Select which {self.mode} to display from the IDs of the set')
         if self.mode == "Map":
@@ -93,7 +93,7 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
     def _getVisualizeDict(self):
         if type(self.protocol).__name__ == XmippApplyFieldZernike3D.__name__:
             if self.have_set:
-                self.chosen = self.deformed[list(self.deformed.getIdSet())[self.idChoice.get()]]
+                self.chosen = self.deformed[self.choices[self.idChoice.get()]]
             else:
                 self.chosen = self.deformed
 
@@ -118,7 +118,6 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
 
     # ------------------- Mode MAP Methods -------------------
     def _doShowStrain(self, param=None):
-
         scriptFile = self.protocol._getPath('strain_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
         fnbase = removeExt(self.protocol._getFileName('fnInputVol'))
@@ -144,7 +143,6 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         return [view]
 
     def _doShowRotation(self, param=None):
-
         scriptFile = self.protocol._getPath('rotation_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
         fnbase = removeExt(self.protocol._getFileName('fnInputVol'))
@@ -170,7 +168,6 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         return [view]
 
     def _doShowMorphOrigRef(self, param=None):
-
         scriptFile = self.protocol._getPath('morph_orig_ref_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
         fninput = os.path.abspath(self.inputVol.getFileName())

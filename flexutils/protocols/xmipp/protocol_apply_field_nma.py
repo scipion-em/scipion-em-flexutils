@@ -104,8 +104,9 @@ class XmippApplyFieldNMA(ProtAnalysis3D, ProtFlexBase):
             c_nma = structs.getZFlex()
 
             outFile = self._getExtraPath(base_name + '_deformed.pdb')
-            out_struct = AtomStructFlex(filename=outFile, progName=const.NMA)
+            out_struct = AtomStructFlex(progName=const.NMA)
             out_struct.copyInfo(structs)
+            out_struct.setLocation(outFile)
             out_struct.setZFlex(c_nma)
 
             self._defineOutputs(deformed=out_struct)
@@ -120,11 +121,14 @@ class XmippApplyFieldNMA(ProtAnalysis3D, ProtFlexBase):
                 c_nma = struct.getZFlex()
 
                 outFile = self._getExtraPath(base_name + '_deformed_{0}.pdb'.format(i_pad))
-                out_struct = AtomStructFlex(filename=outFile, progName=const.NMA)
+                out_struct = AtomStructFlex(progName=const.NMA)
                 out_struct.copyInfo(struct)
+                out_struct.setLocation(outFile)
                 out_struct.setZFlex(c_nma)
 
                 out_structs.append(out_struct)
+
+                idx += 1
 
             self._defineOutputs(deformed=out_structs)
             self._defineSourceRelation(self.inputStruct, out_structs)
