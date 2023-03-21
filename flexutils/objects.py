@@ -267,7 +267,7 @@ class SetOfAtomStructFlex(EMSet):
         self._flexInfo = flexInfo
 
     def copyInfo(self, other):
-        super(SetOfParticles, self).copyInfo(other)
+        super(SetOfAtomStructFlex, self).copyInfo(other)
         if hasattr(other, "_flexInfo"):
             self._flexInfo.copyInfo(other._flexInfo)
 
