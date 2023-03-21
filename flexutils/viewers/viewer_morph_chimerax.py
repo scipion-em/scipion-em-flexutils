@@ -84,10 +84,10 @@ class FlexMorphChimeraX():
                 ImageHandler().convert(os.path.join(self.path, "vol_000.mrc"),
                                        os.path.join(self.path, self.file_names[idz] + ".mrc"))
         elif self.mode == "HetSIREN":
-            from flexutils.utils import generateVolumes
+            from flexutils.utils import generateVolumesHetSIREN
             for idz in path:
-                generateVolumes(self.other_inputs["weights"], self.z_space[idz, :],
-                                self.path, step=self.other_inputs["step"])
+                generateVolumesHetSIREN(self.other_inputs["weights"], self.z_space[idz, :],
+                                        self.path, step=self.other_inputs["step"])
                 ImageHandler().convert(os.path.join(self.path, "decoded_map_class_1.mrc"),
                                        os.path.join(self.path, self.file_names[idz] + ".mrc"))
         self.file_names = [self.file_names[i] for i in path]

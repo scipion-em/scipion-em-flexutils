@@ -441,8 +441,8 @@ class MapView(HasTraits):
             cryodrgn.Plugin._defineVariables()
             self.generate_map = generateVolumes
         elif self.mode == "HetSIREN":
-            from flexutils.utils import generateVolumes
-            self.generate_map = generateVolumes
+            from flexutils.utils import generateVolumesHetSIREN
+            self.generate_map = generateVolumesHetSIREN
 
     # ---------------------------------------------------------------------------
     # Default values

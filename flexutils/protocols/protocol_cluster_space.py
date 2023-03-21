@@ -135,9 +135,9 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
             elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-                from flexutils.utils import generateVolumes
-                generateVolumes(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
-                                self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
+                from flexutils.utils import generateVolumesHetSIREN
+                generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
+                                        self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_1.mrc'),
                                             self._getExtraPath('class_%d.mrc') % clInx, 1,
                                             finalDimension=particles.getXDim())

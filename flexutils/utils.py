@@ -78,7 +78,7 @@ def getXmippFileName(filename):
         filename += ":mrc"
     return filename
 
-def generateVolumes(weigths_file, x_het, outdir, step):
+def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):
     args = _getEvalVolArgs(x_het, weigths_file, outdir, step)
     program = flexutils.Plugin.getTensorflowProgram("predict_map_het_siren.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
