@@ -250,6 +250,18 @@ class AtomStructFlex(AtomStruct):
 
         self.setFileName(filename)
 
+    def getSamplingRate(self):
+        # This is only a way to use the default way to generate subsets
+        return None
+
+    def setSamplingRate(self, sr):
+        # This is only a way to use the default way to generate subsets
+        pass
+
+    def setAlignment(self, sr):
+        # This is only a way to use the default way to generate subsets
+        pass
+
 
 class SetOfAtomStructFlex(EMSet):
     """ Set containing AtomStructFlex items. """
@@ -270,6 +282,18 @@ class SetOfAtomStructFlex(EMSet):
         super(SetOfAtomStructFlex, self).copyInfo(other)
         if hasattr(other, "_flexInfo"):
             self._flexInfo.copyInfo(other._flexInfo)
+
+    def getSamplingRate(self):
+        # This is only a way to use the default way to generate subsets
+        return None
+
+    def setSamplingRate(self, sr):
+        # This is only a way to use the default way to generate subsets
+        pass
+
+    def setAlignment(self, sr):
+        # This is only a way to use the default way to generate subsets
+        pass
 
 
 class ClassStructFlex(SetOfParticlesFlex):
