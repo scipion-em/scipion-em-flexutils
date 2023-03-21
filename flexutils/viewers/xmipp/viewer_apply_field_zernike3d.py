@@ -37,7 +37,7 @@ from flexutils.protocols.xmipp.protocol_apply_field_zernike3d import XmippApplyF
 from flexutils import objects
 
 
-class XmippApplyFieldZernike3D(ProtocolViewer):
+class XmippApplyFieldZernike3DView(ProtocolViewer):
     """ Visualize a Zernike3D map/structure """
     _label = 'viewer apply field Zernike3D'
     # _targets = [XmippProtVolumeDeformZernike3D, XmippApplyFieldZernike3D]
@@ -71,7 +71,7 @@ class XmippApplyFieldZernike3D(ProtocolViewer):
                       condition='have_set',
                       choices=self.choices, default=0,
                       label=f'{self.mode} to display', display=params.EnumParam.DISPLAY_COMBO,
-                      help='Select which volume to display from the IDs of the set')
+                      help=f'Select which {self.mode} to display from the IDs of the set')
         if self.mode == "Map":
             form.addParam('doShowStrain', params.LabelParam,
                           condition='only_apply==False',
@@ -81,19 +81,18 @@ class XmippApplyFieldZernike3D(ProtocolViewer):
                           label="Display the rotation deformation")
             form.addParam('doShowMorphOrigRef', params.LabelParam,
                           condition='only_apply==False',
-                          label="Display the morphing between original and reference volumes")
+                          label="Display the morphing between original and reference structure")
             form.addParam('doShowMorphDeformedRef', params.LabelParam,
-                          label="Display the morphing between deformed and reference volumes")
+                          label="Display the morphing between deformed and reference structure")
         elif self.mode == "Structure":
             form.addParam('doShowPDB', params.LabelParam,
                           label="Display original and deformed PDB or volume")
             form.addParam('doShowMorph', params.LabelParam,
-                          label="Display a morphing between the original and deformed PDB or volume")
+                          label="Display a morphing between the original and deformed structure")
 
     def _getVisualizeDict(self):
         if type(self.protocol).__name__ == XmippApplyFieldZernike3D.__name__:
             if self.have_set:
-
                 self.chosen = self.deformed[list(self.deformed.getIdSet())[self.idChoice.get()]]
             else:
                 self.chosen = self.deformed
