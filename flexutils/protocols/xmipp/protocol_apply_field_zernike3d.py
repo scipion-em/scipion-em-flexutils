@@ -78,7 +78,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
 
     # --------------------------- STEPS functions ------------------------------
     def deformStep(self):
-        volumes = self.volume.get()
+        volumes = self.inputVolume.get()
         if isinstance(volumes, VolumeFlex):
             volumes = [volumes]
             num_vols = 1
@@ -131,7 +131,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             idx += 1
 
     def analyzeRSStep(self):
-        volumes = self.volume.get()
+        volumes = self.inputVolume.get()
 
         if isinstance(volumes, VolumeFlex):
             volumes = [volumes]
@@ -219,7 +219,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
         pwutils.cleanPattern(self._getExtraPath("*.txt"))
 
     def createOutputStep(self):
-        volumes = self.volume.get()
+        volumes = self.inputVolume.get()
         Rmax = Float(int(0.5 * volumes.getXDim()))
         if isinstance(volumes, VolumeFlex):
             L1 = volumes.getFlexInfo().L1
@@ -239,7 +239,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
                 pdb.setZFlex(z_clnm)
                 self._defineOutputs(deformed=pdb)
                 self._defineSourceRelation(self.inputPDB, pdb)
-                self._defineSourceRelation(self.volume, pdb)
+                self._defineSourceRelation(self.inputVolume, pdb)
             else:
                 vol = VolumeFlex(progName=const.ZERNIKE3D)
                 vol.setSamplingRate(volumes.getSamplingRate())
@@ -298,10 +298,10 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             if self.applyPDB.get():
                 self._defineOutputs(deformed=pdbs)
                 self._defineSourceRelation(self.inputPDB, pdbs)
-                self._defineSourceRelation(self.volume, pdbs)
+                self._defineSourceRelation(self.inputVolume, pdbs)
             else:
                 self._defineOutputs(deformed=vols)
-                self._defineSourceRelation(self.volume, vols)
+                self._defineSourceRelation(self.inputVolume, vols)
 
     # --------------------------- UTILS functions ------------------------------
     def writeZernikeFile(self, volume, z_clnm, file):
