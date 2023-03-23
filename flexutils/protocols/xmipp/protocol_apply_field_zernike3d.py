@@ -27,6 +27,7 @@
 
 
 import numpy as np
+import os
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -34,9 +35,14 @@ import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.object import Float
 
+import xmipp3
+
+import flexutils
 from flexutils.protocols import ProtFlexBase
 from flexutils.objects import VolumeFlex, AtomStructFlex
 import flexutils.constants as const
+from flexutils.protocols.xmipp.utils.utils import computeBasis, readMap, getCoordsAtLevel, \
+    getXmippOrigin, resizeZernikeCoefficients
 
 
 class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
@@ -66,8 +72,9 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep("deformStep")
-        self._insertFunctionStep("createOutputStep")
+        self._insertFunctionStep(self.deformStep)
+        self._insertFunctionStep(self.analyzeRSStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions ------------------------------
     def deformStep(self):
@@ -122,6 +129,94 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
                 self.runJob("xmipp_volume_apply_coefficient_zernike3d", params)
 
             idx += 1
+
+    def analyzeRSStep(self):
+        volumes = self.volume.get()
+
+        if isinstance(volumes, VolumeFlex):
+            volumes = [volumes]
+            num_vols = 1
+            first_vol = volumes[0]
+        else:
+            volumes = volumes
+            num_vols = volumes.getSize()
+            first_vol = volumes.getFirstItem()
+
+        self.len_num_vols = len(str(num_vols))
+
+        # Get reference coords and indices
+        ref_file = first_vol.getFlexInfo().refMask.get()
+        ref_map = readMap(ref_file)
+        coords = getCoordsAtLevel(ref_map, 1)
+        origin = getXmippOrigin(ref_map)
+        coords_xo = coords - origin
+        indices = np.transpose(np.asarray([coords[:, 2], coords[:, 1], coords[:, 0]]))
+
+        # Get Zernike3D basis
+        Rmax = first_vol.getFlexInfo().Rmax.get()
+        L1 = first_vol.getFlexInfo().L1.get()
+        L2 = first_vol.getFlexInfo().L2.get()
+        Z = computeBasis(L1=L1, L2=L2, pos=coords_xo, r=Rmax)
+
+        # Save indices
+        indices_path = self._getExtraPath("indices.txt")
+        np.savetxt(indices_path, indices)
+
+        idx = 0
+        for volume in volumes:
+            i_pad = str(idx).zfill(self.len_num_vols)
+
+            # Get z_clnm
+            z_clnm = volume.getZFlex()
+            A = resizeZernikeCoefficients(z_clnm)
+
+            # Get deformation field
+            d_f = Z @ A.T
+
+            # Save deformation field
+            field_path = self._getExtraPath("def_field.txt")
+            np.savetxt(field_path, d_f)
+
+            # RS analysis
+            args = "--field %s --indices %s --out_path %s --boxsize %d" % \
+                   (field_path, indices_path, self._getExtraPath(), ref_map.shape[0])
+            program = os.path.join(const.XMIPP_SCRIPTS, "strain_rotation_analysis.py")
+            program = flexutils.Plugin.getProgram(program)
+            self.runJob(program, args)
+
+            if self.applyPDB.get():
+                struct_file = self.inputPDB.get().getFileName()
+                program = 'xmipp_pdb_label_from_volume'
+
+                # Strain labeling
+                outFile = self._getExtraPath(
+                    pwutils.removeBaseExt(struct_file) + '_deformed_{0}_strain.pdb'.format(i_pad)
+                )
+                args = "--pdb %s --vol %s -o %s --sampling %f --radius 5 --origin %d %d %d" % \
+                       (struct_file, self._getExtraPath("strain.mrc"), outFile, volume.getSamplingRate(),
+                        origin[0], origin[0], origin[0])
+                self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+
+                # Rotation labeling
+                outFile = self._getExtraPath(
+                    pwutils.removeBaseExt(struct_file) + '_deformed_{0}_rotation.pdb'.format(i_pad)
+                )
+                args = "--pdb %s --vol %s -o %s --sampling %f --radius 5 --origin %d %d %d" % \
+                       (struct_file, self._getExtraPath("rotation.mrc"), outFile, volume.getSamplingRate(),
+                        origin[0], origin[0], origin[0])
+                self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+
+            else:
+                # Rename strain and rotation volumes
+                pwutils.moveFile(self._getExtraPath("strain.mrc"),
+                                 self._getExtraPath("deformed_volume_{0}_strain.mrc".format(i_pad)))
+                pwutils.moveFile(self._getExtraPath("rotation.mrc"),
+                                 self._getExtraPath("deformed_volume_{0}_rotation.mrc".format(i_pad)))
+
+            idx += 1
+
+        # Cleaning to save some memory
+        pwutils.cleanPattern(self._getExtraPath("*.txt"))
 
     def createOutputStep(self):
         volumes = self.volume.get()

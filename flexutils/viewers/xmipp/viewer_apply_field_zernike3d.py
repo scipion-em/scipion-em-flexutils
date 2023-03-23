@@ -51,12 +51,10 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
     def __init__(self, **kwargs):
         ProtocolViewer.__init__(self, **kwargs)
         if type(self.protocol).__name__ == XmippApplyFieldZernike3D.__name__:
-            self.only_apply = True
             self.deformed = self.protocol.deformed
             self.have_set = isinstance(self.deformed, Set)
             self.choices = list(self.deformed.getIdSet())
         else:
-            self.only_apply = False
             self.have_set = False
             self.choices = None
 
@@ -72,15 +70,12 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
                       choices=[str(idx) for idx in self.choices], default=0,
                       label=f'{self.mode} to display', display=params.EnumParam.DISPLAY_COMBO,
                       help=f'Select which {self.mode} to display from the IDs of the set')
+        form.addParam('doShowStrain', params.LabelParam,
+                      label="Display the strain deformation")
+        form.addParam('doShowRotation', params.LabelParam,
+                      label="Display the rotation deformation")
         if self.mode == "Map":
-            form.addParam('doShowStrain', params.LabelParam,
-                          condition='only_apply==False',
-                          label="Display the strain deformation")
-            form.addParam('doShowRotation', params.LabelParam,
-                          condition='only_apply==False',
-                          label="Display the rotation deformation")
             form.addParam('doShowMorphOrigRef', params.LabelParam,
-                          condition='only_apply==False',
                           label="Display the morphing between original and reference structure")
             form.addParam('doShowMorphDeformedRef', params.LabelParam,
                           label="Display the morphing between deformed and reference structure")
@@ -113,22 +108,22 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
                     'doShowMorphOrigRef': self._doShowMorphOrigRef,
                     'doShowMorphDeformedRef': self._doShowDeformedOrigRef}
         elif self.mode == "Structure":
-            return {'doShowPDB': self._doShowPDB,
+            return {'doShowStrain': self._doShowStrainStruct,
+                    'doShowRotation': self._doShowRotationStruct,
+                    'doShowPDB': self._doShowPDB,
                     'doShowMorph': self._doShowMorph}
 
     # ------------------- Mode MAP Methods -------------------
     def _doShowStrain(self, param=None):
         scriptFile = self.protocol._getPath('strain_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
-        fnbase = removeExt(self.protocol._getFileName('fnInputVol'))
-        ext = getExt(self.protocol._getFileName('fnInputVol'))
-        fninput = os.path.abspath(fnbase + ext[0:4])
+        fnref = os.path.abspath(self.chosen.getFileName())
         smprt = self.chosen.getSamplingRate()
 
-        fnbase2 = removeExt(self.protocol._getFileName('fnOutVol'))
+        fnbase2 = removeExt(self.chosen.getFileName())
         fnStrain = os.path.abspath(fnbase2)
 
-        fhCmd.write(self.OPEN_FILE % fninput)
+        fhCmd.write(self.OPEN_FILE % fnref)
         fhCmd.write(self.OPEN_FILE % (fnStrain + "_strain.mrc"))
         counter = 1
         fhCmd.write(self.VOXEL_SIZE % (counter, str(smprt)))
@@ -145,15 +140,13 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
     def _doShowRotation(self, param=None):
         scriptFile = self.protocol._getPath('rotation_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
-        fnbase = removeExt(self.protocol._getFileName('fnInputVol'))
-        ext = getExt(self.protocol._getFileName('fnInputVol'))
-        fninput = os.path.abspath(fnbase + ext[0:4])
+        fnref = os.path.abspath(self.chosen.getFileName())
         smprt = self.chosen.getSamplingRate()
 
-        fnbase2 = removeExt(self.protocol._getFileName('fnOutVol'))
+        fnbase2 = removeExt(self.chosen.getFileName())
         fnStrain = os.path.abspath(fnbase2)
 
-        fhCmd.write(self.OPEN_FILE % fninput)
+        fhCmd.write(self.OPEN_FILE % fnref)
         fhCmd.write(self.OPEN_FILE % (fnStrain + "_rotation.mrc"))
         counter = 1
         fhCmd.write(self.VOXEL_SIZE % (counter, str(smprt)))
@@ -171,7 +164,7 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         scriptFile = self.protocol._getPath('morph_orig_ref_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
         fninput = os.path.abspath(self.inputVol.getFileName())
-        fnref = os.path.abspath(self.chosen.getFileName())
+        fnref = os.path.abspath(self.chosen.getFlexInfo().refMap.get())
         smprt = self.chosen.getSamplingRate()
 
         fhCmd.write(self.OPEN_FILE % fninput)
@@ -218,6 +211,42 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
     # ------------------- ------------------- -------------------
 
     # ------------------- Mode Structure Methods -------------------
+    def _doShowStrainStruct(self, param=None):
+        scriptFile = self.protocol._getPath('strain_chimera.cxc')
+        fhCmd = open(scriptFile, 'w')
+
+        fnbase = removeExt(self.chosen.getFileName())
+        fnStrain = os.path.abspath(fnbase)
+
+        fhCmd.write(self.OPEN_FILE % (fnStrain + "_strain.pdb"))
+        fhCmd.write("show cartoons\n")
+        fhCmd.write("cartoon style width 1.5 thick 1.5\n")
+        fhCmd.write("style stick\n")
+        fhCmd.write('color by occupancy palette rainbow\n')
+        fhCmd.write(self.VIEW)
+        fhCmd.close()
+
+        view = ChimeraView(scriptFile)
+        return [view]
+
+    def _doShowRotationStruct(self, param=None):
+        scriptFile = self.protocol._getPath('strain_chimera.cxc')
+        fhCmd = open(scriptFile, 'w')
+
+        fnbase = removeExt(self.chosen.getFileName())
+        fnStrain = os.path.abspath(fnbase)
+
+        fhCmd.write(self.OPEN_FILE % (fnStrain + "_rotation.pdb"))
+        fhCmd.write("show cartoons\n")
+        fhCmd.write("cartoon style width 1.5 thick 1.5\n")
+        fhCmd.write("style stick\n")
+        fhCmd.write('color by occupancy palette rainbow\n')
+        fhCmd.write(self.VIEW)
+        fhCmd.close()
+
+        view = ChimeraView(scriptFile)
+        return [view]
+
     def _doShowPDB(self, obj, **kwargs):
         if self.protocol.applyPDB.get():
             scriptFile = self.protocol._getPath('pdb_deform_chimera.cxc')
