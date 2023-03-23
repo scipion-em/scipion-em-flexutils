@@ -359,7 +359,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
-        for idx, particle in enumerate(inputSet.iterItems()):
+        idx = 0
+        for particle in inputSet.iterItems():
 
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
@@ -383,6 +384,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             outParticle.getTransform().setMatrix(tr)
 
             partSet.append(outParticle)
+
+            idx += 1
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
