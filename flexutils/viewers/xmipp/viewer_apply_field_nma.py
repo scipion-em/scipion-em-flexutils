@@ -28,9 +28,11 @@
 import os
 
 from pyworkflow.object import Set
+from pyworkflow.utils import removeExt
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
-from pwem.viewers import ChimeraView
 import pyworkflow.protocol.params as params
+
+from pwem.viewers import ChimeraView
 
 from flexutils.protocols.xmipp.protocol_apply_field_nma import XmippApplyFieldNMA
 
@@ -57,6 +59,10 @@ class XmippApplyFieldNMAView(ProtocolViewer):
                       choices=[str(idx) for idx in self.choices], default=0,
                       label='Structure to display', display=params.EnumParam.DISPLAY_COMBO,
                       help='Select which strucutre to display from the IDs of the set')
+        form.addParam('doShowStrain', params.LabelParam,
+                      label="Display the strain deformation")
+        form.addParam('doShowRotation', params.LabelParam,
+                      label="Display the rotation deformation")
         form.addParam('doShowPDB', params.LabelParam,
                       label="Display original and deformed PDB or volume")
         form.addParam('doShowMorph', params.LabelParam,
@@ -68,10 +74,48 @@ class XmippApplyFieldNMAView(ProtocolViewer):
         else:
             self.chosen = self.deformed
 
-        return {'doShowPDB': self._doShowPDB,
+        return {'doShowStrain': self._doShowStrainStruct,
+                'doShowRotation': self._doShowRotationStruct,
+                'doShowPDB': self._doShowPDB,
                 'doShowMorph': self._doShowMorph}
 
     # ------------------- Mode Structure Methods -------------------
+    def _doShowStrainStruct(self, param=None):
+        scriptFile = self.protocol._getPath('strain_chimera.cxc')
+        fhCmd = open(scriptFile, 'w')
+
+        fnbase = removeExt(self.chosen.getFileName())
+        fnStrain = os.path.abspath(fnbase)
+
+        fhCmd.write(self.OPEN_FILE % (fnStrain + "_strain.pdb"))
+        fhCmd.write("show cartoons\n")
+        fhCmd.write("cartoon style width 1.5 thick 1.5\n")
+        fhCmd.write("style stick\n")
+        fhCmd.write('color by occupancy palette rainbow\n')
+        fhCmd.write(self.VIEW)
+        fhCmd.close()
+
+        view = ChimeraView(scriptFile)
+        return [view]
+
+    def _doShowRotationStruct(self, param=None):
+        scriptFile = self.protocol._getPath('strain_chimera.cxc')
+        fhCmd = open(scriptFile, 'w')
+
+        fnbase = removeExt(self.chosen.getFileName())
+        fnStrain = os.path.abspath(fnbase)
+
+        fhCmd.write(self.OPEN_FILE % (fnStrain + "_rotation.pdb"))
+        fhCmd.write("show cartoons\n")
+        fhCmd.write("cartoon style width 1.5 thick 1.5\n")
+        fhCmd.write("style stick\n")
+        fhCmd.write('color by occupancy palette rainbow\n')
+        fhCmd.write(self.VIEW)
+        fhCmd.close()
+
+        view = ChimeraView(scriptFile)
+        return [view]
+
     def _doShowPDB(self, obj, **kwargs):
         scriptFile = self.protocol._getPath('pdb_deform_chimera.cxc')
         fhCmd = open(scriptFile, 'w')
