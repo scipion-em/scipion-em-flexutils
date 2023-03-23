@@ -367,7 +367,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
                 outParticle.getTransform().setMatrix(tr)
 
-                idx += 1
+            idx += 1
 
             partSet.append(outParticle)
 
