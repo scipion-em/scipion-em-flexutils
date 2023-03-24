@@ -29,9 +29,12 @@
 import numpy as np
 from pathlib import Path
 import os
+from scipy.ndimage import gaussian_filter
 
 from pyworkflow.utils import getExt
 from pyworkflow.utils.process import runJob
+
+from pwem.emlib.image import ImageHandler
 
 import flexutils
 
@@ -80,6 +83,35 @@ def getXmippFileName(filename):
     if getExt(filename) == ".mrc":
         filename += ":mrc"
     return filename
+
+
+def coordsToMap(coords, values, xsize, thr=None):
+    indices = coords + np.floor(0.5 * xsize)
+    indices = indices.astype(int)
+
+    # Place values on grid
+    xsize = int(xsize)
+    volume = np.zeros((xsize, xsize, xsize), dtype=np.float32)
+    np.add.at(volume, (indices[:, 2], indices[:, 1], indices[:, 0]), values)
+
+    # Filter map
+    volume = gaussian_filter(volume, sigma=1.)
+
+    # Volume mask
+    if thr is None:
+        mask = np.ones(volume.shape)
+    else:
+        mask = np.zeros(volume.shape)
+        mask[volume >= thr] = 1
+
+    return volume, mask
+
+
+def saveMap(filename, map):
+    ih = ImageHandler()
+    img = ih.createImage()
+    img.setData(map.astype(np.float32))
+    img.write(filename + ":mrc")
 
 
 def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):

@@ -31,7 +31,7 @@ import re
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList, Boolean
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -48,7 +48,7 @@ import flexutils
 import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
 from flexutils.objects import ParticleFlex
-from flexutils.utils import getXmippFileName
+from flexutils.utils import getXmippFileName, coordsToMap, saveMap
 
 
 class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -385,6 +385,20 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         else:
             structure = self.inputStruct.get().getFileName()
             partSet.getFlexInfo().refStruct = String(structure)
+
+            i_sr = 1. / inputParticles.getSamplingRate()
+            pdb_lines = self.readPDB(structure)
+            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
+
+            volume, mask = coordsToMap(pdb_coordinates[:, :-1],
+                                       pdb_coordinates[:, -1], Xdim, 0.001)
+            volume_file = self._getExtraPath("ref_map_from_model.mrc")
+            mask_file = self._getExtraPath("ref_mask_from_model.mrc")
+            saveMap(volume_file, volume)
+            saveMap(mask_file, mask)
+
+            partSet.getFlexInfo().refMask = String(mask_file)
+            partSet.getFlexInfo().refMap = String(volume_file)
 
         if self.refinePose.get():
             partSet.getFlexInfo().refPose = Boolean(True)
