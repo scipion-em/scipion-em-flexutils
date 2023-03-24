@@ -460,6 +460,17 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                     pass
         return newlines
 
+    # --------------------------- INFO functions -----------------------------
+    def _summary(self):
+        summary = []
+        logFile = os.path.abspath(self._getLogsPath()) + "/run.stdout"
+        with open(logFile, "r") as fi:
+            for ln in fi:
+                if ln.startswith("GPU memory has"):
+                    summary.append(ln)
+                    break
+        return summary
+
     # ----------------------- VALIDATE functions -----------------------
     def validate(self):
         """ Try to find errors on define params. """

@@ -122,4 +122,15 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
 
     # --------------------------- UTILS functions --------------------------------------------
 
+    # --------------------------- INFO functions -----------------------------
+    def _summary(self):
+        summary = []
+        logFile = os.path.abspath(self._getLogsPath()) + "/run.stdout"
+        with open(logFile, "r") as fi:
+            for ln in fi:
+                if ln.startswith("GPU memory has"):
+                    summary.append(ln)
+                    break
+        return summary
+
     # ----------------------- VALIDATE functions ----------------------------------------
