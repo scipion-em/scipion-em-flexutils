@@ -247,6 +247,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         split_train = self.split_train.get()
         epochs = self.epochs.get()
         l1Reg = self.l1Reg.get()
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
@@ -294,6 +295,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
         weigths_file = self._getExtraPath(os.path.join('network', 'homo_siren_model'))
         pad = self.pad.get()
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()

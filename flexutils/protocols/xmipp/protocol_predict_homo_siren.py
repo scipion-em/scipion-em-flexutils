@@ -150,6 +150,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
         weigths_file = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
         pad = homoSirenProtocol.pad.get()
+        self.newXdim = homoSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = homoSirenProtocol.ctfType.get()

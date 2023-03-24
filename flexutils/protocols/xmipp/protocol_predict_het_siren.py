@@ -154,6 +154,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         md_file = self._getFileName('imgsFn')
         weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
         pad = hetSirenProtocol.pad.get()
+        self.newXdim = hetSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.ctfType.get()

@@ -145,6 +145,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
         weigths_file = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
         pad = deepPoseProtocol.pad.get()
+        self.newXdim = deepPoseProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = deepPoseProtocol.ctfType.get()

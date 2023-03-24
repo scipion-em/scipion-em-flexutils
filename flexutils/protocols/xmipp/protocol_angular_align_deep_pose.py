@@ -237,6 +237,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         step = self.step.get()
         split_train = self.split_train.get()
         epochs = self.epochs.get()
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
@@ -286,6 +287,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         md_file = self._getFileName('imgsFn')
         weigths_file = self._getExtraPath(os.path.join('network', 'deep_pose_model'))
         pad = self.pad.get()
+        self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
