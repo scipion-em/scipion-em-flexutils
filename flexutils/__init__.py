@@ -124,7 +124,7 @@ class Plugin(pwplugin.Plugin):
             return installationCmd
 
         def getCondaInstallationTensorflow():
-            installationCmd = "pip install -e /home/davidherreros/Softwares/plugins_scipion3/tensorflow_toolkit -v"
+            installationCmd = "pip install scipionn-toolkit -v"
             return installationCmd
 
         commands = []
