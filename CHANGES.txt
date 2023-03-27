@@ -1,0 +1,15 @@
+V3.0.2
+   - Zernike3Deep method: Semi-classical neural network for estimation of conformational states based on the Zernike3D basis
+   - HetSIREN method: Neural network heterogeneous reconstruction for real space
+   - HomoSIREN method: Neural network homogeneous reconstruction for real space
+   - DeepPose method: Neural network for angular alignment refinement
+   - DeepNMA method: Semi-classical neural network for estimation of conformational states based on the NMA basis
+   - FlexConsensus method: Consensus neural network for conformational landscapes
+   - DeepElastic method: Dimensionality reduction based on elastic cluster analysis
+   - Dimensionality reduction and landscape visualization splitted into two different protocols
+   - Strain and rotation analysis for deformation fields (currently for Zernike3D and NMA)
+   - Clustering at the structural model space (Zernike3D)
+   - Optimal number of clusters analysis
+Developers:
+   - New data model for Flexibility Hub including several Scipion dynamic objects
+   - Flexibility Hub protocols.conf added
