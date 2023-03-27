@@ -13,3 +13,5 @@ V3.0.2
 Developers:
    - New data model for Flexibility Hub including several Scipion dynamic objects
    - Flexibility Hub protocols.conf added
+   - Some protocols might rely on new xmipp-metadata Pypi package to read Xmipp metadata without the need to rely on Scipion/Xmipp
+   - Tensorflow related protocols will rely on the new tensorflow-toolkit (Flexutils) Pypi package to properly setup the Tensorflow GPU environment
