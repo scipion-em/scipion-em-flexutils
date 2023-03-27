@@ -29,6 +29,7 @@ from .viewers_data import FlexDataViewer
 # from .viewer_morph_salesman import FlexMorphSalesmanViewer
 from .viewer_show_structures import FlexShowStructuresViewer
 from .viewer_show_maps import FlexShowMapsViewer
+from .viewer_optimal_clusters import FlexShowOptimalClustersViewer
 
 # Flexibility Xmipp viewers (offered here due to strong package dependency)
 from .xmipp import *
