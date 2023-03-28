@@ -3,3 +3,4 @@ scipion-em >= 3.0.8
 h5py
 nvidia-ml-py3
 xmipp_metadata
+scikit-image==0.18.1
