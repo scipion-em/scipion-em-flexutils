@@ -124,7 +124,9 @@ class Plugin(pwplugin.Plugin):
             return installationCmd
 
         def getCondaInstallationTensorflow():
-            installationCmd = "pip install scipionn-toolkit -v"
+            conda_init = cls.getCondaActivationCmd()
+            installationCmd = f"{conda_init} conda activate flexutils && " \
+                              f"pip install git+https://github.com/DavidHerreros/Scipionn-Toolkit.git@master#egg=scipionn-toolkit -v"
             return installationCmd
 
         commands = []
