@@ -124,6 +124,10 @@ class PointCloudView(HasTraits):
     mode = String()
     generate_map = Callable()
 
+    # Points properties
+    scale_pts = Button("Scale spheres")
+    scale_factor = String("3")
+
     # ChimeraX morphing
     morphing_choice = Enum('Salesman', 'Random walk')
     morph_chimerax = Button(label="",
@@ -155,21 +159,24 @@ class PointCloudView(HasTraits):
             from cryodrgn.utils import generateVolumes
             cryodrgn.Plugin._defineVariables()
             self.generate_map = generateVolumes
+        elif self.mode == "HetSIREN":
+            from flexutils.utils import generateVolumesHetSIREN
+            self.generate_map = generateVolumesHetSIREN
+        elif self.mode == "NMA":
+            from flexutils.utils import generateVolumesDeepNMA
+            self.generate_map = generateVolumesDeepNMA
 
         # Selections
         self.selections = dict()
         pathFile = os.path.join(self.path, "selections_dict.pkl")
         if os.path.isfile(pathFile):
             self.readSelectionsDict()
-        elif not os.path.isfile(pathFile) and self.mode == "Zernike3D":
+
+        _, idx = self.kdtree_data.query(np.asarray([0, 0, 0]).reshape(1, -1), k=1)
+        self.selections['origin'] = idx[0][0]
+        if not os.path.isfile(pathFile) and self.mode == "Zernike3D":
             for idx in range(int(self.class_inputs["n_vol"])):
-                if (idx+1) == int(self.class_inputs["n_vol"]):
-                    self.selections['reference'] = self.data.shape[0] - (idx + 1)
-                else:
-                    self.selections['class_%d' % (idx+1)] = self.data.shape[0] - (idx + 1)
-        else:
-            _, idx = self.kdtree_data.query(np.asarray([0, 0, 0]).reshape(1, -1), k=1)
-            self.selections['origin'] = idx[0][0]
+                self.selections['class_%d' % (idx + 1)] = self.data.shape[0] - (idx + 1)
 
         self.ipw_sel
 
@@ -247,7 +254,7 @@ class PointCloudView(HasTraits):
                                                figure=self.scene3d.mayavi_scene)
         scatter = mlab.pipeline.glyph(scatter,
                                       opacity=self.opacity,
-                                      scale_mode='none', scale_factor=0.1, mode='sphere', colormap="viridis",
+                                      scale_mode='none', scale_factor=3., mode='sphere', colormap="viridis",
                                       figure=self.scene3d.mayavi_scene)
         scatter.actor.actor.pickable = 0
         setattr(self, 'ipw_pc', scatter)
@@ -256,20 +263,17 @@ class PointCloudView(HasTraits):
     def display_selections(self):
         data = self.data[list(self.selections.values())]
         scatter = mlab.points3d(data[:, 2], data[:, 1], data[:, 0],
-                                scale_mode='none', scale_factor=0.1, mode='sphere', color=(1, 1, 1),
+                                scale_mode='none', scale_factor=3., mode='sphere', color=(1, 1, 1),
                                 figure=self.scene3d.mayavi_scene)
         setattr(self, 'ipw_sel', scatter)
 
     @on_trait_change('scene3d.activated')
     def populateLabels(self):
-        if self.mode == "Zernike3D":
-            self.ipw_label = self.addLabel('reference')
-        else:
-            self.ipw_label = self.addLabel('origin')
+        self.ipw_label = self.addLabel('origin')
 
     def addLabel(self, label):
         data = self.data[self.selections[label]]
-        text = mlab.text3d(data[2] + 0.1, data[1] + 0.1, data[0] + 0.1, label, scale=0.1, color=(1, 1, 1),
+        text = mlab.text3d(data[2] + 0.1, data[1] + 0.1, data[0] + 0.1, label, scale=3., color=(1, 1, 1),
                            figure=self.scene3d.mayavi_scene)
         return text
 
@@ -315,9 +319,10 @@ class PointCloudView(HasTraits):
     def _save_selections_fired(self):
         pathFile = os.path.join(self.path, self.save_file)
         with open(pathFile, 'w') as fid:
-            for idc in list(self.selections.values()):
-                vector = self.z_space[idc]
-                fid.write(' '.join(map(str, vector.reshape(-1))) + "\n")
+            for key, idc in self.selections.items():
+                if "origin" not in key and "class" not in key:
+                    vector = self.z_space[idc]
+                    fid.write(' '.join(map(str, vector.reshape(-1))) + "\n")
         self.saveSelectionsDict()
         np.savetxt(os.path.join(self.path, 'kmean_labels.txt'), self.interp_val)
 
@@ -338,10 +343,17 @@ class PointCloudView(HasTraits):
         self.ipw_sel.mlab_source.reset(x=data[:, 2], y=data[:, 1], z=data[:, 0])
         self.ipw_pc.mlab_source.scalars = self.interp_val
 
+    def _scale_pts_fired(self):
+        scale_factor = float(self.scale_factor)
+        pts, pts_sel = getattr(self, 'ipw_pc'), getattr(self, 'ipw_sel')
+        pts.glyph.glyph.scale_factor = scale_factor
+        pts_sel.glyph.glyph.scale_factor = scale_factor + 1.
+        self.ipw_label.scale = np.array([scale_factor, scale_factor, scale_factor])
+
     def _morph_chimerax_fired(self):
         # Morph maps in chimerax based on different ordering methods
         idm = np.asarray(list(self.selections.values()))
-        sel_names = np.asarray(list(self.selections.keys()))
+        sel_names = list(self.selections.keys())
         if len(self.selections) > 1:
             if self.morphing_choice == "Salesman":
                 print("Salesman chosen")
@@ -443,6 +455,14 @@ class PointCloudView(HasTraits):
                                   self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
                                   apix=float(self.class_inputs["sr"]))
                 self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
+            elif self.mode == "HetSIREN":
+                self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
+                                  self.path, step=self.class_inputs["step"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+            elif self.mode == "NMA":
+                self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
+                                  self.path, sr=self.class_inputs["sr"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
 
             volume = getattr(self, 'ipw_map')
             val_max = np.amax(volume.mlab_source.m_data.scalar_data)
@@ -473,6 +493,11 @@ class PointCloudView(HasTraits):
                     Group(
                         Item('n_clusters', show_label=False, editor=TextEditor()),
                         Item('compute_kmeans'),
+                        show_labels=False, columns=2
+                    ),
+                    Group(
+                        Item('scale_factor', show_label=False, editor=TextEditor()),
+                        Item('scale_pts'),
                         show_labels=False, columns=2
                     ),
                     Group(

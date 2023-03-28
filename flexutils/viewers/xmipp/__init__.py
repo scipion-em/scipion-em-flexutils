@@ -24,4 +24,9 @@
 # *
 # **************************************************************************
 
-from .viewer_angular_alignment_zernike3d import XmippAngularAlignmentZernike3DViewer
+from .viewer_landscape import XmippLandscapeViewer
+from .viewer_reduced_space import XmippReducedSpaceViewer
+from .viewer_apply_field_zernike3d import XmippApplyFieldZernike3DView
+from .viewer_apply_field_nma import XmippApplyFieldNMAView
+from .viewer_flex_consensus import XmippFlexConsensusView
+# from .viewer_structure_map_zernike3d import XmippProtStructureMapZernike3DViewer

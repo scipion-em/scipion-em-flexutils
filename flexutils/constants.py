@@ -37,3 +37,8 @@ CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirement
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
 XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
 
+# Program labels
+ZERNIKE3D = "Zernike3D"
+HETSIREN = "HetSIREN"
+NMA = "NMA"
+CRYODRGN = "CryoDRGN"

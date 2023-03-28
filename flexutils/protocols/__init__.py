@@ -24,11 +24,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from .protocol_base import ProtFlexBase
 
 from .protocol_select_views import ProtFlexSelectViews
 from .protocol_annotate_space import ProtFlexAnnotateSpace
 from .protocol_cluster_space import ProtFlexClusterSpace
 from .protocol_auto_reference import ProtFlexAutoReference
+from .protocol_dimred import ProtFlexDimRedSpace
+from .protocol_find_optimal_clusters import ProtFlexOptimalClusters
 
 # Zernike3D Xmipp protocols (offered here due to strong package dependency)
 from .xmipp import *

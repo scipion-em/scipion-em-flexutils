@@ -28,6 +28,7 @@
 
 import numpy as np
 import os
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String
@@ -40,16 +41,18 @@ from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import (writeSetOfParticles, createItemMatrix,
-                            setXmippAttributes)
+                            setXmippAttributes, matrixFromGeometry)
 from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils.constants as const
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
-class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
+class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Assignation of heterogeneity priors based on the Zernike3D basis. """
     _label = 'assign heterogeneity priors - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
@@ -66,13 +69,9 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         #                label="Choose GPU IDs",
         #                help="Add a list of GPU devices that can be used")
         form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
-        form.addParam('inputPriors', params.PointerParam, label="Input priors", pointerClass="SetOfVolumes",
+        form.addParam('inputPriors', params.PointerParam, label="Input priors", pointerClass="SetOfVolumesFlex",
                       help="A set of volumes with Zernike3D coefficients associated to be used as priors for "
                            "the input particles")
-        form.addParam('inputVolume', params.PointerParam, label="Input volume", pointerClass='Volume',
-                      condition="inputPriors and not hasattr(inputPriors,'refMap')")
-        form.addParam('inputVolumeMask', params.PointerParam, label="Input volume mask", pointerClass='VolumeMask',
-                      condition="inputPriors and not hasattr(inputPriors,'refMask')")
         form.addParam('boxSize', params.IntParam, default=128,
                       label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                       help='In general, downsampling the particles will increase performance without compromising '
@@ -148,14 +147,14 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         ih = ImageHandler()
-        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get().getFileName()
+        inputVolume = inputPriors.getFlexInfo().refMap.get()
         ih.convert(getXmippFileName(inputVolume), fnVol)
         # Xdim = self.inputParticles.get().getFirstItem().getDim()[0]
         if Xdim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1,
                         env=xmipp3.Plugin.getEnviron())
-        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolumeMask.get().getFileName()
+        inputMask = inputPriors.getFlexInfo().refMask.get()
         if inputMask:
             ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
@@ -183,15 +182,15 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
         correctionFactor = self.newXdim / Xdim
 
         # Zernike3D parameters
-        L1 = inputPriors.L1.get()
-        L2 = inputPriors.L2.get()
-        Rmax = correctionFactor * inputPriors.Rmax.get()
+        L1 = inputPriors.getFlexInfo().L1.get()
+        L2 = inputPriors.getFlexInfo().L2.get()
+        Rmax = correctionFactor * inputPriors.getFlexInfo().Rmax.get()
 
         # Write Zernike3D priors to file
         with open(fnPriors, 'w') as f:
             f.write(' '.join(map(str, [L1, L2, Rmax])) + "\n")
             for item in inputPriors.iterItems():
-                z_clnm = np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")
+                z_clnm = item.getZFlex()
                 z_clnm *= correctionFactor
                 f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
@@ -210,7 +209,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
             else:
                 f.write(' '.join(map(str, [L1, L2, Rmax] + deformations.tolist())) + "\n")
             for item in inputPriors.iterItems():
-                z_clnm = np.fromstring(item._xmipp_sphCoefficients.get(), sep=",")
+                z_clnm = item.getZFlex()
                 z_clnm *= correctionFactor
                 f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
@@ -235,57 +234,54 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
 
 
     def createOutputStep(self):
-        Xdim = self.inputParticles.get().getXDim()
-        # self.Ts = inputParticles.getSamplingRate()
-        # newTs = self.targetResolution.get() * 1.0 / 3.0
-        # self.newTs = max(self.Ts, newTs)
-        # self.newXdim = int(Xdim * self.Ts / newTs)
+        inputParticles = self.getInputParticles()
+        Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        correctionFactor = Xdim / self.newXdim
         fnOut = self._getFileName('fnOut')
-        mdOut = md.MetaData(fnOut)
+        mdOut = XmippMetaData(fnOut)
 
         # Zernike3D info
         inputPriors = self.inputPriors.get()
-        L1 = inputPriors.L1.get()
-        L2 = inputPriors.L2.get()
-        Rmax = inputPriors.Rmax.get()
-        inputVolume = inputPriors.refMap.get() if hasattr(inputPriors, 'refMap') else self.inputVolume.get()
-        inputMask = inputPriors.refMask.get() if hasattr(inputPriors, 'refMask') else self.inputVolume.get()
+        L1 = inputPriors.getFlexInfo().L1.get()
+        L2 = inputPriors.getFlexInfo().L2.get()
+        Rmax = inputPriors.getFlexInfo().Rmax.get()
+        inputVolume = inputPriors.getFlexInfo().refMap.get()
+        inputMask = inputPriors.getFlexInfo().refMask.get()
 
-        newMdOut = md.MetaData()
-        i = 0
-        for row in md.iterRows(mdOut):
-            newRow = row
-            if self.newXdim != Xdim:
-                coeffs = mdOut.getValue(md.MDL_SPH_COEFFICIENTS, row.getObjId())
-                deformation = mdOut.getValue(md.MDL_SPH_DEFORMATION, row.getObjId())
-                correctionFactor = Xdim / self.newXdim
-                coeffs = [correctionFactor * coeff for coeff in coeffs]
-                newRow.setValue(md.MDL_SPH_COEFFICIENTS, coeffs)
-                newRow.setValue(md.MDL_SPH_DEFORMATION, correctionFactor * deformation)
-                shiftX = correctionFactor * mdOut.getValue(md.MDL_SHIFT_X, row.getObjId())
-                shiftY = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Y, row.getObjId())
-                shiftZ = correctionFactor * mdOut.getValue(md.MDL_SHIFT_Z, row.getObjId())
-                newRow.setValue(md.MDL_SHIFT_X, shiftX)
-                newRow.setValue(md.MDL_SHIFT_Y, shiftY)
-                newRow.setValue(md.MDL_SHIFT_Z, shiftZ)
-            newRow.addToMd(newMdOut)
-            i += 1
-        newMdOut.write(fnOut)
+        coeffs = correctionFactor * np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
+        deformation = correctionFactor * mdOut[:, "sphDeformation"]
+        shifts = correctionFactor * mdOut[:, ["shiftX", "shiftY", "shiftZ"]]
+        angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
 
-        inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
-        partSet.copyInfo(inputSet)
+        partSet.copyInfo(inputParticles)
         partSet.setAlignmentProj()
-        partSet.copyItems(inputSet,
-                          updateItemCallback=self._updateParticle,
-                          itemDataIterator=md.iterRows(fnOut, sortByLabel=md.MDL_ITEM_ID))
-        partSet.L1 = Integer(L1)
-        partSet.L2 = Integer(L2)
-        partSet.Rmax = Float(Rmax)
-        partSet.refMask = String(inputMask)
-        partSet.refMap = String(inputVolume)
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
+        idx = 0
+        for particle in inputParticles.iterItems():
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
+
+            outParticle.setZFlex(coeffs[idx])
+            outParticle.getFlexInfo().deformation = Float(deformation[idx])
+
+            # Set new transformation matrix
+            tr = matrixFromGeometry(shifts[idx], angles[idx], inverseTransform)
+            outParticle.getTransform().setMatrix(tr)
+
+            partSet.append(outParticle)
+
+            idx += 1
+
+        partSet.getFlexInfo().L1 = Integer(L1)
+        partSet.getFlexInfo().L2 = Integer(L2)
+        partSet.getFlexInfo().Rmax = Float(Rmax)
+        partSet.getFlexInfo().refMask = String(inputMask)
+        partSet.getFlexInfo().refMap = String(inputVolume)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
@@ -306,9 +302,11 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-        if not hasattr(self.inputPriors.get().getFirstItem(), "_xmipp_sphCoefficients"):
-            errors.append("Priors provided do not contain any Zernike3D prior that can "
-                          "be used")
+        inputPriors = self.inputPriors.get()
+        if inputPriors.getFlexInfo().getProgName() != const.ZERNIKE3D:
+            errors.append("The flexibility information associated with the priors is not "
+                          "coming from the Zernike3D algorithm. Please, provide a set of priors "
+                          "with the correct flexibility information.")
         return errors
 
 

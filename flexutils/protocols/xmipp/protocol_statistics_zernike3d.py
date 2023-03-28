@@ -26,10 +26,9 @@
 
 
 import os
-import numpy as np
 
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -39,6 +38,7 @@ import flexutils.constants as const
 import pwem.emlib.metadata as md
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 
+from flexutils.objects import SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -53,22 +53,8 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addParam('particles', PointerParam, label="Zernike3D particles",
-                      pointerClass='SetOfParticles', important=True,
+                      pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a set of Zernike3D coefficients associated")
-        form.addParam('mask', PointerParam, label="Motion mask",
-                      condition="particles and not hasattr(particles,'refMap')",
-                      pointerClass='VolumeMask', important=True,
-                      help="Mask determining where to analyze the motions")
-        form.addParam('L1', IntParam, label="Zernike degree",
-                      condition="particles and not hasattr(particles,'L1')",
-                      important=True,
-                      help="Zernike degree used to compute the particle's deformation"
-                           "field")
-        form.addParam('L2', IntParam, label="Sph degree",
-                      condition="particles and not hasattr(particles,'L2')",
-                      important=True,
-                      help="Sph degree used to compute the particle's deformation"
-                           "field")
         form.addParam('structure', PointerParam, label="Atomic structure",
                       pointerClass="AtomStruct", allowsNull=True,
                       help="Optional: If provided, it will be possible to visualize "
@@ -82,17 +68,17 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
     # --------------------------- STEPS functions -----------------------------
     def launchVolumeViewer(self):
         particles = self.particles.get()
-        mask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get().getFileName()
+        mask = particles.getFlexInfo().refMask.get()
 
-        L1 = particles.L1.get() if hasattr(particles, "L1") else self.L1.get()
-        L2 = particles.L2.get() if hasattr(particles, "L2") else self.L2.get()
+        L1 = particles.getFlexInfo().L1.get()
+        L2 = particles.getFlexInfo().L2.get()
         z_clnm_vec = {}
-        def_vec = {}
+        # def_vec = {}
 
         for particle in particles.iterItems():
-            z_clnm = np.fromstring(particle._xmipp_sphCoefficients.get(), sep=",")
+            z_clnm = particle.getZFlex()
             z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
-            def_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
+            # def_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
 
         def zernikeRow(part, partRow, **kwargs):
             imageToRow(part, partRow, md.MDL_IMAGE, **kwargs)
@@ -104,7 +90,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
             partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
-            partRow.setValue(md.MDL_SPH_DEFORMATION, def_vec[idx])
+            # partRow.setValue(md.MDL_SPH_DEFORMATION, def_vec[idx])
 
         if not os.path.isfile(self._getExtraPath("particles.xmd")):
             writeSetOfImages(particles, self._getExtraPath("particles.xmd"), zernikeRow)
@@ -127,3 +113,15 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
         return [
             "3D visualization of motion statistics",
         ]
+
+    # ----------------------- VALIDATE functions ----------------------------------------
+    def validate(self):
+        """ Try to find errors on define params. """
+        errors = []
+        particles = self.particles.get()
+        if isinstance(particles, SetOfParticlesFlex):
+            if particles.getFlexInfo().getProgName() != const.ZERNIKE3D:
+                errors.append("The flexibility information associated with the particles is not "
+                              "coming from the Zernike3D algorithm. Please, provide a set of particles "
+                              "with the correct flexibility information.")
+        return errors

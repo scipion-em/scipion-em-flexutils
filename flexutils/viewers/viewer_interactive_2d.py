@@ -208,6 +208,17 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
                              "config": kwargs.get("config"),
                              "boxsize": int(kwargs.get("boxsize")),
                              "sr": float(self.class_inputs["sr"])}
+        elif self.mode == "HetSIREN":
+            inputs_mayavi = {"path": self.path,
+                             "mode": self.mode,
+                             "weights": kwargs.get("weights"),
+                             "step": kwargs.get("step"),
+                             "sr": float(self.class_inputs["sr"])}
+        elif self.mode == "NMA":
+            inputs_mayavi = {"path": self.path,
+                             "mode": self.mode,
+                             "weights": kwargs.get("weights"),
+                             "sr": float(self.class_inputs["sr"])}
         self.mayavi_view = MayaviQWidget(**inputs_mayavi)
 
     # ---------------------------------------------------------------------------
@@ -373,12 +384,12 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
                                            'names': names})
         else:
             x, y, names = [], [], []
-            if "n_vol" in self.class_inputs:
-                n_vol = int(self.class_inputs["n_vol"])
-                x, y = self.data[-n_vol:, 0].tolist(), self.data[-n_vol:, 1].tolist()
-                names.append("reference")
-                for idx in range(1, n_vol):
-                    names.append("class_%d" % idx)
+            # if "n_vol" in self.class_inputs:
+            #     n_vol = int(self.class_inputs["n_vol"])
+            #     x, y = self.data[-n_vol:, 0].tolist(), self.data[-n_vol:, 1].tolist()
+            #     names.append("reference")
+            #     for idx in range(1, n_vol):
+            #         names.append("class_%d" % idx)
             data = {'x': x, 'y': y, 'names': names}
             self.seeds = ColumnDataSource(data)
 
@@ -434,6 +445,12 @@ class MapView(HasTraits):
             from cryodrgn.utils import generateVolumes
             cryodrgn.Plugin._defineVariables()
             self.generate_map = generateVolumes
+        elif self.mode == "HetSIREN":
+            from flexutils.utils import generateVolumesHetSIREN
+            self.generate_map = generateVolumesHetSIREN
+        elif self.mode == "NMA":
+            from flexutils.utils import generateVolumesDeepNMA
+            self.generate_map = generateVolumesDeepNMA
 
     # ---------------------------------------------------------------------------
     # Default values
@@ -497,7 +514,14 @@ class MapView(HasTraits):
                                   self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
                                   apix=float(self.class_inputs["sr"]))
                 self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
-
+            elif self.mode == "HetSIREN":
+                self.generate_map(self.class_inputs["weights"], z,
+                                  self.path, step=self.class_inputs["step"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+            elif self.mode == "NMA":
+                self.generate_map(self.class_inputs["weights"], z,
+                                  self.path, sr=self.class_inputs["sr"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
             volume = getattr(self, 'ipw_map')
             val_max = np.amax(volume.mlab_source.m_data.scalar_data)
             val_min = np.amin(volume.mlab_source.m_data.scalar_data)

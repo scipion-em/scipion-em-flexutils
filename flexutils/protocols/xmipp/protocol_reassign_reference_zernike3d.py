@@ -28,23 +28,27 @@
 
 import numpy as np
 import os
+from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, String
+from pyworkflow.object import Integer, String, Float
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
 
-from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, setXmippAttributes, createItemMatrix
+from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, setXmippAttributes, createItemMatrix, \
+    matrixFromGeometry
 
 import flexutils.constants as const
 import flexutils
+from flexutils.protocols import ProtFlexBase
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
-class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
+class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Assignation of heterogeneity priors based on the Zernike3D basis. """
     _label = 'reassign reference - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
@@ -52,16 +56,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
-        form.addParam('inmap', params.PointerParam, label="Particles map", pointerClass='Volume',
-                      help="Map used for the computation of the Zernike3D coefficients associated "
-                           "to the input particles",
-                      condition="inputParticles and not hasattr(inputParticles,'refMap')")
-        form.addParam('inmask', params.PointerParam, label="Particles mask", pointerClass='VolumeMask',
-                      help="Mask used for the computation of the Zernike3D coefficients associated "
-                           "to the input particles",
-                      condition="inputParticles and not hasattr(inputParticles,'refMask')")
-        form.addParam('inputVolume', params.PointerParam, label="New reference", pointerClass='Volume',
+        form.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticlesFlex')
+        form.addParam('inputVolume', params.PointerParam, label="New reference", pointerClass='VolumeFlex',
                       help="Particles will be reassigned so this map is their new reference")
         form.addParam('mask', params.PointerParam, label="Reference mask", pointerClass='VolumeMask',
                       help="Mask associated to the new reference map")
@@ -82,10 +78,10 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
     def computeZernikeStep(self):
         imgsFn = self._getExtraPath('inputParticles.xmd')
         particles = self.inputParticles.get()
-        refMask = particles.refMask.get() if hasattr(particles, 'refMask') else self.inmask.get().getFileName()
-        prevL1 = particles.L1.get()
-        prevL2 = particles.L2.get()
-        Rmax = particles.Rmax.get()
+        refMask = particles.getFlexInfo().refMask.get()
+        prevL1 = particles.getFlexInfo().L1.get()
+        prevL2 = particles.getFlexInfo().L2.get()
+        Rmax = particles.getFlexInfo().Rmax.get()
 
         newRefMap = self.inputVolume.get()
         newRefMask = self.mask.get().getFileName()
@@ -93,11 +89,11 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
         L2 = self.L2.get()
 
         z_clnm_vec = {}
-        deformation_vec = {}
+        # deformation_vec = {}
         for particle in particles.iterItems():
-            z_clnm = np.fromstring(particle._xmipp_sphCoefficients.get(), sep=",")
+            z_clnm = particle.getZFlex()
             z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
-            deformation_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
+            # deformation_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
 
         def zernikeRow(part, partRow, **kwargs):
             imageToRow(part, partRow, md.MDL_IMAGE, **kwargs)
@@ -109,15 +105,15 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
             partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
-            partRow.setValue(md.MDL_SPH_DEFORMATION, deformation_vec[idx])
+            # partRow.setValue(md.MDL_SPH_DEFORMATION, deformation_vec[idx])
 
         writeSetOfImages(particles, imgsFn, zernikeRow)
 
         # Write Zernike3D priors to file
         file_zclnm_r = self._getExtraPath('z_clnm_r,txt')
         with open(file_zclnm_r, 'w') as f:
-            f.write(' '.join(map(str, [L1, L2, newRefMap.Rmax.get()])) + "\n")
-            z_clnm = np.fromstring(newRefMap._xmipp_sphCoefficients.get(), sep=",")
+            f.write(' '.join(map(str, [L1, L2, newRefMap.getFlexInfo().Rmax.get()])) + "\n")
+            z_clnm = newRefMap.getZFlex()
             f.write(' '.join(map(str, z_clnm.reshape(-1))) + "\n")
 
         args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
@@ -129,39 +125,55 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D):
 
     def createOutputStep(self):
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticles()
+        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        mdOut = XmippMetaData(self._getExtraPath("inputParticles_reassigned.xmd"))
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
-        partSet.copyItems(inputSet,
-                          updateItemCallback=self._updateParticle,
-                          itemDataIterator=md.iterRows(self._getExtraPath("inputParticles_reassigned.xmd"), sortByLabel=md.MDL_ITEM_ID))
 
-        partSet.L1 = Integer(self.L1.get())
-        partSet.L2 = Integer(self.L2.get())
-        partSet.Rmax = inputSet.Rmax
-        partSet.refMask = String(self.mask.get().getFileName())
-        partSet.refMap = String(self.inputVolume.get().getFileName())
+        coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
+        deformation = mdOut[:, "sphDeformation"]
+        shifts = mdOut[:, ["shiftX", "shiftY", "shiftZ"]]
+        angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
+
+        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+
+        idx = 0
+        for particle in inputSet.iterItems():
+            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle.copyInfo(particle)
+
+            outParticle.setZFlex(coeffs[idx])
+            outParticle.getFlexInfo().deformation = Float(deformation[idx])
+
+            # Set new transformation matrix
+            tr = matrixFromGeometry(shifts[idx], angles[idx], inverseTransform)
+            outParticle.getTransform().setMatrix(tr)
+
+            partSet.append(outParticle)
+
+            idx += 1
+
+        partSet.getFlexInfo().L1 = Integer(self.L1.get())
+        partSet.getFlexInfo().L2 = Integer(self.L2.get())
+        partSet.getFlexInfo().Rmax = inputSet.getFlexInfo().Rmax
+        partSet.getFlexInfo().refMask = String(self.mask.get().getFileName())
+        partSet.getFlexInfo().refMap = String(self.inputVolume.get().getFileName())
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
     # --------------------------- UTILS functions --------------------------------------------
-    def _updateParticle(self, item, row):
-        setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
-                           md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
-                           md.MDL_FLIP, md.MDL_SPH_DEFORMATION,
-                           md.MDL_SPH_COEFFICIENTS)
-        createItemMatrix(item, row, align=ALIGN_PROJ)
 
     # ----------------------- VALIDATE functions ----------------------------------------
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
-        if not hasattr(self.inputParticles.get().getFirstItem(), "_xmipp_sphCoefficients"):
-            errors.append("Particles must have Zernike3D coefficients associated to them")
-        if not hasattr(self.inputVolume.get(), "_xmipp_sphCoefficients"):
-            errors.append("New reference map must have Zernike3D coefficients associated to it")
+        if isinstance(self.inputParticles.get(), SetOfParticlesFlex):
+            if self.inputParticles.get().getFlexInfo().getProgName() != const.ZERNIKE3D:
+                errors.append("The flexibility information associated with the particles is not "
+                              "coming from the Zernike3D algorithm. Please, provide a set of particles "
+                              "with the correct flexibility information.")
         return errors
 
 
