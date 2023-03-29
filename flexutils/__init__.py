@@ -120,20 +120,22 @@ class Plugin(pwplugin.Plugin):
                 installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
             installationCmd += "conda activate flexutils && conda install -c anaconda cudatoolkit -y && " \
                                "conda install -c conda-forge cudatoolkit-dev -y && pip install -r " + CONDA_REQ + " && "
-            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += "pip install -e %s && " % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += "touch flexutils_installed"
             return installationCmd
 
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
             installationCmd = f"{conda_init} conda activate flexutils && " \
-                              f"pip install git+https://github.com/DavidHerreros/Scipionn-Toolkit.git@master#egg=scipionn-toolkit -v"
+                              f"pip install git+https://github.com/DavidHerreros/Scipionn-Toolkit.git@master#egg=scipionn-toolkit -v && "
+            installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
 
         commands = []
         installationEnv = getCondaInstallationFlexutils()
         installationTensorflow = getCondaInstallationTensorflow()
-        commands.append((installationEnv, []))
-        commands.append((installationTensorflow, []))
+        commands.append((installationEnv, ["flexutils_installed"]))
+        commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,
