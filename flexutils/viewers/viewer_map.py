@@ -27,6 +27,7 @@
 
 import numpy as np
 import os
+from xmipp_metadata.image_handler import ImageHandler
 
 import pylab as p
 from sklearn.neighbors import KDTree
@@ -53,7 +54,6 @@ from mayavi.core.api import PipelineBase, Source
 from mayavi.core.ui.api import SceneEditor, MayaviScene, \
     MlabSceneModel
 
-from pwem.emlib.image import ImageHandler
 from pyworkflow.utils import getExt
 
 import xmipp3
@@ -329,11 +329,7 @@ class MapView(HasTraits):
     # Read functions
     # ---------------------------------------------------------------------------
     def readMap(self, file):
-        if getExt(file) == ".mrc":
-            print(file + ":mrc")
-            map = ImageHandler().read(file + ":mrc").getData()
-        else:
-            map = ImageHandler().read(file).getData()
+        map = ImageHandler().read(file).getData()
         return map
 
     def readPDB(self, file):

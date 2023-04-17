@@ -29,6 +29,7 @@ import os
 import sys
 import numpy as np
 from multiprocessing import Process
+from xmipp_metadata.image_handler import ImageHandler
 
 from watchdog.observers import Observer
 from watchdog.events import LoggingEventHandler
@@ -53,9 +54,6 @@ from traitsui.api import View, Item, HGroup, Group, HSplit, RangeEditor
 from mayavi import mlab
 from mayavi.core.api import PipelineBase
 from mayavi.core.ui.api import SceneEditor, MayaviScene, MlabSceneModel
-
-from pwem.emlib.image import ImageHandler
-from pyworkflow.utils import getExt
 
 import flexutils
 
@@ -355,7 +353,7 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
 
     def morph_selections_chimerax(self):
         # Morph maps in chimerax based on different ordering methods
-        from flexutils.viewers.viewer_morph_chimerax import FlexMorphChimeraX
+        from flexutils.viewers.chimera_viewers.viewer_morph_chimerax import FlexMorphChimeraX
         z_space_selected = np.loadtxt(os.path.join(self.path, "z_space_chimerax.txt"), delimiter=",")
         with open(os.path.join(self.path, 'selection_names_chimerax.txt'), 'r') as f:
             sel_names = [line.strip("\n") for line in f.readlines()]
@@ -492,10 +490,7 @@ class MapView(HasTraits):
     # Read functions
     # ---------------------------------------------------------------------------
     def readMap(self, file):
-        if getExt(file) == ".mrc":
-            map = ImageHandler().read(file + ":mrc").getData()
-        else:
-            map = ImageHandler().read(file).getData()
+        map = ImageHandler().read(file).getData()
         return map
 
     # ---------------------------------------------------------------------------

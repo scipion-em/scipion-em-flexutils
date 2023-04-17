@@ -146,6 +146,6 @@ class XmippLandscapeViewer(ProtocolViewer):
         # Run slicer
         args = "--coords %s --deformation %s" \
                % (file_coords, file_deformation)
-        program = os.path.join(const.VIEWERS, "viewer_point_cloud.py")
+        program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
         program = flexutils.Plugin.getProgram(program)
         runJob(None, program, args)
