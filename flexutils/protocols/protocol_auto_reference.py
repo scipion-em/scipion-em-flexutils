@@ -27,13 +27,13 @@
 import re
 import glob
 import numpy as np
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import ProtAnalysis3D
-from pwem.emlib.image import ImageHandler
 
 import xmipp3
 

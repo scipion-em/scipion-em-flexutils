@@ -30,6 +30,7 @@ import re
 import numpy as np
 
 from xmipp_metadata.metadata import XmippMetaData
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import String, Integer, CsvList
@@ -38,7 +39,6 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 from pwem.objects import Volume
 
@@ -224,10 +224,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ih = ImageHandler()
-            ih.createEmptyImage(fnVolMask, xDim=self.newXdim, yDim=self.newXdim,
-                                zDim=self.newXdim, nDim=1)
-            ih.createCircularMask(int(0.5 * self.newXdim), fnVolMask, fnVolMask)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -411,16 +408,17 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().pad = Integer(self.pad.get())
 
         outVols = self._createSetOfVolumes()
-        outVols.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
+        outVols.setSamplingRate(inputParticles.getSamplingRate())
         for idx in range(self.numVol.get()):
             outVol = Volume()
-            outVol.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
-            outVols.append(outVol)
+            outVol.setSamplingRate(inputParticles.getSamplingRate())
 
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)), 1,
-                                        finalDimension=inputParticles.getXDim())
+                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
+                                        finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
+            outVols.append(outVol)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

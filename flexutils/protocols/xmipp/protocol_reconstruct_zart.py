@@ -30,13 +30,13 @@ import glob
 import numpy as np
 from scipy import stats
 import re
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 # import pyworkflow.protocol.constants as cons
 
 from pwem import emlib
-from pwem.emlib.image import ImageHandler
 from pwem.objects import Volume
 from pwem.protocols import ProtReconstruct3D
 
@@ -235,9 +235,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         dim = self.inputParticles.get().getXDim()
         mask = self._getTmpPath("sphere_mask.mrc")
         r = int(0.5 * dim)
-        image = ImageHandler().createImage()
-        image.setData(np.zeros([dim, dim, dim]).astype(np.float32))
-        image.write(mask)
+        ImageHandler().write(np.zeros([dim, dim, dim]), mask)
         mask_params = "-i %s --mask circular -%d --create_mask %s" % (mask, r, mask)
         self.runJob('xmipp_transform_mask', mask_params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         params += ' --mask %s' % mask
@@ -273,9 +271,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             resMask += mask
         resMask *= oriMask
 
-        image = ImageHandler().createImage()
-        image.setData(resMask.astype(np.float32))
-        image.write(self._getTmpPath("resMask.mrc"))
+        ImageHandler().write(resMask, self._getTmpPath("resMask.mrc"))
 
         self.sigmas = ' '.join(map(str, np.unique(sigmas)))
         print(self.sigmas)

@@ -32,10 +32,8 @@ from joblib import Parallel, delayed
 from itertools import repeat
 import multiprocessing
 
-import pwem.emlib.metadata as md
-
 import flexutils.protocols.xmipp.utils.utils as utl
-from flexutils.viewers.threshold_atoms_viewer import ModelThresholdView
+from flexutils.viewers.map_model_viewers.threshold_atoms_viewer import ModelThresholdView
 
 
 # ---------------------------------------------------------------------------

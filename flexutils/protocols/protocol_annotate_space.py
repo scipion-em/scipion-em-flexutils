@@ -28,15 +28,15 @@
 import os
 import numpy as np
 from sklearn.neighbors import KDTree
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow import BETA
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam
+from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam, EnumParam
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 
-from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
 
 import flexutils
@@ -71,6 +71,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN'",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
+        form.addParam("viewer3D", EnumParam, label="Select viewing tool",
+                      choices=["Annotation 3D", "Annotation Hybrid"], default=0, display=EnumParam.DISPLAY_HLIST,
+                      help="* Annotation 3D provides a 3D intraface for the annotation of conformational "
+                           "landscapes based on point clouds\n"
+                           "* Annotation Hybrid provides a 2D+3D interface for annotation of conformational "
+                           "landscapes based on particle densities")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
 
@@ -141,12 +147,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
                 from cryodrgn.utils import generateVolumes
-                generateVolumes(z_space_vw[clInx], particles._cryodrgnWeights.get(),
-                                particles._cryodrgnConfig.get(), self._getExtraPath(), downsample=self.boxSize.get(),
-                                apix=particles.getSamplingRate())
+                generateVolumes(z_space_vw[clInx], particles.getFlexInfo()._cryodrgnWeights.get(),
+                                particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
+                                downsample=self.boxSize.get(), apix=particles.getSamplingRate())
                 ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
-                                            finalDimension=particles.getXDim())
+                                            self._getExtraPath('class_%d.mrc') % clInx,
+                                            finalDimension=particles.getXDim(), overwrite=True)
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
             elif particles.getFlexInfo().getProgName() == const.HETSIREN:
@@ -154,8 +160,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
                                         self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_1.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
-                                            finalDimension=particles.getXDim())
+                                            self._getExtraPath('class_%d.mrc') % clInx,
+                                            finalDimension=particles.getXDim(), overwrite=True)
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
             elif particles.getFlexInfo().getProgName() == const.NMA:
@@ -210,8 +216,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
-            ih.convert(reference, self._getExtraPath("reference_original.mrc"))
-            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"))
+            ih.convert(reference, self._getExtraPath("reference_original.mrc"), overwrite=True)
+            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"), overwrite=True)
 
             # Resize reference map to increase real time conformation inspection performance
             inputFile = reference
@@ -283,15 +289,18 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         path = os.path.abspath(self._getExtraPath())
 
         # ********* Run viewer *********
+        needsPackages = None
+
         if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             L1 = particles.getFlexInfo().L1.get()
             L2 = particles.getFlexInfo().L2.get()
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--L1 %d --L2 %d --n_vol %d --mode Zernike3D" \
+                   "--L1 %d --L2 %d --n_vol %d --boxsize 64 --mode Zernike3D" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       L1, L2, self.num_vol)
 
         elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+            needsPackages = [const.CRYODRGN, ]
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
                    % (file_coords, file_z_space, file_interp_val, path,
@@ -316,10 +325,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         dimensions = red_space.shape[1]
         if dimensions == 2:
-            program = os.path.join(const.VIEWERS, "viewer_interactive_2d.py")
+            program = os.path.join(const.VIEWERS, "annotation_2d_tools", "viewer_interactive_2d.py")
         elif dimensions == 3:
-            program = os.path.join(const.VIEWERS, "viewer_3d_slicer.py")
-        program = flexutils.Plugin.getProgram(program)
+            if self.viewer3D.get() == 0:
+                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
+            elif self.viewer3D.get() == 1:
+                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_2d_3d.py")
+        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
         self.runJob(program, args)
 
         # *********

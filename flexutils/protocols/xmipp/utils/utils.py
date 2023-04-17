@@ -37,10 +37,10 @@ from skimage import filters
 from skimage.measure import label
 from skimage.morphology import ball, convex_hull_image, skeletonize
 from subprocess import call
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.utils as pwutils
 
-from pwem.emlib.image import ImageHandler
 from pwem.convert.transformations import superimposition_matrix
 from pwem.viewers import Chimera
 
@@ -712,9 +712,7 @@ def readMap(file):
     return ImageHandler().read(file).getData()
 
 def saveMap(map, file):
-    image = ImageHandler().createImage()
-    image.setData(map.astype(np.float32))
-    image.write(file)
+    ImageHandler().write(map, file)
 
 def getXmippOrigin(map):
     return np.asarray([int(0.5 * map.shape[2]),
@@ -834,8 +832,6 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None, output_map=Non
             fhCmd.write("save start_aligned.mrc #3\n")
         fhCmd.write("exit\n")
 
-    # program = Plugin.getProgram()
-    # program = Chimera.getProgram()
     chimera_home = os.environ.get("CHIMERA_HOME")
     program = os.path.join(chimera_home, 'bin', os.path.basename("ChimeraX"))
     cmd = program + ' --nogui "%s"' % scriptFile

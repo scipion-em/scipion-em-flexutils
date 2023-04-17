@@ -27,6 +27,7 @@
 
 import os
 import numpy as np
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam
@@ -34,7 +35,6 @@ import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 
-from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
 
 import flexutils
@@ -136,12 +136,12 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
             elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
                 from cryodrgn.utils import generateVolumes
-                generateVolumes(z_space_vw[clInx], particles._cryodrgnWeights.get(),
-                                particles._cryodrgnConfig.get(), self._getExtraPath(), downsample=self.boxSize.get(),
-                                apix=particles.getSamplingRate())
+                generateVolumes(z_space_vw[clInx], particles.getFlexInfo()._cryodrgnWeights.get(),
+                                particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
+                                downsample=self.boxSize.get(), apix=particles.getSamplingRate())
                 ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
-                                            finalDimension=particles.getXDim())
+                                            self._getExtraPath('class_%d.mrc') % clInx,
+                                            finalDimension=particles.getXDim(), overwrite=True)
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
             elif particles.getFlexInfo().getProgName() == const.HETSIREN:
@@ -149,8 +149,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                 generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
                                         self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_1.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx, 1,
-                                            finalDimension=particles.getXDim())
+                                            self._getExtraPath('class_%d.mrc') % clInx,
+                                            finalDimension=particles.getXDim(), overwrite=True)
                 representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
             elif particles.getFlexInfo().getProgName() == const.NMA:
@@ -204,8 +204,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
-            ih.convert(reference, self._getExtraPath("reference_original.mrc"))
-            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"))
+            ih.convert(reference, self._getExtraPath("reference_original.mrc"), overwrite=True)
+            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"), overwrite=True)
 
             # Resize reference map to increase real time conformation inspection performance
             inputFile = reference
@@ -279,6 +279,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
         path = self._getExtraPath()
 
         # ********* Run viewer *********
+        needsPackages = None
+
         if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             L1 = particles.getFlexInfo().L1.get()
             L2 = particles.getFlexInfo().L2.get()
@@ -288,6 +290,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                       self.num_vol)
 
         elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+            needsPackages = [const.CRYODRGN, ]
             args = "--data %s --z_space %s --interp_val %s --path %s " \
                    "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
                    % (file_coords, file_z_space, file_interp_val, path,
@@ -310,8 +313,8 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate())
 
-        program = os.path.join(const.VIEWERS, "viewer_3d_pc.py")
-        program = flexutils.Plugin.getProgram(program)
+        program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_3d_pc.py")
+        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
         self.runJob(program, args)
 
         # *********

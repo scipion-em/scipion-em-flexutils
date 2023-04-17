@@ -30,11 +30,10 @@ import numpy as np
 from pathlib import Path
 import os
 from scipy.ndimage import gaussian_filter
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow.utils import getExt
 from pyworkflow.utils.process import runJob
-
-from pwem.emlib.image import ImageHandler
 
 import flexutils
 
@@ -108,10 +107,7 @@ def coordsToMap(coords, values, xsize, thr=None):
 
 
 def saveMap(filename, map):
-    ih = ImageHandler()
-    img = ih.createImage()
-    img.setData(map.astype(np.float32))
-    img.write(filename + ":mrc")
+    ImageHandler().write(map, filename)
 
 
 def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):

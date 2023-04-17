@@ -101,7 +101,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
                   particles.getSamplingRate(), self.numberOfThreads.get())
         if self.structure.get():
             args += " --atom_file %s" % self.structure.get().getFileName()
-        program = os.path.join(const.VIEWERS, "viewer_map.py")
+        program = os.path.join(const.VIEWERS, "map_model_viewers", "viewer_map.py")
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
