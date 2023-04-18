@@ -31,12 +31,13 @@ import glob
 import numpy as np
 import os
 
+from xmipp_metadata.image_handler import ImageHandler
+
 from pyworkflow.object import String, Integer, Float
 from pyworkflow import VERSION_2_0
 from pyworkflow.utils import removeExt, moveFile, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 
-from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtAnalysis3D
 from pwem.objects import SetOfVolumes, Volume
 
