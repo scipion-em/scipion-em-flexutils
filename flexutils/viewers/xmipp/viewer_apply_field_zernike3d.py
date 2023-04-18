@@ -185,7 +185,7 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         return [view]
 
     def _doShowDeformedOrigRef(self, param=None):
-        if self.only_apply and self.protocol.applyPDB.get():
+        if self.protocol.applyPDB.get():
             raise ValueError("This viewer is only for volumes, not atomic structures")
 
         scriptFile = self.protocol._getPath('morph_deformed_ref_chimera.cxc')
