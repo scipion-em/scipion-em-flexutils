@@ -592,11 +592,21 @@ def computeBasis(pos, **kwargs):
     L1 = kwargs.pop('L1', None)
     L2 = kwargs.pop('L2', None)
     r = kwargs.pop('r', None)
+    groups = kwargs.pop("groups", None)
+    centers = kwargs.pop("centers", None)
 
     degrees = basisDegreeVectors(L1, L2)
-    basis = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
-             pos, r) for idx in range(degrees.shape[0])]
-    basis = np.hstack(basis)
+    if centers is None:
+        basis = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
+                                   pos, r) for idx in range(degrees.shape[0])]
+        basis = np.hstack(basis)
+    else:
+        basis_centers = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
+                                           centers, r) for idx in range(degrees.shape[0])]
+        basis_centers = np.hstack(basis_centers)
+        basis = np.zeros((pos.shape[0], basis_centers.shape[1]))
+        for group, basis_center in zip(np.unique(groups), basis_centers):
+            basis[groups == group] = basis_center
 
     return basis
 
