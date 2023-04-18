@@ -31,7 +31,7 @@ import flexutils
 
 
 # Conda environment requirements
-CONDA_REQ = os.path.join(flexutils.__path__[0], 'requirements', 'env_requirements.txt')
+CONDA_YML = os.path.join(flexutils.__path__[0], 'requirements', 'flexutils_env.yml')
 
 # Location inside plugin
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
