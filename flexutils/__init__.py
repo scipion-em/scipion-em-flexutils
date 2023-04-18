@@ -105,6 +105,7 @@ class Plugin(pwplugin.Plugin):
         def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
             installationCmd += 'conda env remove -n flexutils && mamba env create -f ' + CONDA_YML + " && "
+            installationCmd += "pip install -e %s && " % (os.path.join(flexutils.__path__[0], ".."))
             installationCmd += "touch flexutils_installed"
             return installationCmd
 
