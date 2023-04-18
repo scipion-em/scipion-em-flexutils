@@ -30,6 +30,7 @@ import os
 import numpy as np
 from scipy.ndimage import gaussian_filter
 import farneback3d
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.utils as pwutils
 
@@ -44,16 +45,22 @@ def computeZernikeCoefficientsMap(file_input, file_target, file_output, L1, L2):
     target_map = utl.readMap(file_target)
 
     # Map to binary
-    start_mask = utl.maskMapYen(start_map)
-    target_mask = utl.maskMapYen(target_map)
-    start_mask = utl.removeSmallCC(start_mask, 50)
-    target_mask = utl.removeSmallCC(target_mask, 50)
-    start_mask = gaussian_filter(start_mask.astype(float), sigma=0.25)
-    target_mask = gaussian_filter(target_mask.astype(float), sigma=0.25)
-    start_mask = start_mask > 0.01
+    start_mask = ImageHandler(file_input).generateMask(iterations=50, boxsize=64)
+    target_mask = ImageHandler(file_target).generateMask(iterations=50, boxsize=64)
+    # start_map = start_map * start_mask
+    # target_map = target_map * target_mask
+    # start_mask = utl.maskMapYen(start_map)
+    # target_mask = utl.maskMapYen(target_map)
+    # start_mask = utl.removeSmallCC(start_mask, 50)
+    # target_mask = utl.removeSmallCC(target_mask, 50)
+    # start_mask = gaussian_filter(start_mask.astype(float), sigma=0.25)
+    # target_mask = gaussian_filter(target_mask.astype(float), sigma=0.25)
+    # start_mask = start_mask > 0.01
     start_mask = start_mask.astype(int)
-    target_mask = target_mask > 0.01
+    # target_mask = target_mask > 0.01
     target_mask = target_mask.astype(int)
+    ImageHandler().write(start_mask, filename="test.mrc", overwrite=True)
+    ImageHandler().write(target_mask, filename="test_2.mrc", overwrite=True)
 
     # Get original coords in mask
     xmipp_origin = utl.getXmippOrigin(start_map)
