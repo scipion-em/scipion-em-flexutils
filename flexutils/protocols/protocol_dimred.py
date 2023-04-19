@@ -78,7 +78,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                            "UMAP, PCA, and cryoExplode are only computed the first time the are used. Afterwards, they "
                            "will be reused to increase performance.")
         form.addParam('nb_umap', IntParam, label="UMAP neighbors",
-                      default=5, condition="mode==0",
+                      default=15, condition="mode==0",
                       help="Number of neighbors to associate to each point in the space when computing "
                            "the UMAP space. The higher the number of neighbors, the more predominant "
                            "global in the original space features will be")
