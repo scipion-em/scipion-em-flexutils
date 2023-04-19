@@ -67,6 +67,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
 
     # Zernike coefficients
     A = utl.resizeZernikeCoefficients(A.reshape(-1))
+    A = sr * A if mode == "structure" else A
 
     # Compute basis
     Z = utl.computeBasis(L1=int(L1), L2=int(L2), pos=coords, r=r, groups=groups, centers=centers)
@@ -97,7 +98,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
         # Save results
         pd_struct_out = pd_struct.copy()
         pd_struct_out.setCoords(coords_moved)
-        pd.writePDB(out_file, pd_struct_out)
+        pd.writePDB(out_file, pd_struct_out, hybrid36=True)
 
 
 if __name__ == '__main__':
