@@ -72,6 +72,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
         form.addParam("viewer3D", EnumParam, label="Select viewing tool",
+                      condition="particles and particles.getFirstItem().getZRed().shape[1] == 3",
                       choices=["Annotation 3D", "Annotation Hybrid"], default=0, display=EnumParam.DISPLAY_HLIST,
                       help="* Annotation 3D provides a 3D intraface for the annotation of conformational "
                            "landscapes based on point clouds\n"
@@ -332,7 +333,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             elif self.viewer3D.get() == 1:
                 program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_2d_3d.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args)
+        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
         # *********
 
