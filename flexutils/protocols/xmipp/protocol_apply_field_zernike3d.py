@@ -120,7 +120,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
                    % (ref_file, vol_file, z_clnm_file, outFile, boxsize, samplingRate)
             program = os.path.join(const.XMIPP_SCRIPTS, "apply_deformation_field_zernike3d.py")
             program = flexutils.Plugin.getProgram(program)
-            self.runJob(program, args)
+            self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
             idx += 1
 
