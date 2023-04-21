@@ -53,7 +53,7 @@ class Plugin(pwplugin.Plugin):
         return "conda activate flexutils-tensorflow"
 
     @classmethod
-    def getProgram(cls, program, python=True, needsPackages=None):
+    def getProgram(cls, program, python=True, cuda=False, needsPackages=None):
         """ Return the program binary that will be used. """
         scipion_packages = []
         env_variables = ""
@@ -72,6 +72,9 @@ class Plugin(pwplugin.Plugin):
                         env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+
+        if cuda:
+            cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '
 
         if python:
             with pwutils.weakImport("chimera"):
@@ -104,7 +107,7 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
+            installationCmd += 'conda env remove -n flexutils && mamba env create -f ' + CONDA_YML + " && "
             installationCmd += "conda activate flexutils && "
             installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
             installationCmd += "touch flexutils_installed"
