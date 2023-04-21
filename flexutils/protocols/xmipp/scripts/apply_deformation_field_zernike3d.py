@@ -48,10 +48,13 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
         groups = mask[indices[:, 2], indices[:, 1], indices[:, 0]]
         values = volume[indices[:, 2], indices[:, 1], indices[:, 0]]
 
-        centers = []
-        for group in np.unique(groups):
-            centers.append(np.mean(coords[groups == group], axis=0))
-        centers = np.asarray(centers)
+        if np.unique(groups).size > 1:
+            centers = []
+            for group in np.unique(groups):
+                centers.append(np.mean(coords[groups == group], axis=0))
+            centers = np.asarray(centers)
+        else:
+            groups, centers = None, None
 
     elif ref_file.suffix == ".pdb":
         mode = "structure"
