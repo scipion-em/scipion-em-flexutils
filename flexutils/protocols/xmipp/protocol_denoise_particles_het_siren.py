@@ -36,11 +36,11 @@ import pyworkflow.protocol.params as params
 from pyworkflow.object import String, Integer
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
+import pyworkflow.utils as pwutils
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import Volume
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -178,11 +178,12 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         # Scale particles
         params = "-i %s -o %s --fourier %d" % \
-                 (self._getExtraPath('decoded_particles.mrcs'),
-                  self._getExtraPath('decoded_particles.mrcs'),
+                 (self._getExtraPath('decoded_particles.mrcs:mrcs'),
+                  self._getExtraPath('aux.mrcs'),
                   Xdim)
         self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
                     env=xmipp3.Plugin.getEnviron())
+        pwutils.moveFile(self._getExtraPath('aux.mrcs'), self._getExtraPath('decoded_particles.mrcs'))
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
