@@ -85,7 +85,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
         # Scatter in volume
         def_vol = np.zeros((boxsize, boxsize, boxsize))
         for idx in range(indices_moved.shape[0]):
-            if np.all(indices_moved[idx]) < boxsize:
+            if np.all(indices_moved[idx] < boxsize):
                 def_vol[indices_moved[idx, 2], indices_moved[idx, 1], indices_moved[idx, 0]] += values[idx]
         # np.add.at(def_vol, [indices_moved[:, 2], indices_moved[:, 1], indices_moved[:, 0]], 1)
 
