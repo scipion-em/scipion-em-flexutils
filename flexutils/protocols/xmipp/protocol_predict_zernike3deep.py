@@ -186,7 +186,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     def convertBinaryStep(self):
         zernikeProtocol = self.zernikeProtocol.get()
-        maskReg = zernikeProtocol.inputVolumeMask.get().getFileName()
+        maskReg = self._getFileName('fnVolMask')
         maskBin = self._getExtraPath("binary_mask.mrc")
         L1 = zernikeProtocol.l1.get()
         L2 = zernikeProtocol.l2.get()
