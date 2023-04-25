@@ -79,7 +79,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         group.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
                        label="Input volume mask", pointerClass='VolumeMask',
                        help="Two different type of mask could be provided:\n"
-                            "     * Protein mask: A binary (non-smooth) mask telling where the protein is in "
+                            "     * Macromolecular mask: A binary (non-smooth) mask telling where the protein is in "
                             "the volume. The tighter the mask is to the protein the better.\n"
                             "     * Rigid region mask: An id mask determining a set of rigid regions. Rigid regions "
                             "will move coordinately, which may be useful to prevent overfitting compared o the protein "
