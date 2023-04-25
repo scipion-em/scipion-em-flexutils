@@ -186,13 +186,20 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     def convertBinaryStep(self):
         zernikeProtocol = self.zernikeProtocol.get()
+        maskRegOri = zernikeProtocol.inputVolumeMask.get().getFileName()
         maskReg = self._getFileName('fnVolMask')
         maskBin = self._getExtraPath("binary_mask.mrc")
+        maskBinOri = self._getExtraPath("binary_mask_ori.mrc")
         L1 = zernikeProtocol.l1.get()
         L2 = zernikeProtocol.l2.get()
         md_file = self._getFileName('imgsFn')
 
-        # Convert mask to binary
+        # Convert mask to binary (original)
+        data = ImageHandler(maskRegOri).getData()
+        data[data > 0] = 1.0
+        ImageHandler().write(data, maskBinOri, overwrite=True)
+
+        # Convert mask to binary (downsampled)
         data = ImageHandler(maskReg).getData()
         data[data > 0] = 1.0
         boxsize = data.shape[0]
@@ -273,7 +280,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
 
-        inputMask = self._getExtraPath("binary_mask.mrc") if self.convertBinary.get() \
+        inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
             else zernikeProtocol.inputVolumeMask.get().getFileName()
         inputVolume = zernikeProtocol.inputVolume.get().getFileName()
         partSet.getFlexInfo().refMask = String(inputMask)
