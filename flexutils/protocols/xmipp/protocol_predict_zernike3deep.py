@@ -229,6 +229,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
+        partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
@@ -242,6 +243,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
             outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
+            outParticle.getFlexInfo().setProgName(const.ZERNIKE3D)
 
             outParticle.setZFlex(zernike_space[idx])
 
