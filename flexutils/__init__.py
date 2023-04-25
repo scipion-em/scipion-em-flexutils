@@ -62,7 +62,7 @@ class Plugin(pwplugin.Plugin):
                 package_name = package_name.lower()
                 try:
                     package = importlib.import_module(package_name)
-                    package_loc = importlib.util.find_spec("cryodrgn").submodule_search_locations[0]
+                    package_loc = importlib.util.find_spec(package_name).submodule_search_locations[0]
                     scipion_packages.append(os.path.dirname(package_loc))
                 except ImportError:
                     raise ImportError(f"Package {package_name} is not installed in Scipion")
@@ -82,7 +82,7 @@ class Plugin(pwplugin.Plugin):
                 cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
 
             if needsPackages is not None:
-                cmd += "PYTHONPATH=%s %s python " % (scipion_packages, env_variables)
+                cmd += "PYTHONPATH=$PYTHONPATH:%s %s python " % (scipion_packages, env_variables)
             else:
                 cmd += "python "
         return cmd + '%(program)s ' % locals()
