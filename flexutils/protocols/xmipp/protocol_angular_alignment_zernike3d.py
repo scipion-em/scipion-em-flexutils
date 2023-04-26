@@ -193,7 +193,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
             if part.hasMicId():
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
-            if hasattr(part, '_xmipp_sphCoefficients') and hasattr(part, '_xmipp_sphDeformation'):
+            if isinstance(part, ParticleFlex):
                 partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
                 idx = list(z_clnm_vec.keys()).index(idx)
                 partRow.setValue(md.MDL_SPH_DEFORMATION, deformations[idx])
