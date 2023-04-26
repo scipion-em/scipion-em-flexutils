@@ -62,7 +62,7 @@ class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):
                       pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
         form.addParam('particles', PointerParam, label="Particles to associate",
-                      pointerClass="SetOfParticlesFlex", important=True,
+                      pointerClass="SetOfParticles", important=True,
                       help='Particles to associate flexibility information (space and other attributes)')
 
     # --------------------------- INSERT steps functions ----------------------
