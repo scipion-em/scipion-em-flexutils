@@ -44,7 +44,7 @@ def computeNewDeformationField(Z, Z_new, A):
     A_new = utl.computeZernikeCoefficients(d_f, Z_new)
 
     # New deformation field
-    d_f_new = Z @ A_new.T
+    d_f_new = Z_new @ A_new.T
 
     # Print error
     rmsd = np.sqrt(np.sum((d_f - d_f_new) ** 2) / d_f.shape[0])
