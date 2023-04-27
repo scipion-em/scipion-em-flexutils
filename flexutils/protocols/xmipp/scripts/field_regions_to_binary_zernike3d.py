@@ -43,7 +43,13 @@ def computeNewDeformationField(Z, Z_new, A):
     # New coefficients
     A_new = utl.computeZernikeCoefficients(d_f, Z_new)
 
-    return utl.resizeZernikeCoefficients(A_new)
+    # New deformation field
+    d_f_new = Z @ A_new.T
+
+    # Print error
+    rmsd = np.sqrt(np.sum((d_f - d_f_new) ** 2) / d_f.shape[0])
+
+    return utl.resizeZernikeCoefficients(A_new), rmsd
 
 
 def field_to_binary_zernike3d(md_file, mask_reg, mask_bin, boxsize, L1, L2, thr):
@@ -75,12 +81,15 @@ def field_to_binary_zernike3d(md_file, mask_reg, mask_bin, boxsize, L1, L2, thr)
     Z_new = utl.computeBasis(L1=int(L1), L2=int(L2), pos=coords_bin, r=r, groups=None, centers=None)
 
     # Compute new coefficients
-    A_all_new = Parallel(n_jobs=thr, verbose=100) \
+    results = Parallel(n_jobs=thr, verbose=100) \
         (delayed(computeNewDeformationField)(Z, Z_new, A) for A in A_all)
+    A_all_new, rmsd = map(list, zip(*results))
     A_all_new = np.asarray(A_all_new)
+    rmsd = np.asarray(rmsd)
 
     # Save new coefficients
     md[:, 'zernikeCoefficients'] = np.asarray([",".join(item) for item in A_all_new.astype(str)])
+    md[:, 'fieldApproximationError'] = rmsd
     md.write(md_file, overwrite=True)
 
 
