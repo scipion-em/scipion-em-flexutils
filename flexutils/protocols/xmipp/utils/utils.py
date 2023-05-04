@@ -322,7 +322,7 @@ def computeZernikes3D(l1, n, l2, m, pos, r_max):
         elif m == 0:
             Y = 14.68*costh2*costh2*costh2 - 20.02*costh2*costh2 + 6.675*costh2 - 0.3178
         elif m == 1:
-            Y = 0.222*cosph*np.power(1.0 - 1.0*costh2, 0.5)*(86.62*costh2*costh2*costh - 78.75*costh2*costh + 13.12*costh2)
+            Y = 0.222*cosph*np.power(1.0 - 1.0*costh2, 0.5)*(86.62*costh2*costh2*costh - 78.75*costh2*costh + 13.12*costh)
         elif m == 2:
             Y = -0.03509*cosph*(costh2 - 1.0)*(433.1*costh2*costh2 - 236.2*costh2 + 13.12)
         elif m == 3:
@@ -696,7 +696,7 @@ def inscribedRadius(atoms):
     return 1.1 * atoms_r
 
 def computeInverse(matrix):
-    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-10  # Probably -6 (for maps) -8 (for PDBs)
+    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-20  # Probably -6 (for maps) -8 (for PDBs)
     u, s, vh = np.linalg.svd(matrix)
 
     for idx in range(len(s)):
