@@ -62,18 +62,17 @@ class XmippProtReconstructZART(ProtReconstruct3D):
 
     #--------------------------- DEFINE param functions --------------------------------------------   
     def _defineParams(self, form):
-
-        # form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
-        #                label="Use GPU for execution",
-        #                help="This protocol has both CPU and GPU implementation.\
-        #                Select the one you want to use.")
-        #
-        # form.addHidden(params.GPU_LIST, params.StringParam, default='0',
-        #                expertLevel=cons.LEVEL_ADVANCED,
-        #                label="Choose GPU IDs",
-        #                help="Add a list of GPU devices that can be used")
-
         form.addSection(label='Input')
+
+        form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                       Select the one you want to use.")
+
+        form.addHidden(params.GPU_LIST, params.StringParam, default='0',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
 
         form.addParam('inputParticles', params.PointerParam, pointerClass='SetOfParticles, SetOfParticlesFlex',
                       pointerCondition='hasAlignmentProj',
@@ -201,11 +200,15 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if refFile:
             params += " --ref %s" % getXmippFileName(refFile)
 
-        if self.numberOfThreads.get() == 1:
-            self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+        if self.usesGpu():
+            params += " --debug_iter"
+            self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=xmipp3.Plugin.getEnviron())
         else:
-            params += " --thr %d" % self.numberOfThreads.get()
-            self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            if self.numberOfThreads.get() == 1:
+                self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            else:
+                params += " --thr %d" % self.numberOfThreads.get()
+                self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         # if self.useGpu.get():
         #     if self.numberOfMpi.get()>1:
@@ -235,7 +238,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         dim = self.inputParticles.get().getXDim()
         mask = self._getTmpPath("sphere_mask.mrc")
         r = int(0.5 * dim)
-        ImageHandler().write(np.zeros([dim, dim, dim]), mask)
+        ImageHandler().write(np.zeros([dim, dim, dim]), mask, overwrite=True)
         mask_params = "-i %s --mask circular -%d --create_mask %s" % (mask, r, mask)
         self.runJob('xmipp_transform_mask', mask_params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
         params += ' --mask %s' % mask
@@ -271,7 +274,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             resMask += mask
         resMask *= oriMask
 
-        ImageHandler().write(resMask, self._getTmpPath("resMask.mrc"))
+        ImageHandler().write(resMask, self._getTmpPath("resMask.mrc"), overwrite=True)
 
         self.sigmas = ' '.join(map(str, np.unique(sigmas)))
         print(self.sigmas)
@@ -384,6 +387,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         self.runJob('xmipp_volume_halves_restoration', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         ih = ImageHandler()
-        ih.convert(self._getExtraPath("volume_restored1.vol"), self._getExtraPath("final_reconstruction.mrc"))
+        ih.convert(self._getExtraPath("volume_restored1.vol"), self._getExtraPath("final_reconstruction.mrc"),
+                   overwrite=True)
 
         return [half_1, half_2]
