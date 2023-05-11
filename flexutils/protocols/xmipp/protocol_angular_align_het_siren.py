@@ -127,7 +127,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "and shift assignation of the particles to make it more consistent with the "
                            "heterogeneity estimation. Otherwise, only heterogeneity information will be "
                            "estimated.")
-        form.addParam('epochs', params.IntParam, default=50, label='Number of training epochs',
+        form.addParam('epochs', params.IntParam, default=20, label='Number of training epochs',
                       help="When training in refinenment mode, the number of epochs might be decreased to "
                            "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
                            "a meaningful local minima.")
@@ -163,7 +163,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
-        form.addParam("l1Reg", params.FloatParam, default=0.5, label="L1 loss regularization",
+        form.addParam("l1Reg", params.FloatParam, default=0.2, label="L1 loss regularization",
                       help="Determines the weight of the L1 map minimization in the cost function. L1 is moslty used to "
                            "decrease the amount of noise in the map learned by the network. We do not recommend to touch "
                            "this parameter")
