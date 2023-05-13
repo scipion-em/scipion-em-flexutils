@@ -27,6 +27,7 @@
 
 import os
 
+import xmipp3
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
 
@@ -103,7 +104,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
             args += " --atom_file %s" % self.structure.get().getFileName()
         program = os.path.join(const.VIEWERS, "map_model_viewers", "viewer_map.py")
         program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args)
+        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
