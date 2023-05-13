@@ -43,12 +43,13 @@ class InteractiveHist(object):
         axcreateSubset = plt.axes([0.75, 0.02, 0.2, 0.050])
         # Button does not allow to define text color so
         # I write it directly
+        color = Config.SCIPION_MAIN_COLOR if hasattr(Config, "SCIPION_MAIN_COLOR") else "maroon"
         axcreateSubset.text(0.5, 0.5, 'Subset Particles',
                             verticalalignment='center',
                             horizontalalignment='center',
                             transform=axcreateSubset.transAxes, color='white')
         bcreateSubset = Button(axcreateSubset, '',  # leave label empty
-                               color=Config.SCIPION_MAIN_COLOR,
+                               color=color,
                                hovercolor='maroon')
         bcreateSubset.on_clicked(self.createSubset)
         return bcreateSubset
