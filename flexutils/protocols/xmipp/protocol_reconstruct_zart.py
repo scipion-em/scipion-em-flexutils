@@ -202,7 +202,9 @@ class XmippProtReconstructZART(ProtReconstruct3D):
 
         if self.usesGpu():
             params += " --debug_iter"
-            self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=xmipp3.Plugin.getEnviron())
+            env = xmipp3.Plugin.getEnviron()
+            env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
+            self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=env)
         else:
             if self.numberOfThreads.get() == 1:
                 self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
