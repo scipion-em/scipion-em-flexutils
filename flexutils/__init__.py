@@ -28,17 +28,13 @@
 
 import os
 
-import site
-
-import glob
-
 import importlib
 
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
 import flexutils
-from flexutils.constants import CONDA_REQ
+from flexutils.constants import CONDA_YML
 
 
 __version__ = "3.0.2"
@@ -57,41 +53,38 @@ class Plugin(pwplugin.Plugin):
         return "conda activate flexutils-tensorflow"
 
     @classmethod
-    def getProgram(cls, program, python=True):
+    def getProgram(cls, program, python=True, cuda=False, needsPackages=None):
         """ Return the program binary that will be used. """
-        scipion_packages = site.getsitepackages()[0]
-        flexutils_packages = scipion_packages.replace("scipion3/", "flexutils/")
-        scipion_packages = glob.glob(os.path.join(scipion_packages, "scipion-em-*"))
-        flexutils_packages = glob.glob(os.path.join(flexutils_packages, "scipion-em-*"))
-        flexutils_packages = [package.replace("flexutils/", "scipion3/") for package in flexutils_packages]
-        set_dif = set(scipion_packages).symmetric_difference(set(flexutils_packages))
-        scipion_packages = list(set_dif)
+        scipion_packages = []
         env_variables = ""
-        for idx in range(len(scipion_packages)):
-            if "egg-link" in scipion_packages[idx]:
-                with open(scipion_packages[idx], "r") as file:
-                    lines = file.readlines()
-                scipion_packages[idx] = lines[0].strip("\n")
-                package = os.path.basename(scipion_packages[idx])
-                if "scipion-em-" in package:
-                    package_name = package.replace("scipion-em-", "")
-                    if "xmipp" in package_name:
-                        package_name += "3"
-                    if "prody" in package_name:
-                        package_name += "2"
+        if needsPackages is not None:
+            for package_name in needsPackages:
+                package_name = package_name.lower()
+                try:
                     package = importlib.import_module(package_name)
-                    package_env_vars = package.Plugin.getVars()
-                    for item, value in package_env_vars.items():
-                        if package_name.lower() in item.lower():
-                            env_variables += " {}='{}'".format(item, value)
+                    package_loc = importlib.util.find_spec(package_name).submodule_search_locations[0]
+                    scipion_packages.append(os.path.dirname(package_loc))
+                except ImportError:
+                    raise ImportError(f"Package {package_name} is not installed in Scipion")
+                package_env_vars = package.Plugin.getVars()
+                for item, value in package_env_vars.items():
+                    if package_name.lower() in item.lower():
+                        env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+
+        if cuda:
+            cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '
 
         if python:
             with pwutils.weakImport("chimera"):
                 from chimera import Plugin as chimeraPlugin
                 cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
-            cmd += "PYTHONPATH=%s %s python " % (scipion_packages, env_variables)
+
+            if needsPackages is not None:
+                cmd += "PYTHONPATH=$PYTHONPATH:%s %s python " % (scipion_packages, env_variables)
+            else:
+                cmd += "python "
         return cmd + '%(program)s ' % locals()
 
     @classmethod
@@ -114,26 +107,26 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
-            if 'CONDA_DEFAULT_ENV' in os.environ:
-                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['CONDA_DEFAULT_ENV']
-            elif 'VIRTUAL_ENV' in os.environ:
-                installationCmd += 'conda create -y -n flexutils --clone %s && ' % os.environ['VIRTUAL_ENV']
-            installationCmd += "conda activate flexutils && conda install -c anaconda cudatoolkit -y && " \
-                               "conda install -c conda-forge cudatoolkit-dev -y && pip install -r " + CONDA_REQ + " && "
-            installationCmd += "pip install -e %s" % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
+            installationCmd += "conda activate flexutils && "
+            installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += "touch flexutils_installed"
             return installationCmd
 
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
             installationCmd = f"{conda_init} conda activate flexutils && " \
-                              f"pip install git+https://github.com/DavidHerreros/Scipionn-Toolkit.git@master#egg=scipionn-toolkit -v"
+                              f"pip install -e " \
+                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@install_new_name#egg=flexutils-toolkit" \
+                              f" -v && "
+            installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
 
         commands = []
         installationEnv = getCondaInstallationFlexutils()
         installationTensorflow = getCondaInstallationTensorflow()
-        commands.append((installationEnv, []))
-        commands.append((installationTensorflow, []))
+        commands.append((installationEnv, ["flexutils_installed"]))
+        commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,

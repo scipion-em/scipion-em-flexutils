@@ -29,6 +29,7 @@ import numpy as np
 import os
 import re
 from xmipp_metadata.metadata import XmippMetaData
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, Boolean
@@ -37,7 +38,6 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
@@ -77,7 +77,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         group.addParam('inputVolume', params.PointerParam, condition="referenceType==0",
                        label="Input volume", pointerClass='Volume')
         group.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
-                       label="Input volume mask", pointerClass='VolumeMask')
+                       label="Input volume mask", pointerClass='VolumeMask',
+                       help="Two different type of mask could be provided:\n"
+                            "     * Macromolecular mask: A binary (non-smooth) mask telling where the protein is in "
+                            "the volume. The tighter the mask is to the protein the better.\n"
+                            "     * Rigid region mask: An id mask determining a set of rigid regions. Rigid regions "
+                            "will move coordinately, which may be useful to prevent overfitting compared o the protein "
+                            "mask cases (per point displacement)."
+                       )
         group.addParam('inputStruct', params.PointerParam, condition="referenceType==1",
                        label="Input structure", pointerClass='AtomStruct',
                        help="Reference structure should be aligned within Scipion to the map reconstructed "
@@ -334,6 +341,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
+        partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
@@ -347,6 +355,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
             outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
+            outParticle.getFlexInfo().setProgName(const.ZERNIKE3D)
 
             outParticle.setZFlex(zernike_space[idx])
 

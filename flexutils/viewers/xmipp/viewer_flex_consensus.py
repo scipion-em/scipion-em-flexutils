@@ -31,7 +31,7 @@ from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.protocol.params as params
 
 from flexutils.protocols.xmipp.protocol_interactive_flex_consensus import TensorflowProtInteractiveFlexConsensus
-from flexutils.viewers.viewer_interactive_hist import InteractiveHist
+from flexutils.viewers.consensus_viewers.viewer_interactive_hist import InteractiveHist
 
 
 class XmippFlexConsensusView(ProtocolViewer):

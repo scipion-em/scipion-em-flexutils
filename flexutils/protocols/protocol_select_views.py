@@ -26,6 +26,7 @@
 
 
 import numpy as np
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
@@ -33,10 +34,9 @@ import pyworkflow.utils as pwutils
 
 from pwem.viewers.showj import *
 from pwem.protocols import ProtAnalysis3D
-from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfVolumes, Volume, SetOfParticles
 
-from flexutils.viewers.viewer_ij import launchIJForSelection
+from flexutils.viewers.imagej_viewers.viewer_ij import launchIJForSelection
 from flexutils.utils import getOutputSuffix
 import flexutils.constants as const
 import flexutils
@@ -209,9 +209,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             combined_corr_image *= corr_image
 
         # Saved combined corr image
-        image = ih.createImage()
-        image.setData(combined_corr_image.astype(np.float32))
-        image.write(self._getExtraPath("combined_corrImage.mrc"))
+        ih.write(combined_corr_image, self._getExtraPath("combined_corrImage.mrc"))
 
 
     def launchIJGUIStep(self):

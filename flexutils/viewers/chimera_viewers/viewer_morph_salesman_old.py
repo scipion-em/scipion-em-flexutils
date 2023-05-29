@@ -128,7 +128,7 @@ class FlexMorphSalesmanViewer(ProtocolViewer):
             num_vol += volumes.getSize()
 
         # Run salesman's solver
-        program = "python " + os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_salesman_solver.py")
+        program = "python " + os.path.join(os.path.dirname(flexutils.__file__), "viewers", "path_finder_tools", "viewer_salesman_solver.py")
         args = "--coords %s --outpath %s --num_vol %d " \
                % (self.protocol._getExtraPath("saved_selections.txt"), self.protocol._getExtraPath("path.txt"),
                   num_vol)

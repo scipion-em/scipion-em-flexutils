@@ -29,7 +29,7 @@ import numpy as np
 from scipy.ndimage import binary_dilation, binary_fill_holes
 from skimage.morphology import ball
 
-from pwem.emlib.image import ImageHandler
+from xmipp_metadata.image_handler import ImageHandler
 
 
 def floodFillMask(infile, outfile):
@@ -38,9 +38,7 @@ def floodFillMask(infile, outfile):
     for _ in range(10):
         data = binary_dilation(data, ball_kernel)
     data = binary_fill_holes(data, ball_kernel)
-    filled_vol = ImageHandler().createImage()
-    filled_vol.setData(data.astype(np.float32))
-    filled_vol.write(outfile)
+    ImageHandler().write(data, outfile)
 
 
 if __name__ == '__main__':

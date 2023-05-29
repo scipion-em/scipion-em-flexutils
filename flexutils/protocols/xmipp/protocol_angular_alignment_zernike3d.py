@@ -30,6 +30,7 @@
 import numpy as np
 import os
 from xmipp_metadata.metadata import XmippMetaData
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String
@@ -38,7 +39,6 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, matrixFromGeometry
@@ -181,7 +181,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
             args = "--i %s --z_clnm %s --o %s" % (getXmippFileName(fnVolMask), fnPriors, def_file)
             program = os.path.join(const.XMIPP_SCRIPTS, "compute_z_clnm_deformation.py")
             program = flexutils.Plugin.getProgram(program)
-            self.runJob(program, args, numberOfMpi=1)
+            self.runJob(program, args, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             deformations = np.loadtxt(def_file)
 
         def zernikeRow(part, partRow, **kwargs):
@@ -193,7 +193,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
             if part.hasMicId():
                 partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
                 partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
-            if hasattr(part, '_xmipp_sphCoefficients') and hasattr(part, '_xmipp_sphDeformation'):
+            if isinstance(part, ParticleFlex):
                 partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
                 idx = list(z_clnm_vec.keys()).index(idx)
                 partRow.setValue(md.MDL_SPH_DEFORMATION, deformations[idx])

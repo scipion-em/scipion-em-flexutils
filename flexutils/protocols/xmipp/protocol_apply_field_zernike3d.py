@@ -28,6 +28,7 @@
 
 import numpy as np
 import os
+from xmipp_metadata.image_handler import ImageHandler
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -104,29 +105,22 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
 
             self.writeZernikeFile(volume, z_clnm, z_clnm_file)
 
+            samplingRate = volume.getSamplingRate()
+            boxsize = volume.getXDim()
+            vol_file = volume.getFlexInfo().refMap.get()
             if self.applyPDB.get():
-                boxSize = volume.getXDim()
-                samplingRate = volume.getSamplingRate()
+                ref_file = self.inputPDB.get().getFileName()
                 outFile = pwutils.removeBaseExt(self.inputPDB.get().getFileName()) + '_deformed_{0}.pdb'.format(i_pad)
-                params = ' --pdb %s --clnm %s -o %s --sr %f' % \
-                         (self.inputPDB.get().getFileName(), z_clnm_file, self._getExtraPath(outFile),
-                          samplingRate)
-                if self.moveBoxOrigin.get():
-                    params += " --boxsize %d" % boxSize
-                self.runJob("xmipp_pdb_sph_deform", params)
+                outFile = self._getExtraPath(outFile)
             else:
+                ref_file = volume.getFlexInfo().refMask.get()
                 outFile = self._getExtraPath("deformed_volume_{0}.mrc".format(i_pad))
-                volume_file = volume.getFileName()
-                if pwutils.getExt(volume_file) == ".mrc":
-                    volume_file += ":mrc"
-                params = "-i %s  --step 1 --blobr 2 -o %s --clnm %s" % \
-                         (volume_file, outFile, z_clnm_file)
-                if volume.getFlexInfo().refMask:
-                    mask_file = volume.getFlexInfo().refMask.get()
-                    if pwutils.getExt(mask_file) == ".mrc":
-                        volume_file += ":mrc"
-                    params += " --mask %s" % mask_file
-                self.runJob("xmipp_volume_apply_coefficient_zernike3d", params)
+
+            args = "--ref_file %s --vol_file %s --z_file %s --out_file %s --boxsize %d --sr %f" \
+                   % (ref_file, vol_file, z_clnm_file, outFile, boxsize, samplingRate)
+            program = os.path.join(const.XMIPP_SCRIPTS, "apply_deformation_field_zernike3d.py")
+            program = flexutils.Plugin.getProgram(program)
+            self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
             idx += 1
 

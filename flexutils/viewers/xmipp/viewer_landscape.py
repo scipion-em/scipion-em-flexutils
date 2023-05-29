@@ -78,7 +78,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                            "UMAP and PCA are only computed the first time the are used. Afterwards, they "
                            "will be reused to increase performance")
         form.addParam('nb_umap', params.IntParam, label="UMAP neighbors",
-                      default=5, condition="mode==0",
+                      default=15, condition="mode==0",
                       help="Number of neighbors to associate to each point in the space when computing "
                            "the UMAP space. The higher the number of neighbors, the more predominant "
                            "global in the original space features will be")
@@ -146,6 +146,6 @@ class XmippLandscapeViewer(ProtocolViewer):
         # Run slicer
         args = "--coords %s --deformation %s" \
                % (file_coords, file_deformation)
-        program = os.path.join(const.VIEWERS, "viewer_point_cloud.py")
+        program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
         program = flexutils.Plugin.getProgram(program)
         runJob(None, program, args)

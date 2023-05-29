@@ -29,12 +29,11 @@ import os
 import numpy as np
 from subprocess import Popen
 from sklearn.neighbors import KDTree
+from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow.utils.process import runJob
-import pyworkflow.utils as pwutils
 
-from pwem.viewers import ChimeraView, Chimera
-from pwem.emlib.image import ImageHandler
+from pwem.viewers import Chimera
 
 import flexutils
 
@@ -163,7 +162,7 @@ class FlexMorphChimeraX():
         np.savetxt(coordsPath, self.z_space)
 
         # Run salesman's solver
-        program = "python " + os.path.join(os.path.dirname(flexutils.__file__), "viewers", "viewer_salesman_solver.py")
+        program = "python " + os.path.join(os.path.dirname(flexutils.__file__), "viewers", "path_finder_tools", "viewer_salesman_solver.py")
         args = "--coords %s --outpath %s --num_vol 0 " \
                % (coordsPath, outPath)
         runJob(None, program, args)

@@ -29,6 +29,7 @@ import os
 import numpy as np
 import re
 from xmipp_metadata.metadata import XmippMetaData
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, CsvList
@@ -37,11 +38,10 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
-                           geometryFromMatrix, matrixFromGeometry
+    geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
@@ -70,12 +70,18 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="Add a list of GPU devices that can be used")
         group = form.addGroup("Data")
         group.addParam('inputParticles', params.PointerParam, label="Input particles to predict",
-                      pointerClass='SetOfParticles')
+                       pointerClass='SetOfParticles')
         group.addParam('zernikeProtocol', params.PointerParam, label="Zernike3Deep trained network",
                        pointerClass='TensorflowProtAngularAlignmentZernike3Deep',
                        help="Previously executed 'angular align - Zernike3Deep'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
+        group = form.addGroup("Mask type")
+        group.addParam('convertBinary', params.BooleanParam, default=False,
+                       label="Associate field to binary mask?",
+                       help="If a regions mask has been used to trained the Zernike3Deep network, you "
+                            "can set this parameter to yes to reassociate the deformation coefficients "
+                            "to a binary mask generated from the regions mask.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -94,6 +100,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self._createFilenameTemplates()
         self._insertFunctionStep(self.writeMetaDataStep)
         self._insertFunctionStep(self.predictStep)
+        if self.convertBinary:
+            self._insertFunctionStep(self.convertBinaryStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------
@@ -170,12 +178,39 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         elif zernikeProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
-
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
         program = flexutils.Plugin.getTensorflowProgram("predict_zernike3deep.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
+
+    def convertBinaryStep(self):
+        zernikeProtocol = self.zernikeProtocol.get()
+        maskRegOri = zernikeProtocol.inputVolumeMask.get().getFileName()
+        maskReg = self._getFileName('fnVolMask')
+        maskBin = self._getExtraPath("binary_mask.mrc")
+        maskBinOri = self._getExtraPath("binary_mask_ori.mrc")
+        L1 = zernikeProtocol.l1.get()
+        L2 = zernikeProtocol.l2.get()
+        md_file = self._getFileName('imgsFn')
+
+        # Convert mask to binary (original)
+        data = ImageHandler(maskRegOri).getData()
+        data[data > 0] = 1.0
+        ImageHandler().write(data, maskBinOri, overwrite=True)
+
+        # Convert mask to binary (downsampled)
+        data = ImageHandler(maskReg).getData()
+        data[data > 0] = 1.0
+        boxsize = data.shape[0]
+        ImageHandler().write(data, maskBin, overwrite=True)
+
+        # Update deformation field
+        args = "--md_file %s --mask_reg %s --mask_bin %s --boxsize %d --l1 %d --l2 %d --thr %d" \
+               % (md_file, maskReg, maskBin, boxsize, L1, L2, self.numberOfThreads.get())
+        program = os.path.join(const.XMIPP_SCRIPTS, "field_regions_to_binary_zernike3d.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
@@ -201,6 +236,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
+        partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
@@ -214,6 +250,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
             outParticle = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
+            outParticle.getFlexInfo().setProgName(const.ZERNIKE3D)
 
             outParticle.setZFlex(zernike_space[idx])
 
@@ -243,14 +280,11 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
 
-        if zernikeProtocol.referenceType.get() == 0:
-            inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
-            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
-            partSet.getFlexInfo().refMap = String(inputVolume)
-        else:
-            structure = zernikeProtocol.inputStruct.get().getFileName()
-            partSet.getFlexInfo().refStruct = String(structure)
+        inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
+            else zernikeProtocol.inputVolumeMask.get().getFileName()
+        inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+        partSet.getFlexInfo().refMask = String(inputMask)
+        partSet.getFlexInfo().refMap = String(inputVolume)
 
         partSet.getFlexInfo().refPose = refinePose
 

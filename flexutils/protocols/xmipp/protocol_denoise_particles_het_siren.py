@@ -36,11 +36,11 @@ import pyworkflow.protocol.params as params
 from pyworkflow.object import String, Integer
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
+import pyworkflow.utils as pwutils
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import Volume
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -53,9 +53,9 @@ import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
 
-class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
-    """ Predict particle poses with map decoding with the HetSIREN network. """
-    _label = 'predict - HetSIREN'
+class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
+    """ Denoise particles with the HetSIREN network. """
+    _label = 'denoise particles - HetSIREN'
     _lastUpdateVersion = VERSION_2_0
 
     # --------------------------- DEFINE param functions -----------------------
@@ -77,11 +77,6 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="Previously executed 'angular align - HetSIREN'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
-        form.addSection(label='Output')
-        form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
-                      help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
-                           "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
-                           "greater than 1")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -152,14 +147,14 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
-        correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
+        Xdim = self.inputParticles.get().getXDim()
+        correctionFactor = Xdim / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.ctfType.get()
         hetDim = hetSirenProtocol.hetDim.get()
-        numVol = hetSirenProtocol.numVol.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
-               "--sr %f --apply_ctf %d --het_dim %d --num_vol %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol)
+               "--sr %f --apply_ctf %d --het_dim %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim)
 
         if hetSirenProtocol.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -174,15 +169,21 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
 
-        if self.filterDecoded.get():
-            args += " --apply_filter"
-
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = flexutils.Plugin.getTensorflowProgram("predict_het_siren.py", python=False)
+        program = flexutils.Plugin.getTensorflowProgram("predict_particles_het_siren.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
+
+        # Scale particles
+        params = "-i %s -o %s --fourier %d" % \
+                 (self._getExtraPath('decoded_particles.mrcs:mrcs'),
+                  self._getExtraPath('aux.mrcs'),
+                  Xdim)
+        self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
+                    env=xmipp3.Plugin.getEnviron())
+        pwutils.moveFile(self._getExtraPath('aux.mrcs'), self._getExtraPath('decoded_particles.mrcs'))
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
@@ -199,6 +200,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         delta_psi = metadata[:, 'delta_angle_psi']
         delta_shift_x = metadata[:, 'delta_shift_x']
         delta_shift_y = metadata[:, 'delta_shift_y']
+        denoised_images_path = metadata[:, "image"]
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.HETSIREN)
@@ -214,6 +216,9 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         for particle in inputSet.iterItems():
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
+
+            index, filename = denoised_images_path[idx].split("@")
+            outParticle.setLocation((int(index), filename))
 
             outParticle.setZFlex(latent_space[idx])
 
@@ -277,23 +282,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().pad = Integer(hetSirenProtocol.pad.get())
 
-        outVols = self._createSetOfVolumes()
-        outVols.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
-        for idx in range(hetSirenProtocol.numVol.get()):
-            outVol = Volume()
-            outVol.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
-            outVols.append(outVol)
-
-            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        finalDimension=inputParticles.getXDim(), overwrite=True)
-
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
-
-        self._defineOutputs(outputVolumes=outVols)
-        self._defineTransformRelation(self.inputParticles, outVols)
 
     # --------------------------- UTILS functions -----------------------
     def _updateParticle(self, item, row):

@@ -1,0 +1,43 @@
+name: flexutils
+
+channels:
+  - conda-forge
+  - dherreros
+
+dependencies:
+  - python=3.9
+  - pip
+  - cudatoolkit=11.2  # If opticalflow3d works, we need 11.3.1
+  - cudatoolkit-dev
+  - setuptools=60.2.0
+  - pyyaml 
+  - numpy
+  - scikit-learn
+  - seaborn
+  - vtk
+  - pyvista
+  - pyvistaqt
+  - scikit-image
+  - panel
+  - bokeh
+  - watchdog
+  - tqdm
+  - pandas
+  - h5py
+  - mayavi
+  - napari
+  - scikit-learn
+  - cython
+  - xmipp_metadata
+  - pip:
+    - PyQt5==5.15.4
+    - PyQtWebEngine==5.15.6
+    - pymeshfix==0.15.0
+    - shapely==1.8.1.post1
+    - mlrose@git+https://github.com/gkhayes/mlrose.git@master
+    - prody==2.4.0
+    - umap-learn
+    - pynndescent>=0.5.10
+    #- farneback3d@git+https://github.com/theHamsta/farneback3d.git@master
+    #- opticalflow3d
+    - scipion-em-xmipp

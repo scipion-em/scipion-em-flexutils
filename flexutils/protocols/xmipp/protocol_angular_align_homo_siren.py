@@ -29,6 +29,7 @@ import os
 import re
 
 from xmipp_metadata.metadata import XmippMetaData
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import String, Integer
@@ -37,7 +38,6 @@ from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
-from pwem.emlib.image import ImageHandler
 from pwem.constants import ALIGN_PROJ
 from pwem.objects import Volume
 
@@ -217,10 +217,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ih = ImageHandler()
-            ih.createEmptyImage(fnVolMask, xDim=self.newXdim, yDim=self.newXdim,
-                                zDim=self.newXdim, nDim=1)
-            ih.createCircularMask(int(0.5 * self.newXdim), fnVolMask, fnVolMask)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -395,8 +392,8 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
 
         ImageHandler().scaleSplines(self._getExtraPath('decoded_map.mrc'),
-                                    self._getExtraPath('decoded_map.mrc'), 1,
-                                    finalDimension=inputParticles.getXDim())
+                                    self._getExtraPath('decoded_map.mrc'),
+                                    finalDimension=inputParticles.getXDim(), overwrite=True)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

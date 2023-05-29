@@ -177,7 +177,8 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         pd_struct = pd.parsePDB(self.inputStruct.get().getFileName(), subset=self._subset[self.atomSubset.get()],
                                 compressed=False)
         pdb_coordinates = pd_struct.getCoords()
-        pdb_coordinates = np.c_[pdb_coordinates, np.ones(pdb_coordinates.shape[0])]
+        values = pd_struct.getBetas()
+        pdb_coordinates = np.c_[pdb_coordinates, values]
         # pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
         # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
         np.savetxt(structure, pdb_coordinates)

@@ -37,10 +37,10 @@ from skimage import filters
 from skimage.measure import label
 from skimage.morphology import ball, convex_hull_image, skeletonize
 from subprocess import call
+from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.utils as pwutils
 
-from pwem.emlib.image import ImageHandler
 from pwem.convert.transformations import superimposition_matrix
 from pwem.viewers import Chimera
 
@@ -322,7 +322,7 @@ def computeZernikes3D(l1, n, l2, m, pos, r_max):
         elif m == 0:
             Y = 14.68*costh2*costh2*costh2 - 20.02*costh2*costh2 + 6.675*costh2 - 0.3178
         elif m == 1:
-            Y = 0.222*cosph*np.power(1.0 - 1.0*costh2, 0.5)*(86.62*costh2*costh2*costh - 78.75*costh2*costh + 13.12*costh2)
+            Y = 0.222*cosph*np.power(1.0 - 1.0*costh2, 0.5)*(86.62*costh2*costh2*costh - 78.75*costh2*costh + 13.12*costh)
         elif m == 2:
             Y = -0.03509*cosph*(costh2 - 1.0)*(433.1*costh2*costh2 - 236.2*costh2 + 13.12)
         elif m == 3:
@@ -592,11 +592,21 @@ def computeBasis(pos, **kwargs):
     L1 = kwargs.pop('L1', None)
     L2 = kwargs.pop('L2', None)
     r = kwargs.pop('r', None)
+    groups = kwargs.pop("groups", None)
+    centers = kwargs.pop("centers", None)
 
     degrees = basisDegreeVectors(L1, L2)
-    basis = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
-             pos, r) for idx in range(degrees.shape[0])]
-    basis = np.hstack(basis)
+    if centers is None:
+        basis = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
+                                   pos, r) for idx in range(degrees.shape[0])]
+        basis = np.hstack(basis)
+    else:
+        basis_centers = [computeZernikes3D(degrees[idx, 0], degrees[idx, 1], degrees[idx, 2], degrees[idx, 3],
+                                           centers, r) for idx in range(degrees.shape[0])]
+        basis_centers = np.hstack(basis_centers)
+        basis = np.zeros((pos.shape[0], basis_centers.shape[1]))
+        for group, basis_center in zip(np.unique(groups), basis_centers):
+            basis[groups == group] = basis_center
 
     return basis
 
@@ -686,7 +696,7 @@ def inscribedRadius(atoms):
     return 1.1 * atoms_r
 
 def computeInverse(matrix):
-    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-10  # Probably -6 (for maps) -8 (for PDBs)
+    tol = np.amax(matrix) * np.amax(np.array(matrix.shape)) * 1e-20  # Probably -6 (for maps) -8 (for PDBs)
     u, s, vh = np.linalg.svd(matrix)
 
     for idx in range(len(s)):
@@ -712,9 +722,7 @@ def readMap(file):
     return ImageHandler().read(file).getData()
 
 def saveMap(map, file):
-    image = ImageHandler().createImage()
-    image.setData(map.astype(np.float32))
-    image.write(file)
+    ImageHandler().write(map, file)
 
 def getXmippOrigin(map):
     return np.asarray([int(0.5 * map.shape[2]),
@@ -834,8 +842,6 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None, output_map=Non
             fhCmd.write("save start_aligned.mrc #3\n")
         fhCmd.write("exit\n")
 
-    # program = Plugin.getProgram()
-    # program = Chimera.getProgram()
     chimera_home = os.environ.get("CHIMERA_HOME")
     program = os.path.join(chimera_home, 'bin', os.path.basename("ChimeraX"))
     cmd = program + ' --nogui "%s"' % scriptFile

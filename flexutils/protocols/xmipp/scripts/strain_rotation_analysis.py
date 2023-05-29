@@ -31,8 +31,6 @@ import mrcfile
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-import flexutils.protocols.xmipp.utils.utils as utl
-
 
 # ---------------------------------------------------------------------------
 # Utilities
