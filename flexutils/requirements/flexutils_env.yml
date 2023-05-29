@@ -2,13 +2,14 @@ name: flexutils
 
 channels:
   - conda-forge
+  - dherreros
 
 dependencies:
   - python=3.9
   - pip
-  - cudatoolkit
-  - cudatoolkit-dev 
-  - setuptools
+  - cudatoolkit=11.2  # If opticalflow3d works, we need 11.3.1
+  - cudatoolkit-dev
+  - setuptools=60.2.0
   - pyyaml 
   - numpy
   - scikit-learn
@@ -27,6 +28,7 @@ dependencies:
   - napari
   - scikit-learn
   - cython
+  - xmipp_metadata
   - pip:
     - PyQt5==5.15.4
     - PyQtWebEngine==5.15.6
