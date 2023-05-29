@@ -29,7 +29,7 @@ import numpy as np
 
 from pwem import EMObject, NO_INDEX
 from pwem.objects import (SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, 
-                          AtomStruct, EMSet, SetOfAtomStructs)
+                          AtomStruct, EMSet, SetOfAtomStructs, TrajFrame, SetOfTrajFrames)
 
 from pyworkflow.object import String, CsvList
 
@@ -318,6 +318,89 @@ class ClassStructFlex(SetOfParticlesFlex):
 class SetOfClassesStructFlex(SetOfClasses):
     """ SetOfClasses3D with flexibility information stored for structures"""
     ITEM_TYPE = ClassStructFlex
+    REP_TYPE = AtomStructFlex
+    REP_SET_TYPE = SetOfAtomStructFlex
+
+    pass
+
+class TrajFrameFlex(TrajFrame):
+    """Trajectory/ensemble frame with flexibility information stored"""
+
+    def __init__(self, progName="", **kwargs):
+        TrajFrame.__init__(self, **kwargs)
+        self._flexInfo = FlexInfo(progName)
+        self._zFlex = CsvList()
+        self._zRed = CsvList()
+        self._transform = Transform()
+
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
+
+    def getZFlex(self):
+        return np.fromstring(self._zFlex.get(), sep=",")
+
+    def setZFlex(self, zFlex):
+        csvZFlex = CsvList()
+        for c in zFlex:
+            csvZFlex.append(c)
+        self._zFlex = csvZFlex
+
+    def getZRed(self):
+        return np.fromstring(self._zRed.get(), sep=",")
+
+    def setZRed(self, zRed):
+        csvZRed = CsvList()
+        for c in zRed:
+            csvZRed.append(c)
+        self._zRed = csvZRed
+
+    def copyInfo(self, other):
+        self.copy(other, copyId=False)
+
+
+class SetOfFramesFlex(SetOfTrajFrames):
+    """SetOfTrajFrames with flexibility information stored"""
+    ITEM_TYPE = TrajFrameFlex
+
+    def __init__(self, progName="", **kwargs):
+        SetOfTrajFrames.__init__(self, **kwargs)
+        self._flexInfo = FlexInfo(progName)
+
+    def getFlexInfo(self):
+        return self._flexInfo
+
+    def setFlexInfo(self, flexInfo):
+        self._flexInfo = flexInfo
+
+    def copyInfo(self, other):
+        super(SetOfTrajFrames, self).copyInfo(other)
+        if hasattr(other, "_flexInfo"):
+            self._flexInfo.copyInfo(other._flexInfo)
+
+class ClassStructFrameFlex(SetOfFramesFlex):
+    """Frames Class3D with flexibility information stored for structures"""
+    REP_TYPE = AtomStructFlex
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not
+        _mapperPath or _size from other set of micrographs to current one.
+        """
+        self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        return clone
+
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfClasses
+        pass
+
+class SetOfClassesStructFrameFlex(SetOfClasses):
+    """ SetOfClasses3D with flexibility information stored for structures"""
+    ITEM_TYPE = ClassStructFrameFlex
     REP_TYPE = AtomStructFlex
     REP_SET_TYPE = SetOfAtomStructFlex
 

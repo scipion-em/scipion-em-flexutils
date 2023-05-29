@@ -61,6 +61,12 @@ class ProtFlexBase:
         classes.setImages(flexParticles)
         return classes
 
+    def _createSetOfClassesStructFrameFlex(self, flexFrames, suffix='', **kwargs):
+        classes = self._createSet(flexutils.objects.SetOfClassesStructFrameFlex,
+                                  'flexClassesStructFrame%s.sqlite', suffix, **kwargs)
+        classes.setFrames(flexFrames)
+        return classes
+
     def _createSetOfVolumesFlex(self, suffix='', **kwargs):
         return self._createSet(flexutils.objects.SetOfVolumesFlex,
                                'flexvolumes%s.sqlite', suffix, **kwargs)
