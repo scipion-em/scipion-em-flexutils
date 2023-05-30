@@ -36,6 +36,7 @@ CONDA_YML = os.path.join(flexutils.__path__[0], 'requirements', 'flexutils_env.y
 # Location inside plugin
 VIEWERS = os.path.join(os.path.dirname(flexutils.__file__), "viewers")
 XMIPP_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "xmipp", "scripts")
+PRODY_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "prody", "scripts")
 
 # Program labels
 ZERNIKE3D = "Zernike3D"

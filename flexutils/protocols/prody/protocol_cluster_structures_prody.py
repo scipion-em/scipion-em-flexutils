@@ -75,57 +75,15 @@ class ProDyProtClusterStructuresEnsemble(ProtAnalysis3D, ProtFlexBase):
 
     # --------------------------- STEPS functions -----------------------------
     def computeClusters(self):
-        # Input data
-        ensemble_fname = self.ensemble.get().getFirstItem().getFileName()
-        if ensemble_fname.endswith('.dcd'):
-            ensemble = pd.parseDCD(ensemble_fname)
-        elif ensemble_fname.endswith('.ens.npz'):
-            ensemble = pd.loadEnsemble(ensemble_fname)
- 
-        structure = pd.parsePDB(self.structure.get().getFileName(), 
-                                subset='ca', compressed=False)
-        dist_thr = self.dist.get()
 
-        structure_coords = structure.getCoords()
-        ensemble.setCoords(structure_coords)
+        args = "--ensemble % s --pdb %s --distThr %f --odir %s" \
+               % (self.ensemble.get().getFirstItem().getFileName(), 
+                  self.structure.get().getFileName(), 
+                  self.dist.get(), self._getExtraPath())
+        program = os.path.join(const.PRODY_SCRIPTS, "structure_rmsd_clustering.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
 
-        # Cluster generation
-        clusters = []
-        frames_cluster = []
-        for idi, conf in enumerate(tqdm(ensemble)):
-            coords_struct_d = conf.getCoords()
-            if clusters:
-                found = False
-                for idx in range(len(clusters)):
-                    d = np.sum((clusters[idx] - coords_struct_d) ** 2, axis=1)
-                    rmsd = np.sqrt(np.sum(d) / d.size)
-                    if rmsd < dist_thr:
-                        clusters[idx] = clusters[idx] + ((coords_struct_d - clusters[idx]) / (len(frames_cluster[idx]) + 1))
-                        frames_cluster[idx].append(idi)
-                        found = True
-                        break
-                if not found:
-                    clusters.append(coords_struct_d)
-                    frames_cluster.append([idi])
-            else:
-                clusters.append(coords_struct_d)
-                frames_cluster.append([idi])
-
-        output_dir = self._getExtraPath()
-
-        # Write clustered structures to output folder
-        clustered_struct_folder = os.path.join(output_dir, "clustered_structures")
-        os.mkdir(clustered_struct_folder)
-        for sid, cluster_coords in enumerate(tqdm(clusters)):
-            clustered_struct = structure.copy()
-            clustered_struct.setCoords(cluster_coords)
-            pd.writePDB(os.path.join(clustered_struct_folder, "cluster_%d.pdb" % sid), clustered_struct)
-
-        # Write image ids for each cluster in folder
-        cluster_ids_folder = os.path.join(output_dir, "cluster_img_ids")
-        os.mkdir(cluster_ids_folder)
-        for sid, vec_ids in enumerate(tqdm(frames_cluster)):
-            np.savetxt(os.path.join(cluster_ids_folder, "cluster_%d.txt" % sid), np.asarray(vec_ids))
 
     def createOutputStep(self):
         frames = self.ensemble.get()
