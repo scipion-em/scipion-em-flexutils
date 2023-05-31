@@ -94,10 +94,10 @@ class ProDyProtClusterStructuresEnsemble(ProtAnalysis3D, ProtFlexBase):
 
         # Create SetOfClasses3D
         suffix = getOutputSuffix(self, SetOfClassesStructFrameFlex)
-        classes = self._createSetOfClassesStructFlex(frames, suffix=suffix,
-                                                     progName=const.PRODY)
+        classes = self._createSetOfClassesStructFrameFlex(frames, suffix=suffix,
+                                                          progName=const.PRODY)
 
-        # Popoulate SetOfClassesStructFlex with structures from KMean frames
+        # Populate SetOfClassesStructFrameFlex with structures from KMean frames
         for clInx in range(num_classes):
 
             newClass = ClassStructFrameFlex(progName=const.PRODY)

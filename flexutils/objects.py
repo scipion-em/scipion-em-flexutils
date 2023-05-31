@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+import logging
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -31,7 +33,7 @@ from pwem import EMObject, NO_INDEX
 from pwem.objects import (SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, 
                           AtomStruct, EMSet, SetOfAtomStructs, TrajFrame, SetOfTrajFrames)
 
-from pyworkflow.object import String, CsvList
+from pyworkflow.object import String, CsvList, Boolean, Pointer
 
 
 class ParticleFlex(Particle):
@@ -398,10 +400,38 @@ class ClassStructFrameFlex(SetOfFramesFlex):
         # Do nothing on close, since the db will be closed by SetOfClasses
         pass
 
-class SetOfClassesStructFrameFlex(SetOfClasses):
+class SetOfClassesStructFrameFlex(SetOfClassesStructFlex):
     """ SetOfClasses3D with flexibility information stored for structures"""
     ITEM_TYPE = ClassStructFrameFlex
     REP_TYPE = AtomStructFlex
     REP_SET_TYPE = SetOfAtomStructFlex
 
-    pass
+    def __init__(self, **kwargs):
+        EMSet.__init__(self, **kwargs)
+        # Store the average images of each class(SetOfParticles)
+        self._representatives = Boolean(False)
+        self._framesPointer = Pointer()
+
+    def getFrames(self):
+        """ Return the SetOfImages used to create the SetOfClasses. """
+        return self._framesPointer.get()
+
+    def getFramesPointer(self):
+        """" Return the pointer to the SetOfImages used to create the SetOfClasses. """
+        return self._framesPointer
+
+    def setFrames(self, frames):
+        """ Set the images (particles) 2d associated with this set of classes.
+        Params:
+            images: An indirect pointer (with extended) to a set of images.
+        """
+        if frames.isPointer():
+            self._framesPointer.copy(frames)
+        else:
+            self._framesPointer.set(frames)
+            
+        if not self._framesPointer.hasExtended():
+            logger.warning("FOR DEVELOPERS: Direct pointers to objects should be avoided. "
+                         "They are problematic in complex streaming scenarios. "
+                         "Pass a pointer to a protocol with extended "
+                         "(e.g.: input param are this kind of pointers. Without get()!)")
