@@ -6,29 +6,27 @@ channels:
 
 dependencies:
   - python=3.9
-  - pip
+  - pip=23.1
   - cudatoolkit=11.2  # If opticalflow3d works, we need 11.3.1
-  - cudatoolkit-dev
+  - cudatoolkit-dev=11.7.0
   - setuptools=60.2.0
-  - pyyaml 
-  - numpy
-  - scikit-learn
-  - seaborn
-  - vtk
-  - pyvista
-  - pyvistaqt
-  - scikit-image
-  - panel
-  - bokeh
-  - watchdog
-  - tqdm
-  - pandas
-  - h5py
-  - mayavi
-  - napari
-  - scikit-learn
-  - cython
-  - xmipp_metadata
+  - pyyaml=6.0
+  - numpy=1.23.0
+  - scikit-learn=1.2.2
+  - seaborn=0.12.2
+  - vtk=9.2.6
+  - pyvista=0.38.5
+  - pyvistaqt=0.10.0
+  - scikit-image=0.19.3
+  - panel=0.14.4
+  - bokeh=2.4.3
+  - watchdog=3.0.0
+  - tqdm=4.65.0
+  - pandas=2.0.0
+  - h5py=3.8.0
+  - mayavi=4.8.1
+  - napari=0.4.17
+  - cython=0.29.34
   - pip:
     - PyQt5==5.15.4
     - PyQtWebEngine==5.15.6
@@ -36,8 +34,9 @@ dependencies:
     - shapely==1.8.1.post1
     - mlrose@git+https://github.com/gkhayes/mlrose.git@master
     - prody==2.4.0
-    - umap-learn
+    - umap-learn==0.5.3
     - pynndescent>=0.5.10
+    - xmipp_metadata@git+https://github.com/DavidHerreros/xmipp_metadata.git@devel
     #- farneback3d@git+https://github.com/theHamsta/farneback3d.git@master
     #- opticalflow3d
     - scipion-em-xmipp
