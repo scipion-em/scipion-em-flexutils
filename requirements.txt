@@ -1,7 +1,7 @@
 scipion-pyworkflow
 scipion-em >= 3.0.8
 h5py
-xmipp_metadata
+xmipp_metadata@git+https://github.com/DavidHerreros/xmipp_metadata.git@devel
 scikit-image>=0.17.2,<=0.20.0
 prody==2.4.0
 seaborn==0.12.2
