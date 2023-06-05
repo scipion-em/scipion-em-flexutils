@@ -76,7 +76,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="If provided, the HomoSIREN network will learn to refine with the new learned angles. "
                             "Otherwise, the network will learn the reconstruction of the map from scratch")
         group.addParam('inputVolumeMask', params.PointerParam,
-                       label="Reconsctruction mask", pointerClass='VolumeMask', allowsNull=True,
+                       label="Reconstruction mask", pointerClass='VolumeMask', allowsNull=True,
                        help="If provided, the pose refinement and reconstruction learned by HomoSIREN will be focused "
                             "in the region delimited by the mask. Otherise, a sphere inscribed in the volume box will "
                             "be used")
@@ -390,10 +390,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
 
         if self.inputVolume.get():
-            inputMask = self.inputVolumeMask.get().getFileName()
             inputVolume = self.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
             partSet.getFlexInfo().refMap = String(inputVolume)
+
+        if self.inputVolumeMask.get():
+            inputMask = self.inputVolumeMask.get().getFileName()
+            partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
             partSet.getFlexInfo().architecture = String("convnn")
