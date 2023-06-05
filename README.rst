@@ -44,3 +44,9 @@ The installation of the Plugin also requires Conda to be installed in the system
 .. code-block::
 
     CONDA_ACTIVATION_CMD = eval "$(/path/to/your/conda/installation/condabin/conda shell.bash hook)"
+
+==========================
+Tutorials
+==========================
+
+Flexibility Hub tutorials are available in the `Scipion FlexHub Wiki <>`__ and in `Youtube <https://www.youtube.com/playlist?list=PLuu0votIJpSxTmPLvKRHV3ijadqlxxHfb>`__.
