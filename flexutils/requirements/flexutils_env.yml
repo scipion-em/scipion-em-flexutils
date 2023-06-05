@@ -1,4 +1,4 @@
-name: test_flex
+name: flexutils
 
 channels:
   - conda-forge
