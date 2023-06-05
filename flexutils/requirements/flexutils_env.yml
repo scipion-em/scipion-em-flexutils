@@ -1,4 +1,4 @@
-name: flexutils
+name: test_flex
 
 channels:
   - conda-forge
@@ -25,11 +25,12 @@ dependencies:
   - pandas=2.0.0
   - h5py=3.8.0
   - mayavi=4.8.1
+  - traitsui=7.4.3
   - napari=0.4.17
   - cython=0.29.34
+  - pyqt==5.15.4
+  - pyqtwebengine==5.15.4
   - pip:
-    - PyQt5==5.15.4
-    - PyQtWebEngine==5.15.6
     - pymeshfix==0.15.0
     - shapely==1.8.1.post1
     - mlrose@git+https://github.com/gkhayes/mlrose.git@master
