@@ -1,3 +1,5 @@
+Advanced Flexibility Hub Tutorial on experimental data
+You'll need to download its dataset -> scipion3 testdata --download FlexHub_Tutorials
 [
     {
         "object.className": "ProtImportParticles",
@@ -10,13 +12,13 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 3,
-        "filesPath": "/media/davidherreros/Datos_David/Data/FlexHub_Tutorials/Advanced_Guide/particles_026609.star",
+        "filesPath": "~Path to particles:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Advanced_Guide/particles_026609.star|2|pathtoparticles~",
         "filesPattern": null,
         "copyFiles": false,
         "emxFile": null,
         "alignType": 0,
         "mdFile": null,
-        "starFile": "/media/davidherreros/Datos_David/Data/FlexHub_Tutorials/Advanced_Guide/particles_026609.star",
+        "starFile": "~Path to star file:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Advanced_Guide/particles_026609.star|2|pathtostar~",
         "ignoreIdColumn": false,
         "sqliteFile": null,
         "frealignLabel": null,
@@ -47,7 +49,7 @@
         "runMode": 0,
         "inputPdbData": 1,
         "pdbId": null,
-        "pdbFile": "/media/davidherreros/Datos_David/Data/FlexHub_Tutorials/Advanced_Guide/reference_model.pdb"
+        "pdbFile": "~Path to model:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Advanced_Guide/reference_model.pdb|2|pathtomodel~"
     },
     {
         "object.className": "ProtImportVolumes",
@@ -60,7 +62,7 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "/media/davidherreros/Datos_David/Data/FlexHub_Tutorials/Advanced_Guide/reference_map.mrc",
+        "filesPath": "~Path to map:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Advanced_Guide/reference_map.mrc|2|pathtomap~",
         "filesPattern": null,
         "copyFiles": false,
         "emdbId": null,
@@ -86,7 +88,7 @@
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "/media/davidherreros/Datos_David/Data/FlexHub_Tutorials/Advanced_Guide/reference_mask.mrc",
+        "maskPath": "~Path to mask:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Advanced_Guide/reference_mask.mrc|2|pathtomask~",
         "samplingRate": 1.34
     },
     {

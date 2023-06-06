@@ -1,3 +1,5 @@
+Advanced Flexibility Hub Tutorial on experimental data
+You'll need to download its dataset -> scipion3 testdata --download FlexHub_Tutorials
 [
     {
         "object.className": "ProtImportParticles",
@@ -10,7 +12,7 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 4,
-        "filesPath": "/media/davidherreros/LinuxExt/ScipionUserData/projects/FlexHub_Tutorial/particles.sqlite",
+        "filesPath": "~Path to particles:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Starter_Guide/particles.sqlite|2|pathtoparticles~",
         "filesPattern": null,
         "copyFiles": false,
         "emxFile": null,
@@ -18,7 +20,7 @@
         "mdFile": null,
         "starFile": null,
         "ignoreIdColumn": false,
-        "sqliteFile": "/media/davidherreros/LinuxExt/ScipionUserData/projects/FlexHub_Tutorial/Data/particles.sqlite",
+        "sqliteFile": "~Path to sqlite:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Starter_Guide/particles.sqlite|2|pathtosqlite~",
         "frealignLabel": null,
         "stackFile": null,
         "parFile": null,
@@ -47,7 +49,7 @@
         "runMode": 0,
         "inputPdbData": 1,
         "pdbId": null,
-        "pdbFile": "/media/davidherreros/LinuxExt/ScipionUserData/projects/FlexHub_Tutorial/Data/AK.pdb"
+        "pdbFile": "~Path to model:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Starter_Guide/AK.pdb|2|pathtomodel~"
     },
     {
         "object.className": "ProtImportVolumes",
@@ -60,7 +62,7 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "/media/davidherreros/LinuxExt/ScipionUserData/projects/FlexHub_Tutorial/Data/AK.vol",
+        "filesPath": "~Path to map:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Starter_Guide/AK.vol|2|pathtomap~",
         "filesPattern": null,
         "copyFiles": false,
         "emdbId": null,
@@ -86,7 +88,7 @@
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "/media/davidherreros/LinuxExt/ScipionUserData/projects/FlexHub_Tutorial/Data/AK_mask.vol",
+        "maskPath": "~Path to mask:|%(SCIPION_TESTS)s/FlexHub_Tutorials/Starter_Guide/AK_mask.vol|2|pathtomask~",
         "samplingRate": 2.0
     },
     {
