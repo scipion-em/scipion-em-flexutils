@@ -105,7 +105,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
                            "to run at least 8 iteration for better results")
-        form.addParam('reg', params.FloatParam, default=0.0001, expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('reg', params.FloatParam, default=1e-5, expertLevel=params.LEVEL_ADVANCED,
                       label='ART lambda',
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
                            "Note that larger values may lead to divergence.")

@@ -58,13 +58,13 @@ from mayavi.core.ui.api import SceneEditor, MayaviScene, MlabSceneModel
 import flexutils
 
 
-class InteractiveAnnotate2D(QtWidgets.QApplication):
+class InteractiveAnnotate2D(QtWidgets.QWidget):
 
     # ---------------------------------------------------------------------------
     # Init
     # ---------------------------------------------------------------------------
     def __init__(self, **kwargs):
-        super(InteractiveAnnotate2D, self).__init__(sys.argv)
+        super(InteractiveAnnotate2D, self).__init__()
         # Attributes from kwargs
         self.class_inputs = kwargs
         self.data = kwargs.get("data")
@@ -396,10 +396,22 @@ class InteractiveAnnotate2D(QtWidgets.QApplication):
     # Launch values
     # ---------------------------------------------------------------------------
     def launchViewer(self):
+        # Get application
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication(sys.argv)
+
+        # Show interface
         self.window.show()
+
+        # Load Bokeh server
         p = Process(target=self.server.io_loop.start, args=())
         p.start()
-        self.exec()
+
+        # Execute app
+        app.exec_()
+
+        # Stop app and sever
         self.server.io_loop.stop()
         self.server.stop()
         p.terminate()
