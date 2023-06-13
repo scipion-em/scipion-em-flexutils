@@ -28,7 +28,8 @@
 import numpy as np
 
 from pwem import EMObject, NO_INDEX
-from pwem.objects import SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, AtomStruct, EMSet
+from pwem.objects import (SetOfParticles, Particle, SetOfClasses, Volume, Transform, SetOfImages, 
+                          AtomStruct, EMSet, SetOfAtomStructs)
 
 from pyworkflow.object import String, CsvList
 
@@ -263,7 +264,7 @@ class AtomStructFlex(AtomStruct):
         pass
 
 
-class SetOfAtomStructFlex(EMSet):
+class SetOfAtomStructFlex(SetOfAtomStructs):
     """ Set containing AtomStructFlex items. """
     ITEM_TYPE = AtomStructFlex
     EXPOSE_ITEMS = True
