@@ -315,7 +315,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
         program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_3d_pc.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        self.runJob(program, args)
 
         # *********
 
