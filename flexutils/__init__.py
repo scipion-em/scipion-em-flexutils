@@ -81,6 +81,12 @@ class Plugin(pwplugin.Plugin):
                 from chimera import Plugin as chimeraPlugin
                 cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
 
+            with pwutils.weakImport("xmipp3"):
+                import xmipp3
+                cmd += "XMIPP_HOME=%s " % xmipp3.Plugin.getHome()
+
+            cmd += "SCIPION_CANCEL_XMIPP_BINDING_WARNING=1 "
+
             if needsPackages is not None:
                 cmd += "PYTHONPATH=$PYTHONPATH:%s %s python " % (scipion_packages, env_variables)
             else:
