@@ -42,7 +42,6 @@ from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import (writeSetOfParticles, createItemMatrix,
                             setXmippAttributes, matrixFromGeometry)
-from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils.constants as const
@@ -135,8 +134,8 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
         correctionFactor = self.newXdim / Xdim
         newTs = inputParticles.getSamplingRate() / correctionFactor
-        writeInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE, newTs)
-        writeInfoField(self._getExtraPath(), "size", md.MDL_XSIZE, self.newXdim)
+        np.savetxt(self._getExtraPath("sampling.txt"), newTs)
+        np.savetxt(self._getExtraPath("size.txt"), self.newXdim)
         if self.newXdim != Xdim:
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --save_metadata_stack %s --fourier %d" %
@@ -171,7 +170,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         fnVolMask = self._getFileName('fnVolMask')
         fnOutDir = self._getFileName('fnOutDir')
         fnPriors = self._getFileName('fnPriors')
-        Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
+        Ts = np.loadtxt(self._getExtraPath("sampling.txt"))
         maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts
 
         Xdim = inputParticles.getXDim()

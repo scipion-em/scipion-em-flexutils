@@ -25,7 +25,7 @@
 # **************************************************************************
 from pyworkflow.utils import weakImport
 
-weakImport("from .viewer_landscape import XmippLandscapeViewer")
+from .viewer_landscape import XmippLandscapeViewer
 from .viewer_reduced_space import XmippReducedSpaceViewer
 from .viewer_apply_field_zernike3d import XmippApplyFieldZernike3DView
 from .viewer_apply_field_nma import XmippApplyFieldNMAView
