@@ -104,7 +104,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
             args += " --atom_file %s" % self.structure.get().getFileName()
         program = os.path.join(const.VIEWERS, "map_model_viewers", "viewer_map.py")
         program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        self.runJob(program, args)
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
