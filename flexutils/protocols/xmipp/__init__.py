@@ -41,7 +41,7 @@ from .protocol_apply_field_nma import XmippApplyFieldNMA
 
 # Weak imports to avoid library incompatibilities in viewers due to Xmipp environment (this avoids loading
 # the Xmipp env and the Scipion libraries that interfere with flexutils ones)
-with weakImport("xmipp3"):
+with weakImport("from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes"):
     from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
 
 # from .protocol_deform_map_zernike3d import XmippProtVolumeDeformZernike3D
