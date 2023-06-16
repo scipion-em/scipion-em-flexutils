@@ -28,37 +28,23 @@
 import numpy as np
 import os
 from xmipp_metadata.image_handler import ImageHandler
+from xmipp_metadata.metadata import XmippMetaData
 
-import pylab as p
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
-import time
 from Bio.PDB import PDBParser
 import _thread
 import multiprocessing
-
-import pyvista as pv
 
 from traits.api import HasTraits, Instance, Array, Float, Int, Bool, String,\
     on_trait_change, Callable, List
 from traits.trait_types import Button, Enum
 from traitsui.api import View, Item, HGroup, Group, HSplit, VGroup, RangeEditor, TextEditor, EnumEditor
 
-from pyface.image_resource import ImageResource
-
-from tvtk.api import tvtk
-from tvtk.pyface.scene import Scene
-
 from mayavi import mlab
 from mayavi.core.api import PipelineBase, Source
 from mayavi.core.ui.api import SceneEditor, MayaviScene, \
     MlabSceneModel
-
-from pyworkflow.utils import getExt
-
-import xmipp3
-
-import pwem.emlib.metadata as md
 
 import flexutils
 from flexutils.protocols.xmipp.utils.utils import computeBasis, readZernikeFile, getCoordsAtLevel, \
@@ -161,8 +147,8 @@ class MapView(HasTraits):
         return getCoordsAtLevel(self.map, 1)
 
     def _df_stats_default(self):
-        metadata = md.MetaData(self.metadata_file)
-        z_space = np.asarray(metadata.getColumnValues(md.MDL_SPH_COEFFICIENTS))
+        metadata = XmippMetaData(self.metadata_file)
+        z_space = np.asarray(metadata.getMetaDataColumns("sphCoefficients"))
         # mean_df = np.zeros(self.coords_map.shape)
         # std_df = np.zeros(self.coords_map.shape)
         path = os.path.dirname(self.metadata_file)
