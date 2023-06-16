@@ -42,7 +42,6 @@ import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, matrixFromGeometry
-from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils
