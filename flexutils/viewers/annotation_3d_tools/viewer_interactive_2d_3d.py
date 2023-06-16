@@ -28,6 +28,7 @@
 import os
 import sys
 from functools import partial
+from xmipp_metadata.image_handler import ImageHandler
 
 import numpy as np
 from multiprocessing import Process
@@ -58,7 +59,6 @@ from mayavi import mlab
 from mayavi.core.api import PipelineBase
 from mayavi.core.ui.api import SceneEditor, MayaviScene, MlabSceneModel
 
-from pwem.emlib.image import ImageHandler
 from pyworkflow.utils import getExt
 
 import flexutils
@@ -610,10 +610,7 @@ class MapView(HasTraits):
     # Read functions
     # ---------------------------------------------------------------------------
     def readMap(self, file):
-        if getExt(file) == ".mrc":
-            map = ImageHandler().read(file + ":mrc").getData()
-        else:
-            map = ImageHandler().read(file).getData()
+        map = ImageHandler().read(file).getData()
         return map
 
     # ---------------------------------------------------------------------------
