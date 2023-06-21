@@ -49,4 +49,4 @@ The installation of the Plugin also requires Conda to be installed in the system
 Tutorials
 ==========================
 
-Flexibility Hub tutorials are available in the `Scipion FlexHub Wiki <>`__ and in `Youtube <https://www.youtube.com/playlist?list=PLuu0votIJpSxTmPLvKRHV3ijadqlxxHfb>`__.
+Flexibility Hub tutorials are available in the `Scipion FlexHub Wiki <https://scipion-em.github.io/docs/release-3.0.0/docs/user/tutorials/flexibilityHub/main_page.html>`__ and in `Youtube <https://www.youtube.com/playlist?list=PLuu0votIJpSxTmPLvKRHV3ijadqlxxHfb>`__.
