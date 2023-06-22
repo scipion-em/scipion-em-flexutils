@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 import prody as pd
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList
+from pyworkflow.object import Integer, Float, String, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -184,6 +184,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.NMA)
+        partSet._hasCTF = Boolean(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()

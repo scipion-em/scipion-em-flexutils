@@ -339,6 +339,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        partSet._hasCTF = Boolean(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.getFlexInfo().setProgName(const.ZERNIKE3D)

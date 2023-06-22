@@ -31,7 +31,7 @@ import os
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, String, Float
+from pyworkflow.object import Integer, String, Float, Boolean
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
@@ -126,6 +126,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
     def createOutputStep(self):
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        partSet._hasCTF = Boolean(inputSet.hasCTF())
         mdOut = XmippMetaData(self._getExtraPath("inputParticles_reassigned.xmd"))
 
         partSet.copyInfo(inputSet)

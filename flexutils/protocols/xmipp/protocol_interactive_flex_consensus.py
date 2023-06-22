@@ -29,6 +29,7 @@ import numpy as np
 import os
 
 import pyworkflow.protocol.params as params
+from pyworkflow.object import Boolean
 from pyworkflow.utils.path import makePath
 from pyworkflow import VERSION_2_0
 
@@ -114,6 +115,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
 
         suffix = getOutputSuffix(self, SetOfParticlesFlex)
         partSet = self._createSetOfParticlesFlex(suffix, progName=inputSet.getFlexInfo().getProgName())
+        partSet._hasCTF = Boolean(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
