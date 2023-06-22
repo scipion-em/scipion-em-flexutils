@@ -333,7 +333,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             elif self.viewer3D.get() == 1:
                 program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_2d_3d.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        self.runJob(program, args)
 
         # *********
 

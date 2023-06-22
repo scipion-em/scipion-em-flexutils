@@ -42,7 +42,6 @@ import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, matrixFromGeometry
-from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils
@@ -199,8 +198,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
                 partRow.setValue(md.MDL_SPH_DEFORMATION, deformations[idx])
 
         writeSetOfImages(inputParticles, imgsFn, zernikeRow)
-        writeInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE, newTs)
-        writeInfoField(self._getExtraPath(), "size", md.MDL_XSIZE, self.newXdim)
+        np.savetxt(self._getExtraPath("sampling.txt"), newTs)
+        np.savetxt(self._getExtraPath("size.txt"), self.newXdim)
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
@@ -220,7 +219,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
         fnOut = self._getFileName('fnOut')
         fnVolMask = self._getFileName('fnVolMask')
         fnOutDir = self._getFileName('fnOutDir')
-        Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
+        Ts = np.loadtxt(self._getExtraPath("sampling.txt"))
         L1 = inputParticles.getFlexInfo().L1.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.l1.get()
         L2 = inputParticles.getFlexInfo().L2.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.l2.get()
         maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts

@@ -23,11 +23,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from pyworkflow.utils import weakImport
 
 from .protocol_reconstruct_zart import XmippProtReconstructZART
 from .protocol_match_and_deform_structure_zernike3d import XmippMatchDeformSructZernike3D
 from .protocol_match_and_deform_map_zernike3d import XmippMatchDeformMapZernike3D
-from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
 from .protocol_assign_heterogeneity_priors_zernike3d import XmippProtHeterogeneityPriorsZernike3D
 from .protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
 from .protocol_focus_zernike3d import XmippProtFocusZernike3D
@@ -38,6 +38,11 @@ from .protocol_structure_landscape import XmippProtStructureLanscapes
 from .protocol_cluster_structures_zernike3d import XmippProtClusterStructuresZernike3D
 from .protocol_apply_field_zernike3d import XmippApplyFieldZernike3D
 from .protocol_apply_field_nma import XmippApplyFieldNMA
+
+# Weak imports to avoid library incompatibilities in viewers due to Xmipp environment (this avoids loading
+# the Xmipp env and the Scipion libraries that interfere with flexutils ones)
+with weakImport("xmipp3.base"):
+    from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
 
 # from .protocol_deform_map_zernike3d import XmippProtVolumeDeformZernike3D
 # from .protocol_structure_map_zernike3d import XmippProtStructureMapZernike3D

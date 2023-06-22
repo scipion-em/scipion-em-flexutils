@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from pyworkflow.utils import weakImport
 
 from .viewer_landscape import XmippLandscapeViewer
 from .viewer_reduced_space import XmippReducedSpaceViewer
