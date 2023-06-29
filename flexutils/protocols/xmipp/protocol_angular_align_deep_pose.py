@@ -331,9 +331,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim

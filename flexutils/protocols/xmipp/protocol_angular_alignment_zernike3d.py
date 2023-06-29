@@ -258,11 +258,11 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
         angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
 
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
-        partSet._hasCTF = Boolean(inputParticles.hasCTF())
         inputMask = inputParticles.getFlexInfo().refMask.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolumeMask.get().getFileName()
         inputVolume = inputParticles.getFlexInfo().refMap.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolume.get().getFileName()
 
         partSet.copyInfo(inputParticles)
+        partSet.setHasCTF(inputParticles.hasCTF())
         partSet.setAlignmentProj()
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ

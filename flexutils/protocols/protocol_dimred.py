@@ -138,7 +138,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         idx = 0

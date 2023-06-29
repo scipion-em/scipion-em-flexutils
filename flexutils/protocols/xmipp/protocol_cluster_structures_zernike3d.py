@@ -110,7 +110,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
 
             newClass = ClassStructFlex(progName=const.ZERNIKE3D)
             newClass.copyInfo(particles)
-            newClass._hasCTF = Boolean(particles.hasCTF())
+            newClass.setHasCTF(particles.hasCTF())
             representative = AtomStructFlex(progName=const.ZERNIKE3D)
             representative.setFileName(os.path.join(rep_path, "cluster_%d.pdb" % clInx))
 

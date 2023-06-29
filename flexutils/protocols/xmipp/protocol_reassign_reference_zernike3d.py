@@ -126,10 +126,10 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
     def createOutputStep(self):
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
         mdOut = XmippMetaData(self._getExtraPath("inputParticles_reassigned.xmd"))
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])

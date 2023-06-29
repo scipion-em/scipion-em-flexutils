@@ -115,9 +115,9 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
 
         suffix = getOutputSuffix(self, SetOfParticlesFlex)
         partSet = self._createSetOfParticlesFlex(suffix, progName=inputSet.getFlexInfo().getProgName())
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         idx = 0

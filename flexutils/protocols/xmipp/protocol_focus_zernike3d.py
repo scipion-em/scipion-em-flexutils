@@ -120,7 +120,7 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
+        partSet.setHasCTF(inputSet.hasCTF())
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
         deformation = mdOut[:, "sphDeformation"]

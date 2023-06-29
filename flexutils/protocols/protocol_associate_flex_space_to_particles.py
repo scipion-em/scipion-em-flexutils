@@ -62,7 +62,7 @@ class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):
 
         outSet = self._createSetOfParticlesFlex()
         outSet.copyInfo(particlesFlex)
-        outSet._hasCTF = Boolean(particlesFlex.hasCTF())
+        outSet.setHasCTF(particlesFlex.hasCTF())
 
         for particleFlex, particle in zip(particlesFlex.iterItems(), particles.iterItems()):
             particleFlex.setLocation(particle.getLocation())

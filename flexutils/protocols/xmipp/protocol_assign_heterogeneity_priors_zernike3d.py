@@ -254,9 +254,9 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         angles = mdOut[:, ["angleRot", "angleTilt", "anglePsi"]]
 
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
-        partSet._hasCTF = Boolean(inputParticles.hasCTF())
 
         partSet.copyInfo(inputParticles)
+        partSet.setHasCTF(inputParticles.hasCTF())
         partSet.setAlignmentProj()
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ

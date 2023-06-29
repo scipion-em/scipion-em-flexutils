@@ -105,7 +105,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         suffix = getOutputSuffix(self, SetOfParticles)
         output_particles = self._createSetOfParticles(suffix)
         output_particles.copyInfo(particles)
-        output_particles._hasCTF = Boolean(particles.hasCTF())
+        output_particles.setHasCTF(particles.hasCTF())
 
         # Loop particles and determine if the lie within the polygon delimited areas
         points_file = self._getExtraPath("point.txt")

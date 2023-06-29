@@ -132,7 +132,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             newClass = Class()
             newClass.copyInfo(particles)
-            newClass._hasCTF = Boolean(particles.hasCTF())
+            newClass.setHasCTF(particles.hasCTF())
             newClass.setAcquisition(particles.getAcquisition())
             representative = Rep(progName=progName)
             if hasattr(representative, "setSamplingRate"):

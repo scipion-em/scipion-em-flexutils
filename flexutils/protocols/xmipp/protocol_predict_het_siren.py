@@ -202,7 +202,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.HETSIREN)
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
+        partSet.setHasCTF(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
