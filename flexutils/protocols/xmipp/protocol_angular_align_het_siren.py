@@ -352,7 +352,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.HETSIREN)
 
         partSet.copyInfo(inputSet)
-        partSet._hasCTF = Boolean(inputSet.hasCTF())
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
