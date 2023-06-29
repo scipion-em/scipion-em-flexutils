@@ -29,6 +29,7 @@ import os
 import numpy as np
 
 from pyworkflow import BETA
+from pyworkflow.object import Boolean
 from pyworkflow.protocol.params import PointerParam, FloatParam
 
 from pwem.protocols import ProtAnalysis3D
@@ -109,6 +110,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
 
             newClass = ClassStructFlex(progName=const.ZERNIKE3D)
             newClass.copyInfo(particles)
+            newClass._hasCTF = Boolean(particles.hasCTF())
             representative = AtomStructFlex(progName=const.ZERNIKE3D)
             representative.setFileName(os.path.join(rep_path, "cluster_%d.pdb" % clInx))
 

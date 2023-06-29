@@ -36,6 +36,7 @@ from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.object import Boolean
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -131,6 +132,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             newClass = Class()
             newClass.copyInfo(particles)
+            newClass._hasCTF = Boolean(particles.hasCTF())
             newClass.setAcquisition(particles.getAcquisition())
             representative = Rep(progName=progName)
             if hasattr(representative, "setSamplingRate"):
