@@ -64,7 +64,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
+        form.addHidden(params.USE_GPU, params.BooleanParam, default=False,
                        label="Use GPU for execution",
                        help="This protocol has both CPU and GPU implementation.\
                        Select the one you want to use.")
