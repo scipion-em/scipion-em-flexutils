@@ -135,7 +135,8 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
         red_space = np.loadtxt(file_coords)
 
         inputSet = self.particles.get()
-        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        progName = inputSet.getFlexInfo().getProgName()
+        partSet = self._createSetOfParticlesFlex(progName=progName)
 
         partSet.copyInfo(inputSet)
         partSet.setHasCTF(inputSet.hasCTF())
@@ -143,7 +144,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
 
         idx = 0
         for particle in inputSet.iterItems():
-            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=progName)
             outParticle.copyInfo(particle)
 
             outParticle.setZRed(red_space[idx])
