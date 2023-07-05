@@ -103,7 +103,7 @@ class Plugin(pwplugin.Plugin):
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
             cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/ %(program)s ' % locals()
+        return cmd + ' TF_CPP_MIN_LOG_LEVEL=2 %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
@@ -123,7 +123,7 @@ class Plugin(pwplugin.Plugin):
             conda_init = cls.getCondaActivationCmd()
             installationCmd = f"{conda_init} conda activate flexutils && " \
                               f"pip install -e " \
-                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@install_new_name#egg=flexutils-toolkit" \
+                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@devel#egg=flexutils-toolkit" \
                               f" -v && "
             installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
