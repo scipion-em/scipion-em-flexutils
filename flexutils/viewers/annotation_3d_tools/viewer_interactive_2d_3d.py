@@ -569,6 +569,12 @@ class MapView(HasTraits):
             from cryodrgn.utils import generateVolumes
             cryodrgn.Plugin._defineVariables()
             self.generate_map = generateVolumes
+        elif self.mode == "HetSIREN":
+            from flexutils.utils import generateVolumesHetSIREN
+            self.generate_map = generateVolumesHetSIREN
+        elif self.mode == "NMA":
+            from flexutils.utils import generateVolumesDeepNMA
+            self.generate_map = generateVolumesDeepNMA
 
     # ---------------------------------------------------------------------------
     # Default values
@@ -629,6 +635,14 @@ class MapView(HasTraits):
                                   self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
                                   apix=float(self.class_inputs["sr"]))
                 self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
+            elif self.mode == "HetSIREN":
+                self.generate_map(self.class_inputs["weights"], z,
+                                  self.path, step=self.class_inputs["step"])
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
+            elif self.mode == "NMA":
+                self.generate_map(self.class_inputs["weights"], z,
+                                  self.path, sr=float(self.class_inputs["sr"]))
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
 
             volume = getattr(self, 'ipw_map')
             val_max = np.amax(volume.mlab_source.m_data.scalar_data)

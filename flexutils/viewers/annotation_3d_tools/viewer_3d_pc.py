@@ -451,11 +451,11 @@ class PointCloudView(HasTraits):
             elif self.mode == "HetSIREN":
                 self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
                                   self.path, step=self.class_inputs["step"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
             elif self.mode == "NMA":
                 self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
                                   self.path, sr=self.class_inputs["sr"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
 
             volume = getattr(self, 'ipw_map')
             val_max = np.amax(volume.mlab_source.m_data.scalar_data)

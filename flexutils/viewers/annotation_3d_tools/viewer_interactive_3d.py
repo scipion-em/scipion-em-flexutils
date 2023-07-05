@@ -322,11 +322,11 @@ class Annotate3D(object):
             elif self.mode == "HetSIREN":
                 self.generate_map(self.class_inputs["weights"], self.z_space[ind, :],
                                   self.path, step=self.class_inputs["step"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
             elif self.mode == "NMA":
                 self.generate_map(self.class_inputs["weights"], self.z_space[ind, :],
                                   self.path, sr=self.class_inputs["sr"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_1.mrc"))
+                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
 
             self.dock_widget.viewer_model1.layers[0].data = self.generated_map
             self.prev_layers = [layer.data.copy() for layer in self.dock_widget.viewer.layers]
