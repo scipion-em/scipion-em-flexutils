@@ -132,7 +132,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         deepNMAProtocol = self.deepNMAProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model'))
+        weigths_file = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model.h5'))
         n_modes = deepNMAProtocol.n_modes.get()
         pad = deepNMAProtocol.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / deepNMAProtocol.boxSize.get()
@@ -167,7 +167,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         deepNMAProtocol = self.deepNMAProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = deepNMAProtocol.boxSize.get()
-        model_path = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model'))
+        model_path = deepNMAProtocol._getExtraPath(os.path.join('network', 'deep_nma_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)

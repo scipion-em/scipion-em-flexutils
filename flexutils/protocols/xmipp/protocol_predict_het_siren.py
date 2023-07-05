@@ -149,7 +149,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -189,7 +189,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -283,11 +283,11 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         for idx in range(hetSirenProtocol.numVol.get()):
             outVol = Volume()
             outVol.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
+            outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
 
-            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
+            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                        self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
 
         self._defineOutputs(outputParticles=partSet)

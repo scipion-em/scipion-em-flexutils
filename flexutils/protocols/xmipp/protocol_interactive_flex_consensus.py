@@ -98,7 +98,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         data_path = self._getExtraPath("data")
         out_path = self._getExtraPath()
         lat_dim = flexConsensusProtocol.latDim.get()
-        weigths_file = flexConsensusProtocol._getExtraPath(os.path.join('network', 'flex_consensus_model'))
+        weigths_file = flexConsensusProtocol._getExtraPath(os.path.join('network', 'flex_consensus_model.h5'))
         args = "--data_path %s --out_path %s --weigths_file %s --lat_dim %d" \
                % (data_path, out_path, weigths_file, lat_dim)
 

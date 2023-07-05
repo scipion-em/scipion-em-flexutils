@@ -144,7 +144,7 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         Xdim = self.inputParticles.get().getXDim()
@@ -177,20 +177,16 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.runJob(program, args, numberOfMpi=1)
 
         # Scale particles
-        params = "-i %s -o %s --fourier %d" % \
-                 (self._getExtraPath('decoded_particles.mrcs:mrcs'),
-                  self._getExtraPath('aux.mrcs'),
-                  Xdim)
-        self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
-                    env=xmipp3.Plugin.getEnviron())
-        pwutils.moveFile(self._getExtraPath('aux.mrcs'), self._getExtraPath('decoded_particles.mrcs'))
+        ImageHandler().scaleSplines(self._getExtraPath('decoded_particles.mrcs'),
+                                    self._getExtraPath('decoded_particles.mrcs'),
+                                    finalDimension=Xdim, overwrite=True, isStack=True)
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -217,8 +213,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
 
-            index, filename = denoised_images_path[idx].split("@")
-            outParticle.setLocation((int(index), filename))
+            index, _ = denoised_images_path[idx].split("@")
+            outParticle.setLocation((int(index), self._getExtraPath("decoded_particles.mrcs")))
 
             outParticle.setZFlex(latent_space[idx])
 

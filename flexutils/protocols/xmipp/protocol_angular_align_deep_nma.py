@@ -244,7 +244,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'deep_nma_model'))
+        weigths_file = self._getExtraPath(os.path.join('network', 'deep_nma_model.h5'))
         n_modes = self.n_modes.get()
         pad = self.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
@@ -278,7 +278,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'deep_nma_model'))
+        model_path = self._getExtraPath(os.path.join('network', 'deep_nma_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
