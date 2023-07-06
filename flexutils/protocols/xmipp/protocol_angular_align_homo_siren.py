@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer
+from pyworkflow.object import String, Integer, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -275,7 +275,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
+            modelPath = netProtocol._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
             args += " --weigths_file %s" % modelPath
 
         if self.superConv.get():
@@ -290,7 +290,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'homo_siren_model'))
+        weigths_file = self._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
         pad = self.pad.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -324,7 +324,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'homo_siren_model'))
+        model_path = self._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -338,6 +338,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         partSet = self._createSetOfParticles()
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim

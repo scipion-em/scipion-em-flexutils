@@ -289,7 +289,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
         L1 = self.l1.get()
         L2 = self.l2.get()
         pad = self.pad.get()
@@ -324,7 +324,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        model_path = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -341,6 +341,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
         partSet.setAlignmentProj()
 

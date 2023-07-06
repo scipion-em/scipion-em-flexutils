@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList
+from pyworkflow.object import Integer, Float, String, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -143,7 +143,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
     def predictStep(self):
         deepPoseProtocol = self.deepPoseProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+        weigths_file = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model.h5'))
         pad = deepPoseProtocol.pad.get()
         self.newXdim = deepPoseProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -178,7 +178,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         deepPoseProtocol = self.deepPoseProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = deepPoseProtocol.boxSize.get()
-        model_path = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model'))
+        model_path = deepPoseProtocol._getExtraPath(os.path.join('network', 'deep_pose_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -190,6 +190,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
+        partSet.setHasCTF(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()

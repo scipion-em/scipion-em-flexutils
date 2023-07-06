@@ -29,7 +29,7 @@ import os
 import numpy as np
 
 from pyworkflow import BETA
-from pyworkflow.object import CsvList
+from pyworkflow.object import CsvList, Boolean
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
                                        GPU_LIST, USE_GPU
@@ -135,14 +135,16 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
         red_space = np.loadtxt(file_coords)
 
         inputSet = self.particles.get()
-        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        progName = inputSet.getFlexInfo().getProgName()
+        partSet = self._createSetOfParticlesFlex(progName=progName)
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         idx = 0
         for particle in inputSet.iterItems():
-            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=progName)
             outParticle.copyInfo(particle)
 
             outParticle.setZRed(red_space[idx])

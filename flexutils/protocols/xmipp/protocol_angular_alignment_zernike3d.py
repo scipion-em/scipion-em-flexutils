@@ -33,7 +33,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -262,6 +262,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
         inputVolume = inputParticles.getFlexInfo().refMap.get() if isinstance(inputParticles, SetOfParticlesFlex) else self.inputVolume.get().getFileName()
 
         partSet.copyInfo(inputParticles)
+        partSet.setHasCTF(inputParticles.hasCTF())
         partSet.setAlignmentProj()
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ

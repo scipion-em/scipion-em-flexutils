@@ -31,7 +31,7 @@ import os
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, String, Float
+from pyworkflow.object import Integer, String, Float, Boolean
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
@@ -129,6 +129,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         mdOut = XmippMetaData(self._getExtraPath("inputParticles_reassigned.xmd"))
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])

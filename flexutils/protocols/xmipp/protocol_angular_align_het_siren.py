@@ -33,7 +33,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer, CsvList
+from pyworkflow.object import String, Integer, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -286,7 +286,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+            modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
             args += " --weigths_file %s" % modelPath
 
         if self.useGpu.get():
@@ -298,7 +298,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model'))
+        weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         pad = self.pad.get()
         hetDim = self.hetDim.get()
         numVol = self.numVol.get()
@@ -337,7 +337,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'het_siren_model'))
+        model_path = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -352,6 +352,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.HETSIREN)
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
@@ -415,11 +416,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             outVol = Volume()
             outVol.setSamplingRate(inputParticles.getSamplingRate())
 
-            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
+            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                        self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
 
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
+            outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
 
         self._defineOutputs(outputParticles=partSet)

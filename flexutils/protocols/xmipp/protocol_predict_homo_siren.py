@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String
+from pyworkflow.object import String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -145,7 +145,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
     def predictStep(self):
         homoSirenProtocol = self.homoSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
+        weigths_file = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
         pad = homoSirenProtocol.pad.get()
         self.newXdim = homoSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -180,7 +180,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         homoSirenProtocol = self.homoSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = homoSirenProtocol.boxSize.get()
-        model_path = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model'))
+        model_path = homoSirenProtocol._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -192,6 +192,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
+        partSet.setHasCTF(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()

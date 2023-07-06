@@ -31,6 +31,7 @@ from xmipp_metadata.image_handler import ImageHandler
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
 import pyworkflow.utils as pwutils
+from pyworkflow.object import Boolean
 
 from pwem.viewers.showj import *
 from pwem.protocols import ProtAnalysis3D
@@ -104,6 +105,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         suffix = getOutputSuffix(self, SetOfParticles)
         output_particles = self._createSetOfParticles(suffix)
         output_particles.copyInfo(particles)
+        output_particles.setHasCTF(particles.hasCTF())
 
         # Loop particles and determine if the lie within the polygon delimited areas
         points_file = self._getExtraPath("point.txt")

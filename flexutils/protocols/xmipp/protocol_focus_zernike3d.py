@@ -31,7 +31,7 @@ import os
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float
+from pyworkflow.object import Integer, Float, Boolean
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
@@ -120,6 +120,7 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
+        partSet.setHasCTF(inputSet.hasCTF())
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
         deformation = mdOut[:, "sphDeformation"]
