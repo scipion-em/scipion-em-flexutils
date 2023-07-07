@@ -134,8 +134,8 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
         correctionFactor = self.newXdim / Xdim
         newTs = inputParticles.getSamplingRate() / correctionFactor
-        np.savetxt(self._getExtraPath("sampling.txt"), newTs)
-        np.savetxt(self._getExtraPath("size.txt"), self.newXdim)
+        np.savetxt(self._getExtraPath("sampling.txt"), [newTs])
+        np.savetxt(self._getExtraPath("size.txt"), [self.newXdim])
         if self.newXdim != Xdim:
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --save_metadata_stack %s --fourier %d" %

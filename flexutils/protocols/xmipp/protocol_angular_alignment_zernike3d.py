@@ -198,8 +198,8 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
                 partRow.setValue(md.MDL_SPH_DEFORMATION, deformations[idx])
 
         writeSetOfImages(inputParticles, imgsFn, zernikeRow)
-        np.savetxt(self._getExtraPath("sampling.txt"), newTs)
-        np.savetxt(self._getExtraPath("size.txt"), self.newXdim)
+        np.savetxt(self._getExtraPath("sampling.txt"), [newTs])
+        np.savetxt(self._getExtraPath("size.txt"), [self.newXdim])
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
