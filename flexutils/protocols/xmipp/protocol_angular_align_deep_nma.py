@@ -49,9 +49,10 @@ from flexutils.protocols import ProtFlexBase
 from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 
+
 class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with automatic NMA selection. """
-    _label = 'angular align - DeepNMA'
+    _label = 'flexible align - DeepNMA'
     _lastUpdateVersion = VERSION_2_0
     _subset = ["ca", "bb", None]
 
@@ -108,24 +109,30 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
         form.addSection(label='Network')
-        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
-                      expertLevel=params.LEVEL_ADVANCED,
-                      default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                      help="* *ConvNN*: convolutional neural network\n"
-                           "* *MLPNN*: multiperceptron neural network")
-        form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-                      help="If True, the neural network will be also trained to refine the angular "
-                           "and shift assignation of the particles to make it more consistent with the "
-                           "flexibility estimation. Otherwise, only heterogeneity information will be "
-                           "estimated.")
-        form.addParam('epochs', params.IntParam, default=20, label='Number of training epochs')
-        form.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
-                           "We do not recommend to change this value unless you experience memory errors. "
-                           "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
-                      help="This value (between 0 and 1) determines the fraction of images that will "
-                           "be used to train the network.")
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+                       expertLevel=params.LEVEL_ADVANCED,
+                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *ConvNN*: convolutional neural network\n"
+                            "* *MLPNN*: multiperceptron neural network")
+        group.addParam('epochs', params.IntParam, default=20, label='Number of training epochs')
+        group.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
+                       help="Number of images that will be used simultaneously for every training step. "
+                            "We do not recommend to change this value unless you experience memory errors. "
+                            "In this case, value should be decreased.")
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+                       help="If True, the neural network will be also trained to refine the angular "
+                            "and shift assignation of the particles to make it more consistent with the "
+                            "flexibility estimation. Otherwise, only heterogeneity information will be "
+                            "estimated.")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+                       help="This value (between 0 and 1) determines the fraction of images that will "
+                            "be used to train the network.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Fourier Phase Correlation'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -206,14 +213,19 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         pad = self.pad.get()
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
+        lr = self.lr.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --n_modes %d --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d --pad %d --sr %f --apply_ctf %d" \
-               % (md_file, out_path, n_modes, batch_size, split_train, epochs, pad, sr,
-                  applyCTF)
+               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
+               % (md_file, out_path, n_modes, batch_size, split_train, pad, sr,
+                  applyCTF, lr)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
 
         if self.costFunction.get() == 0:
             args += " --cost corr"

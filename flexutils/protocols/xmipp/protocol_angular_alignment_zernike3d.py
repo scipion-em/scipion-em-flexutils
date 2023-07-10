@@ -53,7 +53,7 @@ from flexutils.utils import getXmippFileName
 
 class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment based on Zernike3D basis. """
-    _label = 'angular align - Zernike3D'
+    _label = 'flexible align - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
 
     # --------------------------- DEFINE param functions --------------------------------------------

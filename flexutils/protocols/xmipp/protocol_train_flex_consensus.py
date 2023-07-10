@@ -62,12 +62,18 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
                        expertLevel=params.LEVEL_ADVANCED,
                        help="Dimension of the FlexConsensus bottleneck (latent space dimension)")
         form.addSection(label='Network')
-        form.addParam('epochs', params.IntParam, default=100, label='Number of training epochs')
-        form.addParam('batch_size', params.IntParam, default=64, label='Number of images in batch',
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('epochs', params.IntParam, default=100, label='Number of training epochs')
+        group.addParam('batch_size', params.IntParam, default=64, label='Number of images in batch',
                       help="Number of images that will be used simultaneously for every training step. "
                            "We do not recommend to change this value unless you experience memory errors. "
                            "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+        group.addParam('lr', params.FloatParam, default=1e-3, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                       help="This value (between 0 and 1) determines the fraction of images that will "
                            "be used to train the network.")
         form.addParallelSection(threads=4, mpi=0)
@@ -107,11 +113,16 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         out_path = self._getExtraPath()
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
+        lr = self.lr.get()
         lat_dim = self.latDim.get()
         args = "--data_path %s --out_path %s --lat_dim %d --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d" \
-               % (data_path, out_path, lat_dim, batch_size, split_train, epochs)
+               "--shuffle --split_train %f --lr %f" \
+               % (data_path, out_path, lat_dim, batch_size, split_train, lr)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
