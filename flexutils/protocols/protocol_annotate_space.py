@@ -372,4 +372,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             errors.append("Number of particles to be associated with each selected state is larger than the "
                           "total number of particles in the dataset. Please, provide a smaller value "
                           "(Advanced parameter)")
+
+        # Check CryoDRGN boxsize parameter is set as it is mandatory
+        if particles.getFlexInfo().getProgName() == 'CryoDRGN' and self.boxSize.get() is None:
+            errors.append("Boxsize parameter needs to be set to an integer value smaller than or equal "
+                          "to the boxsize used internally to train the CryoDRGN network")
+
         return errors

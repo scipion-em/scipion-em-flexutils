@@ -354,4 +354,10 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
             errors.append("Cluster space is only implemented for reduced spaces of 3 dimensions. Please, used the "
                           "dimensionality reduction protocol available in Flexutils Plugin to generate a valid "
                           "set of particles")
+
+        # Check CryoDRGN boxsize parameter is set as it is mandatory
+        if particles.getFlexInfo().getProgName() == 'CryoDRGN' and self.boxSize.get() is None:
+            errors.append("Boxsize parameter needs to be set to an integer value smaller than or equal "
+                          "to the boxsize used internally to train the CryoDRGN network")
+
         return errors
