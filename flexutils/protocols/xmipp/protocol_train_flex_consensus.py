@@ -63,9 +63,19 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
                        help="Dimension of the FlexConsensus bottleneck (latent space dimension)")
         form.addSection(label='Network')
         group = form.addGroup("Network hyperparameters")
-        group.addParam('epochs', params.IntParam, default=100, label='Number of training epochs')
-        group.addParam('batch_size', params.IntParam, default=64, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=0, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=100, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
+        group.addParam('batch_size', params.IntParam, default=64, label='Number of samples in batch',
+                      help="Number of samples that will be used simultaneously for every training step. "
                            "We do not recommend to change this value unless you experience memory errors. "
                            "In this case, value should be decreased.")
         group.addParam('lr', params.FloatParam, default=1e-3, label='Learning rate',

@@ -123,15 +123,17 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
-        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-                       help="If True, the neural network will be also trained to refine the angular "
-                            "and shift assignation of the particles to make it more consistent with the "
-                            "heterogeneity estimation. Otherwise, only heterogeneity information will be "
-                            "estimated.")
-        group.addParam('epochs', params.IntParam, default=20, label='Number of training epochs',
-                       help="When training in refinenment mode, the number of epochs might be decreased to "
-                            "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
-                            "a meaningful local minima.")
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=0, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=20, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
         group.addParam('batch_size', params.IntParam, default=16, label='Number of images in batch',
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
@@ -141,6 +143,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
         group = form.addGroup("Extra network parameters")
+        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+                       help="If True, the neural network will be also trained to refine the angular "
+                            "and shift assignation of the particles to make it more consistent with the "
+                            "heterogeneity estimation. Otherwise, only heterogeneity information will be "
+                            "estimated.")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
                             "be used to train the network.")

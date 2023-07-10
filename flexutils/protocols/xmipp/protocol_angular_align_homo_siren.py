@@ -119,10 +119,17 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         #               help="If True, the neural network will be trained to refine the current pose "
         #                    "(shifts and alignments) according to the information of the reference map. "
         #                    "Otherwise, the pose will be estimated from scratch.")
-        group.addParam('epochs', params.IntParam, default=50, label='Number of training epochs',
-                       help="When training in refinenment mode, the number of epochs might be decreased to "
-                            "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
-                            "a meaningful local minima.")
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=0, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=50, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
         group.addParam('batch_size', params.IntParam, default=16, label='Number of images in batch',
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
