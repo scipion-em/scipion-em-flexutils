@@ -134,7 +134,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
                        label="Samples",
                        help='Maximum number of samples seen during network training')
-        group.addParam('batch_size', params.IntParam, default=16, label='Number of images in batch',
+        group.addParam('batch_size', params.IntParam, default=8, label='Number of images in batch',
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
