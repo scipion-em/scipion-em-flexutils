@@ -109,40 +109,46 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
         form.addSection(label='Network')
-        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
-                      expertLevel=params.LEVEL_ADVANCED,
-                      default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                      help="* *ConvNN*: convolutional neural network\n"
-                           "* *MLPNN*: multiperceptron neural network")
-        # form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-        #               help="If True, the neural network will be trained to refine the current pose "
-        #                    "(shifts and alignments) according to the information of the reference map. "
-        #                    "Otherwise, the pose will be estimated from scratch.")
         form.addParam('fineTune', params.BooleanParam, default=False, label="Fine tune previous network?",
                       help="If True, a previously trained deepPose network will be fine tuned based on the "
                            "new input parameters. Note that when this option is set, the input particles "
                            "must have a trained deepPose network associated (i.e. particles must come from "
                            "a **'angular align - deepPose'** protocol.")
         form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
-                      pointerClass='TensorflowProtAngularAlignmentDeepPose',
-                      allowsNull=True,
-                      condition="fineTune")
-        form.addParam('epochs', params.IntParam, default=50, label='Number of training epochs',
-                      help="When training in refinenment mode, the number of epochs might be decreased to "
-                           "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
-                           "a meaningful local minima.")
-        form.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
-                           "We do not recommend to change this value unless you experience memory errors. "
-                           "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
-                      help="This value (between 0 and 1) determines the fraction of images that will "
-                           "be used to train the network.")
-        form.addParam('step', params.IntParam, default=1, label='Points step', condition="referenceType==0",
-                      help="How many points (voxels) to skip during the training computations. "
-                           "A value of 1 means that all point within the mask provided in the input "
-                           "will be used. A value of 2 implies that half of the point will be skipped "
-                           "to increase the performance.")
+                       pointerClass='TensorflowProtAngularAlignmentDeepPose',
+                       allowsNull=True,
+                       condition="fineTune")
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+                       expertLevel=params.LEVEL_ADVANCED,
+                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *ConvNN*: convolutional neural network\n"
+                            "* *MLPNN*: multiperceptron neural network")
+        # form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+        #               help="If True, the neural network will be trained to refine the current pose "
+        #                    "(shifts and alignments) according to the information of the reference map. "
+        #                    "Otherwise, the pose will be estimated from scratch.")
+        group.addParam('epochs', params.IntParam, default=50, label='Number of training epochs',
+                       help="When training in refinenment mode, the number of epochs might be decreased to "
+                            "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
+                            "a meaningful local minima.")
+        group.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
+                       help="Number of images that will be used simultaneously for every training step. "
+                            "We do not recommend to change this value unless you experience memory errors. "
+                            "In this case, value should be decreased.")
+        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+                       help="This value (between 0 and 1) determines the fraction of images that will "
+                            "be used to train the network.")
+        group.addParam('step', params.IntParam, default=1, label='Points step', condition="referenceType==0",
+                       help="How many points (voxels) to skip during the training computations. "
+                            "A value of 1 means that all point within the mask provided in the input "
+                            "will be used. A value of 2 implies that half of the point will be skipped "
+                            "to increase the performance.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Corr * FPC'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -236,15 +242,20 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         batch_size = self.batch_size.get()
         step = self.step.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
+        lr = self.lr.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d --pad %d --refine_pose " \
-               "--sr %f --apply_ctf %d" \
-               % (md_file, out_path, batch_size, split_train, epochs, pad, sr, applyCTF)
+               "--shuffle --split_train %f --pad %d --refine_pose " \
+               "--sr %f --apply_ctf %d --lr %f" \
+               % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, lr)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
 
         if self.referenceType.get() == 0:
             args += " --step %d" % step
@@ -342,7 +353,6 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-
             tr_ori = particle.getTransform().getMatrix()
             shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
 

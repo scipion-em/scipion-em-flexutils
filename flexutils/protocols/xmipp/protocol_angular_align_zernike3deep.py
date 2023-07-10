@@ -53,7 +53,7 @@ from flexutils.utils import getXmippFileName, coordsToMap, saveMap
 
 class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with the Zernike3Deep algortihm. """
-    _label = 'angular align - Zernike3Deep'
+    _label = 'flexible align - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
 
     # --------------------------- DEFINE param functions --------------------------------------------
@@ -128,29 +128,45 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
         form.addSection(label='Network')
-        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
-                      expertLevel=params.LEVEL_ADVANCED,
-                      default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                      help="* *ConvNN*: convolutional neural network\n"
-                           "* *MLPNN*: multiperceptron neural network")
-        form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-                      help="If True, the neural network will be also trained to refine the angular "
-                           "and shift assignation of the particles to make it more consistent with the "
-                           "flexibility estimation. Otherwise, only heterogeneity information will be "
-                           "estimated.")
-        form.addParam('epochs', params.IntParam, default=20, label='Number of training epochs')
-        form.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
-                           "We do not recommend to change this value unless you experience memory errors. "
-                           "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
-                      help="This value (between 0 and 1) determines the fraction of images that will "
-                           "be used to train the network.")
-        form.addParam('step', params.IntParam, default=1, label='Points step', condition="referenceType==0",
-                      help="How many points (voxels) to skip during the training computations. "
-                           "A value of 1 means that all point within the mask provided in the input "
-                           "will be used. A value of 2 implies that half of the point will be skipped "
-                           "to increase the performance.")
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+                       expertLevel=params.LEVEL_ADVANCED,
+                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *ConvNN*: convolutional neural network\n"
+                            "* *MLPNN*: multiperceptron neural network")
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=0, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=20, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
+        group.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
+                       help="Number of images that will be used simultaneously for every training step. "
+                            "We do not recommend to change this value unless you experience memory errors. "
+                            "In this case, value should be decreased.")
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+                       help="If True, the neural network will be also trained to refine the angular "
+                            "and shift assignation of the particles to make it more consistent with the "
+                            "flexibility estimation. Otherwise, only heterogeneity information will be "
+                            "estimated.")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+                       help="This value (between 0 and 1) determines the fraction of images that will "
+                            "be used to train the network.")
+        group.addParam('step', params.IntParam, default=1, label='Points step', condition="referenceType==0",
+                       help="How many points (voxels) to skip during the training computations. "
+                            "A value of 1 means that all point within the mask provided in the input "
+                            "will be used. A value of 2 implies that half of the point will be skipped "
+                            "to increase the performance.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Fourier Phase Correlation'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -246,14 +262,19 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         batch_size = self.batch_size.get()
         step = self.step.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
+        lr = self.lr.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d --pad %d --sr %f --apply_ctf %d" \
-               % (md_file, out_path, L1, L2, batch_size, split_train, epochs, pad, sr,
-                  applyCTF)
+               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
+               % (md_file, out_path, L1, L2, batch_size, split_train, pad, sr,
+                  applyCTF, lr)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
 
         if self.referenceType.get() == 0:
             args += " --step %d" % step
