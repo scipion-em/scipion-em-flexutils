@@ -41,6 +41,7 @@ from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import Tensorflow
 from flexutils.protocols.xmipp.protocol_predict_deep_nma import TensorflowProtPredictDeepNMA
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
 from flexutils.protocols.xmipp.protocol_predict_het_siren import TensorflowProtPredictHetSiren
+from flexutils.protocols.protocol_score_landscape import ProtFlexScoreLandscape
 
 import flexutils.constants as const
 from flexutils.utils import computeNormRows
@@ -54,7 +55,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                 XmippProtReassignReferenceZernike3D, TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtPredictZernike3Deep, TensorflowProtAngularAlignmentDeepNMA,
                 TensorflowProtPredictDeepNMA, TensorflowProtAngularAlignmentHetSiren,
-                TensorflowProtPredictHetSiren]
+                TensorflowProtPredictHetSiren, ProtFlexScoreLandscape]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):

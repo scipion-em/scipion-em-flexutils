@@ -28,8 +28,7 @@
 import numpy as np
 import os
 
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
-import pyworkflow.protocol.params as params
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, Viewer
 from pyworkflow.utils.process import runJob
 
 from flexutils.protocols.xmipp.protocol_structure_landscape import XmippProtStructureLanscapes
@@ -40,14 +39,14 @@ from flexutils.utils import computeNormRows
 import flexutils
 
 
-class XmippReducedSpaceViewer(ProtocolViewer):
+class XmippReducedSpaceViewer(Viewer):
     """ Visualize reduced conformational space """
-    _label = 'viewer reduced space - Zernike3D'
+    _label = 'viewer reduced space'
     _targets = [XmippProtStructureLanscapes, ProtFlexDimRedSpace]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
-        ProtocolViewer.__init__(self, **kwargs)
+        Viewer.__init__(self, **kwargs)
         self._data = None
 
     def getData(self):
@@ -55,17 +54,7 @@ class XmippReducedSpaceViewer(ProtocolViewer):
             self._data = self.loadData()
         return self._data
 
-
-    def _defineParams(self, form):
-        form.addSection(label='Show reduced conformational space')
-        form.addParam('doShowSpace', params.LabelParam,
-                      label="Display the reduced conformational space")
-
-    def _getVisualizeDict(self):
-        # self.protocol._createFilenameTemplates()
-        return {'doShowSpace': self._doShowSpace}
-
-    def _doShowSpace(self, param=None):
+    def _visualize(self, obj, **kwargs):
         red_space = []
         z_clnm = []
         particles = self.protocol.outputParticles
