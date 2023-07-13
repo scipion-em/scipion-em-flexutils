@@ -27,10 +27,12 @@
 
 import numpy as np
 import os
+from pathos.multiprocessing import ProcessingPool as Pool
+import subprocess
 
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.protocol.params as params
-from pyworkflow.utils.process import runJob
+from pyworkflow.utils.process import buildRunCommand
 
 from flexutils.protocols.xmipp.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
 from flexutils.protocols.xmipp.protocol_focus_zernike3d import XmippProtFocusZernike3D
@@ -101,52 +103,74 @@ class XmippLandscapeViewer(ProtocolViewer):
         return {'doShowSpace': self._doShowSpace}
 
     def _doShowSpace(self, param=None):
-        z_clnm = []
         particles = self.protocol.outputParticles
-        for particle in particles.iterItems():
-            z_clnm.append(particle.getZFlex())
-        z_clnm = np.asarray(z_clnm)
-        if z_clnm.shape[1] < 3:
-            raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
-
-        # Generate files to call command line
         file_z_clnm = self.protocol._getExtraPath("z_clnm.txt")
         file_deformation = self.protocol._getExtraPath("deformation.txt")
-        np.savetxt(file_z_clnm, z_clnm)
-
-        # Compute/Read UMAP or PCA
         mode = self.mode.get()
+
         if mode == 0:
             file_coords = self.protocol._getExtraPath("umap_coords.txt")
-            if not os.path.isfile(file_coords):
-                args = "--input %s --umap --output %s --n_neighbors %d " \
-                       "--n_epochs %d --n_components 3 --thr %d" \
-                       % (file_z_clnm, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
-                          self.threads.get())
-                if self.densmap_umap.get():
-                    args += " --densmap"
-                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
-                program = flexutils.Plugin.getProgram(program)
-                runJob(None, program, args)
+            mode = [mode, self.nb_umap.get(), self.epochs_umap.get(), self.threads.get(), self.densmap_umap.get()]
         elif mode == 1:
             file_coords = self.protocol._getExtraPath("pca_coords.txt")
-            if not os.path.isfile(file_coords):
-                args = "--input %s --pca --output %s --n_components 3" % (file_z_clnm, file_coords)
-                program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
-                program = flexutils.Plugin.getProgram(program)
-                runJob(None, program, args)
+            mode = [mode, ]
 
-        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-            deformation = computeNormRows(z_clnm)
-        else:
-            deformation = np.zeros(z_clnm.shape)
+        def launchViewerNonBlocking(args):
+            (particles, file_z_clnm, file_deformation, file_coords, mode) = args
 
-        # Generate files to call command line
-        np.savetxt(file_deformation, deformation)
+            z_clnm = []
+            for particle in particles.iterItems():
+                z_clnm.append(particle.getZFlex())
+            z_clnm = np.asarray(z_clnm)
+            if z_clnm.shape[1] < 3:
+                raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
-        # Run slicer
-        args = "--coords %s --deformation %s" \
-               % (file_coords, file_deformation)
-        program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
-        program = flexutils.Plugin.getProgram(program)
-        runJob(None, program, args)
+            # Generate files to call command line
+            np.savetxt(file_z_clnm, z_clnm)
+
+            # Compute/Read UMAP or PCA
+            if mode[0] == 0:
+                if not os.path.isfile(file_coords):
+                    args = "--input %s --umap --output %s --n_neighbors %d " \
+                           "--n_epochs %d --n_components 3 --thr %d" \
+                           % (file_z_clnm, file_coords, mode[1], mode[2], mode[3])
+                    if mode[4]:
+                        args += " --densmap"
+                    program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                    program = flexutils.Plugin.getProgram(program)
+                    command = buildRunCommand(program, args, 1)
+                    p = subprocess.Popen(command, shell=True)
+                    p.wait()
+            elif mode[0] == 1:
+                if not os.path.isfile(file_coords):
+                    args = "--input %s --pca --output %s --n_components 3" % (file_z_clnm, file_coords)
+                    program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                    program = flexutils.Plugin.getProgram(program)
+                    command = buildRunCommand(program, args, 1)
+                    p = subprocess.Popen(command, shell=True)
+                    p.wait()
+
+            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                deformation = computeNormRows(z_clnm)
+            else:
+                deformation = np.zeros(z_clnm.shape)
+
+            # Generate files to call command line
+            np.savetxt(file_deformation, deformation)
+
+            # Run slicer
+            args = "--coords %s --deformation %s" \
+                   % (file_coords, file_deformation)
+            program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
+            program = flexutils.Plugin.getProgram(program)
+            command = buildRunCommand(program, args, 1)
+            subprocess.Popen(command, shell=True)
+
+        # Launch with Pathos
+        p = Pool()
+        # p.restart()
+        p.apipe(launchViewerNonBlocking, args=(particles, file_z_clnm, file_deformation, file_coords, mode))
+        # p.join()
+        # p.close()
+
+        return []
