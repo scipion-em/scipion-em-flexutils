@@ -115,7 +115,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "a **'angular align - deepPose'** protocol.")
         form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
                       allowsNull=True,
-                      pointerClass='TensorflowProtAngularAlignmentHomoSiren',
+                      pointerClass='TensorflowProtAngularAlignmentHetSiren',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
         group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
