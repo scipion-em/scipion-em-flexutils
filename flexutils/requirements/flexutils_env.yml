@@ -40,4 +40,5 @@ dependencies:
     - xmipp_metadata@git+https://github.com/DavidHerreros/xmipp_metadata.git@devel
     #- farneback3d@git+https://github.com/theHamsta/farneback3d.git@master
     #- opticalflow3d
+    - pathos
     - scipion-em-xmipp
