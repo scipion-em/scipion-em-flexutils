@@ -31,6 +31,8 @@ from subprocess import Popen
 from sklearn.neighbors import KDTree
 from xmipp_metadata.image_handler import ImageHandler
 
+from PyQt5.QtCore import QObject, pyqtSignal
+
 from pyworkflow.utils.process import runJob
 
 from pwem.viewers import Chimera
@@ -38,14 +40,16 @@ from pwem.viewers import Chimera
 import flexutils
 
 
-class FlexMorphChimeraX():
+class FlexMorphChimeraX(QObject):
     """ Morphing along different paths """
     OPEN_FILE = "open %s\n"
     VOXEL_SIZE = "volume #%d voxelSize %s\n"
     VOL_HIDE = "vol #%d hide\n"
     VIEW = "view\n"
+    finished = pyqtSignal()
 
     def __init__(self, _z_space, _file_names, _mode, _path, **kwargs):
+        super(QObject, self).__init__()
         self.z_space = _z_space
         self.mode = _mode
         self.file_names = _file_names
@@ -118,6 +122,7 @@ class FlexMorphChimeraX():
         fhCmd.close()
 
         self.openChimeraX(scriptFile)
+        self.finished.emit()
 
     def showRandomWalk(self):
         path = self.computeRandomWalkPath()

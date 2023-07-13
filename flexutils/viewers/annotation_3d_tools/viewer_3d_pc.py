@@ -47,7 +47,10 @@ from mayavi.core.api import PipelineBase
 from mayavi.core.ui.api import SceneEditor, MayaviScene, \
     MlabSceneModel
 
+from PyQt5.QtCore import QThread
+
 import flexutils
+from flexutils.viewers.utils.pyqt_worker import GenerateVolumesWorker
 from flexutils.viewers.chimera_viewers.viewer_morph_chimerax import FlexMorphChimeraX
 
 
@@ -146,22 +149,6 @@ class PointCloudView(HasTraits):
         self.kdtree_data = KDTree(self.data)
         self.kdtree_z_pace = KDTree(self.z_space)
 
-        # Generate map
-        if self.mode == "Zernike3D":
-            from flexutils.protocols.xmipp.utils.utils import applyDeformationField
-            self.generate_map = applyDeformationField
-        elif self.mode == "CryoDrgn":
-            import cryodrgn
-            from cryodrgn.utils import generateVolumes
-            cryodrgn.Plugin._defineVariables()
-            self.generate_map = generateVolumes
-        elif self.mode == "HetSIREN":
-            from flexutils.utils import generateVolumesHetSIREN
-            self.generate_map = generateVolumesHetSIREN
-        elif self.mode == "NMA":
-            from flexutils.utils import generateVolumesDeepNMA
-            self.generate_map = generateVolumesDeepNMA
-
         # Selections
         self.selections = dict()
         pathFile = os.path.join(self.path, "selections_dict.pkl")
@@ -173,6 +160,10 @@ class PointCloudView(HasTraits):
         if not os.path.isfile(pathFile) and self.mode == "Zernike3D":
             for idx in range(int(self.class_inputs["n_vol"])):
                 self.selections['class_%d' % (idx + 1)] = self.data.shape[0] - (idx + 1)
+
+        # Worker threads
+        self.thread_vol = None
+        self.thread_chimerax = None
 
         self.ipw_sel
 
@@ -347,19 +338,16 @@ class PointCloudView(HasTraits):
         self.ipw_label.scale = np.array([scale_factor, scale_factor, scale_factor])
 
     def _morph_chimerax_fired(self):
-        # Morph maps in chimerax based on different ordering methods
-        idm = np.asarray(list(self.selections.values()))
-        sel_names = list(self.selections.keys())
-        if len(self.selections) > 1:
-            if self.morphing_choice == "Salesman":
-                print("Salesman chosen")
-                morph_chimerax = FlexMorphChimeraX(self.z_space[idm], sel_names, self.mode, self.path, **self.class_inputs)
-                morph_chimerax.showSalesMan()
-            elif self.morphing_choice == "Random walk":
-                print("Random walk chosen")
-                morph_chimerax = FlexMorphChimeraX(self.z_space[idm], sel_names, self.mode, self.path,
-                                                   **self.class_inputs)
-                morph_chimerax.showRandomWalk()
+        if self.thread_chimerax is None:
+            # Morph maps in chimerax based on different ordering methods
+            idm = np.asarray(list(self.selections.values()))
+            sel_names = list(self.selections.keys())
+            if len(self.selections) > 1:
+                args = (self.z_space[idm], sel_names, self.mode, self.path)
+
+                # Create worker in separate thread
+                self.createThreadChimeraX(*args, **self.class_inputs)
+                self.thread_chimerax.start()
 
     def picker_callback(self, picker):
         """ Picker callback: this get called when on pick events.
@@ -379,11 +367,12 @@ class PointCloudView(HasTraits):
                              self.ipw_sel.mlab_source.y[point_id], \
                              self.ipw_sel.mlab_source.z[point_id]
 
-                self.moveViewToPosition([px, py, pz])
+                if self.thread_vol is None:
+                    self.moveViewToPosition([px, py, pz])
 
-                # Update label
-                self.ipw_label.trait_set(position=[px + 0.1, py + 0.1, pz + 0.1], text=self.current_sel)
-                self.ipw_label.actor.property.color = (1, 1, 1)
+                    # Update label
+                    self.ipw_label.trait_set(position=[px + 0.1, py + 0.1, pz + 0.1], text=self.current_sel)
+                    self.ipw_label.actor.property.color = (1, 1, 1)
 
     # ---------------------------------------------------------------------------
     # Conversion functions
@@ -437,32 +426,70 @@ class PointCloudView(HasTraits):
         pos = np.asarray([position[2], position[1], position[0]]).reshape(1, -1)
         _, ind = self.kdtree_data.query(pos, k=1)
 
-        if self.generate_map is not None:
-            if self.mode == "Zernike3D":
-                self.generate_map("reference.mrc", "mask.mrc", "deformed.mrc",
-                                  self.path, self.z_space[ind[0], :],
-                                  int(self.class_inputs["L1"]), int(self.class_inputs["L2"]), 32)
-                self.generated_map = self.readMap(os.path.join(self.path, "deformed.mrc"))
-            elif self.mode == "CryoDrgn":
-                self.generate_map(self.z_space[ind[0], :], self.class_inputs["weights"],
-                                  self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
-                                  apix=float(self.class_inputs["sr"]))
-                self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
-            elif self.mode == "HetSIREN":
-                self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
-                                  self.path, step=self.class_inputs["step"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
-            elif self.mode == "NMA":
-                self.generate_map(self.class_inputs["weights"], self.z_space[ind[0], :],
-                                  self.path, sr=self.class_inputs["sr"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
+        # Get generation function arguments
+        if self.mode == "Zernike3D":
+            args = {"map": "reference.mrc", "mask": "mask.mrc", "output": "deformed.mrc",
+                    "path": self.path, "z_clnm": self.z_space[ind[0], :],
+                    "L1": int(self.class_inputs["L1"]), "L2": int(self.class_inputs["L2"]),
+                    "Rmax": 32}
+        elif self.mode == "CryoDrgn":
+            args = {"zValues": self.z_space[ind[0], :], "weights": self.class_inputs["weights"],
+                    "config": self.class_inputs["config"], "outdir": self.path,
+                    "apix": float(self.class_inputs["sr"]), "flip": False,
+                    "downsample": int(self.class_inputs["boxsize"]), "invert": False}
+        elif self.mode == "HetSIREN":
+            args = {"weigths_file": self.class_inputs["weights"], "x_het": self.z_space[ind[0], :],
+                    "outdir": self.path, "step": self.class_inputs["step"]}
+        elif self.mode == "NMA":
+            args = {"weigths_file": self.class_inputs["weights"], "c_nma": self.z_space[ind[0], :],
+                    "outdir": self.path, "sr": self.class_inputs["sr"]}
 
-            volume = getattr(self, 'ipw_map')
-            val_max = np.amax(volume.mlab_source.m_data.scalar_data)
-            val_min = np.amin(volume.mlab_source.m_data.scalar_data)
-            volume.mlab_source.reset(scalars=self.generated_map)
-            if val_max == val_min:
-                volume.contour.contours = [0.0001]
+        # Create worker in separate thread
+        self.createThread(**args)
+        self.thread_vol.start()
+
+    # ---------------------------------------------------------------------------
+    # Worker generation
+    # ---------------------------------------------------------------------------
+    def createThread(self, **kwargs):
+        self.thread_vol = QThread()
+        self.worker = GenerateVolumesWorker(self.mode, **kwargs)
+        self.worker.moveToThread(self.thread_vol)
+        self.thread_vol.started.connect(self.worker.generateVolume)
+        self.worker.volume.connect(self.updateEmittedMap)
+        self.worker.finished.connect(self.thread_vol.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread_vol.finished.connect(self.thread_vol.deleteLater)
+        self.thread_vol.finished.connect(self.removeThreadVol)
+
+    def createThreadChimeraX(self, *args, **kwargs):
+        self.thread_chimerax = QThread()
+        self.worker = FlexMorphChimeraX(*args, **kwargs)
+        self.worker.moveToThread(self.thread_chimerax)
+        if self.morphing_choice == "Salesman":
+            self.thread_chimerax.started.connect(self.worker.showSalesMan)
+        elif self.morphing_choice == "Random walk":
+            self.thread_chimerax.started.connect(self.worker.showRandomWalk)
+        self.worker.finished.connect(self.thread_chimerax.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread_chimerax.finished.connect(self.thread_chimerax.deleteLater)
+        self.thread_chimerax.finished.connect(self.removeThreadChimeraX)
+
+    def removeThreadVol(self):
+        self.thread_vol = None
+
+    def removeThreadChimeraX(self):
+        self.thread_chimerax = None
+
+    def updateEmittedMap(self, map):
+        self.generated_map = map
+
+        volume = getattr(self, 'ipw_map')
+        val_max = np.amax(volume.mlab_source.m_data.scalar_data)
+        val_min = np.amin(volume.mlab_source.m_data.scalar_data)
+        volume.mlab_source.reset(scalars=self.generated_map)
+        if val_max == val_min:
+            volume.contour.contours = [0.0001]
 
     # ---------------------------------------------------------------------------
     # The layout of the dialog created
