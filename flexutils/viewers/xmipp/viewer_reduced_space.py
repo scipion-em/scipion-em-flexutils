@@ -27,9 +27,11 @@
 
 import numpy as np
 import os
+from pathos.multiprocessing import ProcessingPool as Pool
+import subprocess
 
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, Viewer
-from pyworkflow.utils.process import runJob
+from pyworkflow.utils.process import buildRunCommand
 
 from flexutils.protocols.xmipp.protocol_structure_landscape import XmippProtStructureLanscapes
 from flexutils.protocols.protocol_dimred import ProtFlexDimRedSpace
@@ -55,33 +57,47 @@ class XmippReducedSpaceViewer(Viewer):
         return self._data
 
     def _visualize(self, obj, **kwargs):
-        red_space = []
-        z_clnm = []
-        particles = self.protocol.outputParticles
-        for particle in particles.iterItems():
-            z_clnm.append(particle.getZFlex())
-            red_space.append(particle.getZRed())
-        z_clnm = np.asarray(z_clnm)
-        red_space = np.asarray(red_space)
-        if red_space.shape[1] < 3:
-            raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
-
-        # Generate files to call command line
         file_red_space = self.protocol._getExtraPath("red_coords.txt")
         file_deformation = self.protocol._getExtraPath("deformation.txt")
-        np.savetxt(file_red_space, red_space)
+        particles = self.protocol.outputParticles
 
-        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-            deformation = computeNormRows(z_clnm)
-        else:
-            deformation = np.zeros(z_clnm.shape)
+        def launchViewerNonBlocking(args):
+            (particles, file_red_space, file_deformation) = args
+            red_space = []
+            z_clnm = []
+            for particle in particles.iterItems():
+                z_clnm.append(particle.getZFlex())
+                red_space.append(particle.getZRed())
+            z_clnm = np.asarray(z_clnm)
+            red_space = np.asarray(red_space)
+            if red_space.shape[1] < 3:
+                raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
-        # Generate files to call command line
-        np.savetxt(file_deformation, deformation)
+            # Generate files to call command line
+            np.savetxt(file_red_space, red_space)
 
-        # Run slicer
-        args = "--coords %s --deformation %s" \
-               % (file_red_space, file_deformation)
-        program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
-        program = flexutils.Plugin.getProgram(program)
-        runJob(None, program, args)
+            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                deformation = computeNormRows(z_clnm)
+            else:
+                deformation = np.zeros(z_clnm.shape)
+
+            # Generate files to call command line
+            np.savetxt(file_deformation, deformation)
+
+            # Run slicer
+            args = "--coords %s --deformation %s" \
+                   % (file_red_space, file_deformation)
+            program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
+            program = flexutils.Plugin.getProgram(program)
+
+            command = buildRunCommand(program, args, 1)
+            subprocess.Popen(command, shell=True)
+
+        # Launch with Pathos
+        p = Pool()
+        # p.restart()
+        p.apipe(launchViewerNonBlocking, args=(particles, file_red_space, file_deformation))
+        # p.join()
+        # p.close()
+
+        return []

@@ -34,6 +34,8 @@ from copy import deepcopy
 
 from PyQt5.QtGui import QIntValidator, QIcon
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QSizePolicy
+from PyQt5.QtCore import QThread
+
 from sklearn.neighbors import KDTree
 from sklearn.cluster import KMeans
 
@@ -52,6 +54,7 @@ from napari.qt import QtViewer
 from napari._qt.layer_controls import QtLayerControlsContainer
 
 import flexutils
+from flexutils.viewers.utils.pyqt_worker import GenerateVolumesWorker
 from flexutils.viewers.chimera_viewers.viewer_morph_chimerax import FlexMorphChimeraX
 
 NAPARI_GE_4_16 = parse_version(napari.__version__) > parse_version("0.4.16")
@@ -141,22 +144,6 @@ class Annotate3D(object):
         self.kdtree_data = KDTree(self.data)
         self.kdtree_z_pace = KDTree(self.z_space)
 
-        # Generate map
-        if self.mode == "Zernike3D":
-            from flexutils.protocols.xmipp.utils.utils import applyDeformationField
-            self.generate_map = applyDeformationField
-        elif self.mode == "CryoDrgn":
-            import cryodrgn
-            from cryodrgn.utils import generateVolumes
-            cryodrgn.Plugin._defineVariables()
-            self.generate_map = generateVolumes
-        elif self.mode == "HetSIREN":
-            from flexutils.utils import generateVolumesHetSIREN
-            self.generate_map = generateVolumesHetSIREN
-        elif self.mode == "NMA":
-            from flexutils.utils import generateVolumesDeepNMA
-            self.generate_map = generateVolumesDeepNMA
-
         # Create viewer
         self.view = napari.Viewer(ndisplay=3, title="Flexutils 3D Annotation")
         self.view.window._qt_window.setWindowIcon(QIcon(os.path.join(os.path.dirname(flexutils.__file__),
@@ -181,6 +168,10 @@ class Annotate3D(object):
         self.dock_widget.menu_widget.cluster_btn.clicked.connect(self._compute_kmeans_fired)
         self.dock_widget.menu_widget.morph_button.clicked.connect(self._morph_chimerax_fired)
         self.dock_widget.viewer.layers.events.inserted.connect(self.on_insert_add_callback)
+
+        # Worker threads
+        self.thread_vol = None
+        self.thread_chimerax = None
 
         # Run viewer
         napari.run()
@@ -251,22 +242,19 @@ class Annotate3D(object):
 
     def _morph_chimerax_fired(self):
         # Morph maps in chimerax based on different ordering methods
-        layer = self.dock_widget.viewer.layers.selection._current
-        if layer.name != "Landscape":
-            points = layer.data
-            if points.shape[0] > 0:
-                _, inds = self.kdtree_data.query(points, k=1)
-                inds = np.array(inds).flatten()
-                sel_names = ["vol_%03d" % idx for idx in range(points.shape[0])]
-                # if self.morphing_choice == "Salesman":
-                #     print("Salesman chosen")
-                morph_chimerax = FlexMorphChimeraX(self.z_space[inds], sel_names, self.mode, self.path, **self.class_inputs)
-                morph_chimerax.showSalesMan()
-                # elif self.morphing_choice == "Random walk":
-                #     print("Random walk chosen")
-                #     morph_chimerax = FlexMorphChimeraX(self.z_space[inds], sel_names, self.mode, self.path,
-                #                                        **self.class_inputs)
-                #     morph_chimerax.showRandomWalk()
+        if self.thread_chimerax is None:
+            layer = self.dock_widget.viewer.layers.selection._current
+            if layer.name != "Landscape":
+                points = layer.data
+                if points.shape[0] > 0:
+                    _, inds = self.kdtree_data.query(points, k=1)
+                    inds = np.array(inds).flatten()
+                    sel_names = ["vol_%03d" % idx for idx in range(points.shape[0])]
+
+                    args = (self.z_space[inds], sel_names, self.mode, self.path)
+
+                    self.createThreadChimeraX(*args, **self.class_inputs)
+                    self.thread_chimerax.start()
 
     def on_insert_add_callback(self, event):
         layer = event.value
@@ -306,30 +294,61 @@ class Annotate3D(object):
         _, ind = self.kdtree_data.query(pos, k=1)
         ind = np.array(ind).flatten()[0]
 
-        if self.generate_map is not None:
-            if self.mode == "Zernike3D":
-                boxsize = int(self.class_inputs["boxsize"])
-                self.generate_map("reference.mrc", "mask.mrc", "deformed.mrc",
-                                  self.path, self.z_space[ind, :],
-                                  int(self.class_inputs["L1"]), int(self.class_inputs["L2"]),
-                                  int(0.5 * boxsize))
-                self.generated_map = self.readMap(os.path.join(self.path, "deformed.mrc"))
-            elif self.mode == "CryoDrgn":
-                self.generate_map(self.z_space[ind, :], self.class_inputs["weights"],
-                                  self.class_inputs["config"], self.path, downsample=int(self.class_inputs["boxsize"]),
-                                  apix=float(self.class_inputs["sr"]))
-                self.generated_map = self.readMap(os.path.join(self.path, "vol_000.mrc"))
-            elif self.mode == "HetSIREN":
-                self.generate_map(self.class_inputs["weights"], self.z_space[ind, :],
-                                  self.path, step=self.class_inputs["step"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
-            elif self.mode == "NMA":
-                self.generate_map(self.class_inputs["weights"], self.z_space[ind, :],
-                                  self.path, sr=self.class_inputs["sr"])
-                self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
+        # Get generation function arguments
+        if self.mode == "Zernike3D":
+            args = {"map": "reference.mrc", "mask": "mask.mrc", "output": "deformed.mrc",
+                    "path": self.path, "z_clnm": self.z_space[ind, :],
+                    "L1": int(self.class_inputs["L1"]), "L2": int(self.class_inputs["L2"]),
+                    "Rmax": 32}
+        elif self.mode == "CryoDrgn":
+            args = {"zValues": self.z_space[ind, :], "weights": self.class_inputs["weights"],
+                    "config": self.class_inputs["config"], "outdir": self.path,
+                    "apix": float(self.class_inputs["sr"]), "flip": False,
+                    "downsample": int(self.class_inputs["boxsize"]), "invert": False}
+        elif self.mode == "HetSIREN":
+            args = {"weigths_file": self.class_inputs["weights"], "x_het": self.z_space[ind, :],
+                    "outdir": self.path, "step": self.class_inputs["step"]}
+        elif self.mode == "NMA":
+            args = {"weigths_file": self.class_inputs["weights"], "c_nma": self.z_space[ind, :],
+                    "outdir": self.path, "sr": self.class_inputs["sr"]}
 
-            self.dock_widget.viewer_model1.layers[0].data = self.generated_map
-            self.prev_layers = [layer.data.copy() for layer in self.dock_widget.viewer.layers]
+        # Create worker in separate thread
+        self.createThread(**args)
+        self.thread_vol.start()
+
+    # ---------------------------------------------------------------------------
+    # Worker generation
+    # ---------------------------------------------------------------------------
+    def createThread(self, **kwargs):
+        self.thread_vol = QThread()
+        self.worker = GenerateVolumesWorker(self.mode, **kwargs)
+        self.worker.moveToThread(self.thread_vol)
+        self.thread_vol.started.connect(self.worker.generateVolume)
+        self.worker.volume.connect(self.updateEmittedMap)
+        self.worker.finished.connect(self.thread_vol.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread_vol.finished.connect(self.thread_vol.deleteLater)
+        self.thread_vol.finished.connect(self.removeThreadVol)
+
+    def createThreadChimeraX(self, *args, **kwargs):
+        self.thread_chimerax = QThread()
+        self.worker = FlexMorphChimeraX(*args, **kwargs)
+        self.worker.moveToThread(self.thread_chimerax)
+        self.thread_chimerax.started.connect(self.worker.showSalesMan)
+        self.worker.finished.connect(self.thread_chimerax.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread_chimerax.finished.connect(self.thread_chimerax.deleteLater)
+        self.thread_chimerax.finished.connect(self.removeThreadChimeraX)
+
+    def removeThreadVol(self):
+        self.thread_vol = None
+
+    def removeThreadChimeraX(self):
+        self.thread_chimerax = None
+
+    def updateEmittedMap(self, map):
+        self.dock_widget.viewer_model1.layers[0].data = map
+        self.prev_layers = [layer.data.copy() for layer in self.dock_widget.viewer.layers]
 
 
 if __name__ == '__main__':
