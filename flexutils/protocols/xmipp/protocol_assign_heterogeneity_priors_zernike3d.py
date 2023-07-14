@@ -140,7 +140,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --save_metadata_stack %s --fourier %d" %
                         (imgsFn,
-                         self._getExtraPath('scaled_particles.stk'),
+                         self._getTmpPath('scaled_particles.stk'),
                          self._getExtraPath('scaled_particles.xmd'),
                          self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)

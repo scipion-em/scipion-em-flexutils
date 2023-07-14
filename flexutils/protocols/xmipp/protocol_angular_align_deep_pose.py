@@ -231,7 +231,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
-                      self._getExtraPath('scaled_particles.stk'),
+                      self._getTmpPath('scaled_particles.stk'),
                       self._getExtraPath('scaled_particles.xmd'),
                       self.newXdim)
             if self.numberOfMpi.get() > 1:
