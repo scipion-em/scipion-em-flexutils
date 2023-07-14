@@ -91,14 +91,14 @@ class FlexMorphChimeraX(QObject):
             for idz in path:
                 generateVolumesHetSIREN(self.other_inputs["weights"], self.z_space[idz, :],
                                         self.path, step=self.other_inputs["step"])
-                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_1.mrc"),
+                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_01.mrc"),
                                        os.path.join(self.path, self.file_names[idz] + ".mrc"))
         elif self.mode == "NMA":
             from flexutils.utils import generateVolumesDeepNMA
             for idz in path:
                 generateVolumesDeepNMA(self.other_inputs["weights"], self.z_space[idz, :],
                                         self.path, sr=self.other_inputs["sr"])
-                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_1.mrc"),
+                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_01.mrc"),
                                        os.path.join(self.path, self.file_names[idz] + ".mrc"))
         self.file_names = [self.file_names[i] for i in path]
 
