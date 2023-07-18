@@ -103,6 +103,7 @@ class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):
         idx = 0
         for particle in inputParticles.iterItems():
             outParticle = particle.clone()
+            outParticle.setObjId(None)
             z_score = z_scores[idx]
             if self.filter.get():
                 if outliersThreshold >= z_score:
@@ -110,7 +111,7 @@ class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):
                     outParticles.append(outParticle)
             else:
                 outParticles.outlierScore = Float(z_score)
-                outParticles.append(outParticles)
+                outParticles.append(outParticle)
             idx += 1
 
         self._defineOutputs(outputParticles=outParticles)
