@@ -279,16 +279,17 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().pad = Integer(hetSirenProtocol.pad.get())
 
         outVols = self._createSetOfVolumes()
-        outVols.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
+        outVols.setSamplingRate(inputParticles.getSamplingRate())
         for idx in range(hetSirenProtocol.numVol.get()):
             outVol = Volume()
-            outVol.setSamplingRate(inputParticles.getSamplingRate() / correctionFactor)
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
-            outVols.append(outVol)
+            outVol.setSamplingRate(inputParticles.getSamplingRate())
 
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
+            outVols.append(outVol)
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
