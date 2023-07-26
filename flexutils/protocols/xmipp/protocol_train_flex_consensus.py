@@ -121,7 +121,8 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
     def trainingStep(self):
         data_path = self._getExtraPath("data")
         out_path = self._getExtraPath()
-        os.mkdir(os.path.join(out_path, "network"))
+        if not os.path.isdir(out_path):
+            os.mkdir(os.path.join(out_path, "network"))
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
