@@ -54,9 +54,8 @@ class XmippLandscapeViewer(ProtocolViewer):
     """ Visualize conformational lanscapes """
     _label = 'viewer conformational landscape'
     _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D,
-                XmippProtReassignReferenceZernike3D, TensorflowProtAngularAlignmentZernike3Deep,
-                TensorflowProtPredictZernike3Deep, TensorflowProtAngularAlignmentDeepNMA,
-                TensorflowProtPredictDeepNMA, TensorflowProtAngularAlignmentHetSiren,
+                XmippProtReassignReferenceZernike3D, TensorflowProtPredictZernike3Deep,
+                TensorflowProtAngularAlignmentDeepNMA, TensorflowProtPredictDeepNMA,
                 TensorflowProtPredictHetSiren, ProtFlexScoreLandscape]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
@@ -24,13 +23,3 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .viewers_data import FlexDataViewer
-
-# from .viewer_morph_salesman import FlexMorphSalesmanViewer
-from .viewer_show_structures import FlexShowStructuresViewer
-from flexutils.viewers.map_model_viewers.viewer_show_maps import FlexShowMapsViewer
-from flexutils.viewers.clustering_viewers.viewer_optimal_clusters import FlexShowOptimalClustersViewer
-from flexutils.viewers.tensorboard.viewer_tensorboard import TensorboardViewer
-
-# Flexibility Xmipp viewers (offered here due to strong package dependency)
-from .xmipp import *
