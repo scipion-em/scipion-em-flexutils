@@ -94,7 +94,7 @@ class Plugin(pwplugin.Plugin):
         return cmd + '%(program)s ' % locals()
 
     @classmethod
-    def getTensorflowProgram(cls, program, python=True):
+    def getTensorflowProgram(cls, program, python=True, log_level=2):
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getTensorflowActivation())
         if python:
             # import pyworkflow, pwem, xmipp3
@@ -103,7 +103,7 @@ class Plugin(pwplugin.Plugin):
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
             cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + ' TF_CPP_MIN_LOG_LEVEL=2 %(program)s ' % locals()
+        return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
@@ -113,7 +113,7 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
+            installationCmd += 'conda env remove -n flexutils && mamba env create -f ' + CONDA_YML + " && "
             installationCmd += "conda activate flexutils && "
             installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
             installationCmd += "touch flexutils_installed"

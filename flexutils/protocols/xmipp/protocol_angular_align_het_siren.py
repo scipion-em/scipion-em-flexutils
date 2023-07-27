@@ -156,6 +156,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "A value of 1 means that all point within the mask provided in the input "
                             "will be used. A value of 2 implies that half of the point will be skipped "
                             "to increase the performance.")
+        group = form.addGroup("Logger")
+        group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
+                       help="If you experience any error during the training execution, we recommend setting "
+                            "this parameter to True followed by a restart of this protocol to generate a more "
+                            "informative logging file.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['MSE', 'Correlation', 'FPC'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -311,7 +316,13 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = flexutils.Plugin.getTensorflowProgram("train_het_siren.py", python=False)
+        if self.debugMode.get():
+            log_level = 0
+        else:
+            log_level = 2
+
+        program = flexutils.Plugin.getTensorflowProgram("train_het_siren.py", python=False,
+                                                        log_level=log_level)
         self.runJob(program, args, numberOfMpi=1)
 
     def predictStep(self):

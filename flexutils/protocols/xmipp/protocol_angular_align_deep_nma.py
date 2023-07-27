@@ -143,6 +143,11 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
                             "be used to train the network.")
+        group = form.addGroup("Logger")
+        group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
+                       help="If you experience any error during the training execution, we recommend setting "
+                            "this parameter to True followed by a restart of this protocol to generate a more "
+                            "informative logging file.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Fourier Phase Correlation'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -261,7 +266,13 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = flexutils.Plugin.getTensorflowProgram("train_deep_nma.py", python=False)
+        if self.debugMode.get():
+            log_level = 0
+        else:
+            log_level = 2
+
+        program = flexutils.Plugin.getTensorflowProgram("train_deep_nma.py", python=False,
+                                                        log_level=log_level)
         self.runJob(program, args, numberOfMpi=1)
 
     def predictStep(self):
