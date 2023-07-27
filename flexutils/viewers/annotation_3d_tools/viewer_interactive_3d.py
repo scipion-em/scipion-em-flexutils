@@ -232,7 +232,7 @@ class Annotate3D(object):
     def _compute_kmeans_fired(self):
         # Compute KMeans and save automatic selection
         n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
-        clusters = KMeans(n_clusters=n_clusters, n_init=1).fit(self.z_space)
+        clusters = KMeans(n_clusters=n_clusters).fit(self.z_space)
         centers = clusters.cluster_centers_
         self.interp_val = clusters.labels_
         _, inds = self.kdtree_z_pace.query(centers, k=1)
