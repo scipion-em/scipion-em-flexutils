@@ -30,6 +30,7 @@ import os
 import subprocess
 import time
 import psutil
+import socket
 
 from PyQt5 import QtWidgets, QtWebEngineWidgets, QtGui
 from PyQt5.QtCore import QUrl
@@ -47,13 +48,13 @@ class ViewTensorboard(QtWidgets.QWidget):
     def __init__(self, logdir_path):
         super(ViewTensorboard, self).__init__()
         # Setup Tensorboard
-        self.launchTensorboard(logdir_path)
+        port = self.launchTensorboard(logdir_path)
 
         # Web engine to render plot
         self.window = QtWidgets.QWidget()
         self.web_engine = QtWebEngineWidgets.QWebEngineView()
         # self.web_engine.setFixedWidth(1000)
-        self.web_engine.load(QUrl("http://localhost:6006/"))
+        self.web_engine.load(QUrl(f"http://localhost:{port}/"))
 
         # PyQt layout
         window_lay = QtWidgets.QHBoxLayout()
@@ -68,11 +69,15 @@ class ViewTensorboard(QtWidgets.QWidget):
     # Create interface
     # ---------------------------------------------------------------------------
     def launchTensorboard(self, logdir_path):
+        sock = socket.socket()
+        sock.bind(('', 0))
+        port = sock.getsockname()[1]
         program = flexutils.Plugin.getTensorflowProgram("tensorboard", python=False)
-        args = f" --logdir {logdir_path}"
+        args = f" --logdir {logdir_path} --port {port}"
         self.tensorboard_process = subprocess.Popen(program + args, shell=True, stdout=subprocess.DEVNULL,
                                                     stderr=subprocess.DEVNULL)
         time.sleep(5)
+        return port
 
     # ---------------------------------------------------------------------------
     # Tools
