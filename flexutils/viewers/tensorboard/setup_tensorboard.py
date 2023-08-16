@@ -29,8 +29,10 @@ import sys
 import os
 import subprocess
 import time
+
 import psutil
 import socket
+from contextlib import closing
 
 from PyQt5 import QtWidgets, QtWebEngineWidgets, QtGui
 from PyQt5.QtCore import QUrl
@@ -69,14 +71,21 @@ class ViewTensorboard(QtWidgets.QWidget):
     # Create interface
     # ---------------------------------------------------------------------------
     def launchTensorboard(self, logdir_path):
-        sock = socket.socket()
-        sock.bind(('', 0))
-        port = sock.getsockname()[1]
+        def is_port_in_use(port: int) -> bool:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                return s.connect_ex(('localhost', port)) == 0
+
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.bind(('', 0))
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            port = s.getsockname()[1]
         program = flexutils.Plugin.getTensorflowProgram("tensorboard", python=False)
         args = f" --logdir {logdir_path} --port {port}"
         self.tensorboard_process = subprocess.Popen(program + args, shell=True, stdout=subprocess.DEVNULL,
                                                     stderr=subprocess.DEVNULL)
-        time.sleep(5)
+
+        while not is_port_in_use(port):
+            time.sleep(0.1)
         return port
 
     # ---------------------------------------------------------------------------
