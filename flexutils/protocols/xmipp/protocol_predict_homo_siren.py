@@ -150,7 +150,7 @@ class TensorflowProtPredictHomoSiren(ProtAnalysis3D):
         self.newXdim = homoSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = homoSirenProtocol.ctfType.get()
+        applyCTF = homoSirenProtocol.applyCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d" \
                % (md_file, weigths_file, pad, sr, applyCTF)

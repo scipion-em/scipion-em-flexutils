@@ -137,7 +137,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         pad = deepNMAProtocol.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / deepNMAProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = deepNMAProtocol.ctfType.get()
+        applyCTF = deepNMAProtocol.applyCTF.get()
         args = "--md_file %s --weigths_file %s --n_modes %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, n_modes, pad, sr, applyCTF)

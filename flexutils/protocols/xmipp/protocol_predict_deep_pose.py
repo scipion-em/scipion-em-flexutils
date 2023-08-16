@@ -148,7 +148,7 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         self.newXdim = deepPoseProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = deepPoseProtocol.ctfType.get()
+        applyCTF = deepPoseProtocol.applyCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d" \
                % (md_file, weigths_file, pad, sr, applyCTF)

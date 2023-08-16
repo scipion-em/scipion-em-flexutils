@@ -160,7 +160,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         pad = zernikeProtocol.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = zernikeProtocol.ctfType.get()
+        applyCTF = zernikeProtocol.applyCTF.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)

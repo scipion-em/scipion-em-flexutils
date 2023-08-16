@@ -154,7 +154,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = hetSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = hetSirenProtocol.ctfType.get()
+        applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
         numVol = hetSirenProtocol.numVol.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
