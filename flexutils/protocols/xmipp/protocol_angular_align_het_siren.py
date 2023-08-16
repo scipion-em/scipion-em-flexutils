@@ -275,7 +275,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
-               "--shuffle --split_train %f --pad %d --refine_pose " \
+               "--shuffle --split_train %f --pad %d " \
                "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d --lr %f" \
                % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, step,
                   l1Reg, hetDim, lr)
