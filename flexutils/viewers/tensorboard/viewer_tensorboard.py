@@ -25,7 +25,6 @@
 # **************************************************************************
 
 
-import numpy as np
 import os
 from pathos.multiprocessing import ProcessingPool as Pool
 import subprocess
@@ -35,6 +34,8 @@ from pyworkflow.utils.process import buildRunCommand
 
 from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
+from flexutils.protocols.xmipp.protocol_angular_align_deep_pose import TensorflowProtAngularAlignmentDeepPose
+from flexutils.protocols.xmipp.protocol_angular_align_homo_siren import TensorflowProtAngularAlignmentHomoSiren
 
 import flexutils.constants as const
 import flexutils
@@ -44,7 +45,9 @@ class TensorboardViewer(Viewer):
     """ Tensorboard visualization of neural networks """
     _label = 'viewer conformational landscape'
     _targets = [TensorflowProtAngularAlignmentZernike3Deep,
-                TensorflowProtAngularAlignmentHetSiren]
+                TensorflowProtAngularAlignmentHetSiren,
+                TensorflowProtAngularAlignmentDeepPose,
+                TensorflowProtAngularAlignmentHomoSiren]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
