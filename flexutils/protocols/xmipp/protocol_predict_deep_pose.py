@@ -163,9 +163,6 @@ class TensorflowProtPredictDeepPose(ProtAnalysis3D):
         elif deepPoseProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
-        # if deepPoseParticles.refPose.get():
-        #     args += " --refine_pose"
-
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
