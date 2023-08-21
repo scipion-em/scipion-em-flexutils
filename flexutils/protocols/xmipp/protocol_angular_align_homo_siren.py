@@ -82,6 +82,17 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                             'the estimation the deformation field for each particle. Note that output particles will '
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
+        group = form.addGroup("Refinement workflow parameters")
+        group.addParam('refString', params.StringParam, default="100m,100p",
+                       label='Refinement workflow',
+                       help='Refinement workflow determining the training strategy for HomoSIREN. Each refinement '
+                            'step is composed by a number (optional - number of epochs for this step) followed by a '
+                            'letter describing the training strategy. Possible strategies include:'
+                            '    * **p**: Train the pose parameters only\n'
+                            '    * **m**: Train the map only\n'
+                            '    * **b**: Train both the pose and map parameters\n'
+                            '    * **s**: Train the map in superconvergence mode (we recommend a low number of epochs '
+                            'in this case)\n')
         group = form.addGroup("CTF Parameters (Advanced)",
                               expertLevel=params.LEVEL_ADVANCED)
         group.addParam('applyCTF', params.BooleanParam, default=True, label='Apply CTF?',
@@ -176,17 +187,16 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                       help="Determines the weight of the L1 map minimization in the cost function. L1 is moslty used to "
                            "decrease the amount of noise in the map learned by the network. We do not recommend to touch "
                            "this parameter")
+        form.addParam("multires", params.StringParam, default="2,4,8", label="Multiresolution levels",
+                      help="Number of multiresolution levels to be added to the cost function. A multiresolution level "
+                           "consists of a binning factor to be used to generate an extra image comparison in the cost "
+                           "function after applying the binning factor. Having extra multiresolution levels adds an "
+                           "useful regularization to find more meaningful local minima during the training process.")
         form.addSection(label='Output')
         form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
                       help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
                            "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
                            "greater than 1")
-        form.addSection(label='Experimental')
-        form.addParam("superConv", params.BooleanParam, default=False, label="Train in super-convergence mode?",
-                      help="WARNING: This is still an experimental feature being tested.\n"
-                           "If True, the HomoSIREN network will be trained in super-convergence mode. In super-convergence "
-                           "mode, the network can be trained in a few epochs (1 - 5 might be enough), greatly decreasing "
-                           "the training time without compromising much the accuracy of the results")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -262,15 +272,18 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         split_train = self.split_train.get()
         lr = self.lr.get()
         l1Reg = self.l1Reg.get()
+        multires = self.multires.get()
+        refString = self.refString.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d --refine_pose " \
-               "--sr %f --apply_ctf %d --step %d --l1_reg %f --lr %f" \
+               "--sr %f --apply_ctf %d --step %d --l1_reg %f --lr %f --multires %s " \
+               "--ref_string %s" \
                % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, step,
-                  l1Reg, lr)
+                  l1Reg, lr, multires, refString)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
@@ -300,9 +313,6 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
             args += " --weigths_file %s" % modelPath
-
-        if self.superConv.get():
-            args += " --super_conv"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
