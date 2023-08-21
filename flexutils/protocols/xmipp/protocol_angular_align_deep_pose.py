@@ -121,13 +121,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         group = form.addGroup("Network hyperparameters")
         group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
-        # form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-        #               help="If True, the neural network will be trained to refine the current pose "
-        #                    "(shifts and alignments) according to the information of the reference map. "
-        #                    "Otherwise, the pose will be estimated from scratch.")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
                        default=0, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
@@ -178,6 +174,11 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
+        form.addParam("multires", params.StringParam, default="2,4,8", label="Multiresolution levels",
+                      help="Number of multiresolution levels to be added to the cost function. A multiresolution level "
+                           "consists of a binning factor to be used to generate an extra image comparison in the cost "
+                           "function after applying the binning factor. Having extra multiresolution levels adds an "
+                           "useful regularization to find more meaningful local minima during the training process.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -255,14 +256,15 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         step = self.step.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
+        multires = self.multires.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
-               "--shuffle --split_train %f --pad %d --refine_pose " \
-               "--sr %f --apply_ctf %d --lr %f" \
-               % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, lr)
+               "--shuffle --split_train %f --pad %d " \
+               "--sr %f --apply_ctf %d --lr %f --multires %s" \
+               % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, lr, multires)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
@@ -280,9 +282,6 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
             args += " --cost corr-fpc --radius_mask %f" % self.maskRadius.get()
             if self.smoothMask.get():
                 args += " --smooth_mask"
-
-        # if self.refinePose.get():
-        #     args += " --refine_pose"
 
         if self.architecture.get() == 0:
             args += " --architecture convnn"
@@ -320,7 +319,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
-        args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
+        args = "--md_file %s --weigths_file %s --pad %d --sr %f " \
                "--apply_ctf %d" \
                % (md_file, weigths_file, pad, sr, applyCTF)
 
