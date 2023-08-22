@@ -321,10 +321,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --sr %f --mode NMA" \
+                   "--weights %s --sr %f --boxsize %d --mode NMA" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
-                      particles.getSamplingRate())
+                      particles.getSamplingRate(), particles.getXDim())
 
         dimensions = red_space.shape[1]
         if dimensions == 2:

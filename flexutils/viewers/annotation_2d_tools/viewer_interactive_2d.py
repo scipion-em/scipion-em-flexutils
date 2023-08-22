@@ -216,7 +216,8 @@ class InteractiveAnnotate2D(QtWidgets.QWidget):
             inputs_mayavi = {"path": self.path,
                              "mode": self.mode,
                              "weights": kwargs.get("weights"),
-                             "sr": float(self.class_inputs["sr"])}
+                             "sr": float(self.class_inputs["sr"]),
+                             "boxsize": int(self.class_inputs["boxsize"])}
         self.mayavi_view = MayaviQWidget(**inputs_mayavi)
 
     # ---------------------------------------------------------------------------
@@ -527,7 +528,7 @@ class MapView(HasTraits):
                 self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
             elif self.mode == "NMA":
                 self.generate_map(self.class_inputs["weights"], z,
-                                  self.path, sr=self.class_inputs["sr"])
+                                  self.path, sr=self.class_inputs["sr"], xsize=self.class_inputs["boxsize"])
                 self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
             volume = getattr(self, 'ipw_map')
             val_max = np.amax(volume.mlab_source.m_data.scalar_data)

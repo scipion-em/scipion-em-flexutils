@@ -37,11 +37,8 @@ from pyworkflow.utils.process import buildRunCommand
 from flexutils.protocols.xmipp.protocol_angular_alignment_zernike3d import XmippProtAngularAlignmentZernike3D
 from flexutils.protocols.xmipp.protocol_focus_zernike3d import XmippProtFocusZernike3D
 from flexutils.protocols.xmipp.protocol_reassign_reference_zernike3d import XmippProtReassignReferenceZernike3D
-from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_predict_zernike3deep import TensorflowProtPredictZernike3Deep
-from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import TensorflowProtAngularAlignmentDeepNMA
 from flexutils.protocols.xmipp.protocol_predict_deep_nma import TensorflowProtPredictDeepNMA
-from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
 from flexutils.protocols.xmipp.protocol_predict_het_siren import TensorflowProtPredictHetSiren
 from flexutils.protocols.protocol_score_landscape import ProtFlexScoreLandscape
 
@@ -55,7 +52,7 @@ class XmippLandscapeViewer(ProtocolViewer):
     _label = 'viewer conformational landscape'
     _targets = [XmippProtAngularAlignmentZernike3D, XmippProtFocusZernike3D,
                 XmippProtReassignReferenceZernike3D, TensorflowProtPredictZernike3Deep,
-                TensorflowProtAngularAlignmentDeepNMA, TensorflowProtPredictDeepNMA,
+                TensorflowProtPredictDeepNMA,
                 TensorflowProtPredictHetSiren, ProtFlexScoreLandscape]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 

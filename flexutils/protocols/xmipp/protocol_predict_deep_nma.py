@@ -48,6 +48,7 @@ import flexutils
 from flexutils.protocols import ProtFlexBase
 from flexutils.objects import ParticleFlex
 import flexutils.constants as const
+from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
@@ -55,7 +56,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
      DeepNMA network. """
     _label = 'predict - DeepNMA'
     _lastUpdateVersion = VERSION_2_0
-    _subset = ["ca", "bb", None]
+    _subset = ["ca", "bb", "all"]
 
     # --------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -85,6 +86,7 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
+            'fnConnect': self._getExtraPath("connectivity.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -99,7 +101,8 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
     # --------------------------- STEPS functions -----------------------
     def writeMetaDataStep(self):
         imgsFn = self._getFileName('imgsFn')
-        structure = self._getFileName('fnStruct')
+        structure_file = self._getFileName('fnStruct')
+        connect_file = self._getFileName('fnConnect')
 
         inputParticles = self.inputParticles.get()
         deepNMAProtocol = self.deepNMAProtocol.get()
@@ -108,12 +111,18 @@ class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):
         refStruct = deepNMAProtocol.inputStruct.get().getFileName()
         subset = self._subset[deepNMAProtocol.atomSubset.get()]
 
-        pd_struct = pd.parsePDB(refStruct, subset=subset, compressed=False)
-        pdb_coordinates = pd_struct.getCoords()
-        pdb_coordinates = np.c_[pdb_coordinates, np.ones(pdb_coordinates.shape[0])]
-        # pdb_lines = self.readPDB(deepNMAProtocol.inputStruct.get().getFileName())
-        # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
-        np.savetxt(structure, pdb_coordinates)
+        # pd_struct = pd.parsePDB(refStruct, subset=subset, compressed=False)
+        # pdb_coordinates = pd_struct.getCoords()
+        # pdb_coordinates = np.c_[pdb_coordinates, np.ones(pdb_coordinates.shape[0])]
+        # # pdb_lines = self.readPDB(deepNMAProtocol.inputStruct.get().getFileName())
+        # # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
+        # np.savetxt(structure, pdb_coordinates)
+        parser = PDBUtils(selectionString=subset)
+        pdb_coordinates, connectivity = parser.parsePDB(refStruct)
+        values = np.ones(pdb_coordinates.shape[0])
+        pdb_coordinates = np.c_[pdb_coordinates, values]
+        np.savetxt(structure_file, pdb_coordinates)
+        np.savetxt(connect_file, connectivity)
 
         writeSetOfParticles(inputParticles, imgsFn)
 

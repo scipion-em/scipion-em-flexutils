@@ -116,13 +116,13 @@ def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
 
-def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr):
-    args = _getEvalVolArgs(c_nma, weigths_file, "nma_file", outdir, sr=sr)
+def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr, xsize):
+    args = _getEvalVolArgs(c_nma, weigths_file, "nma_file", outdir, sr=sr, xsize=xsize)
     program = flexutils.Plugin.getTensorflowProgram("predict_map_deep_nma.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
 
-def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None):
+def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None, xsize=None):
     if not os.path.exists(outdir):
         os.mkdir(outdir)
 
@@ -140,5 +140,8 @@ def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None
 
     if sr:
         args.append('--sr %f' % sr)
+
+    if xsize:
+        args.append('--xsize %d' % xsize)
 
     return args

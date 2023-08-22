@@ -310,10 +310,10 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --sr %f --mode NMA" \
+                   "--weights %s --sr %f --boxsize %d --mode NMA" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
-                      particles.getSamplingRate())
+                      particles.getSamplingRate(), particles.getXDim())
 
         program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_3d_pc.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)

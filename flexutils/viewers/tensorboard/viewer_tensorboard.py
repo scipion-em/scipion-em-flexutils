@@ -36,6 +36,7 @@ from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import Tensor
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
 from flexutils.protocols.xmipp.protocol_angular_align_deep_pose import TensorflowProtAngularAlignmentDeepPose
 from flexutils.protocols.xmipp.protocol_angular_align_homo_siren import TensorflowProtAngularAlignmentHomoSiren
+from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import TensorflowProtAngularAlignmentDeepNMA
 
 import flexutils.constants as const
 import flexutils
@@ -47,8 +48,8 @@ class TensorboardViewer(Viewer):
     _targets = [TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtAngularAlignmentHetSiren,
                 TensorflowProtAngularAlignmentDeepPose,
-                TensorflowProtAngularAlignmentHomoSiren]
-    _environments = [DESKTOP_TKINTER, WEB_DJANGO]
+                TensorflowProtAngularAlignmentHomoSiren,
+                TensorflowProtAngularAlignmentDeepNMA]
 
     def __init__(self, **kwargs):
         Viewer.__init__(self, **kwargs)

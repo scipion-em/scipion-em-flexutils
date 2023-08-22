@@ -239,6 +239,18 @@ class InteractiveAnnotate2D(QtWidgets.QWidget):
                              "config": kwargs.get("config"),
                              "boxsize": int(kwargs.get("boxsize")),
                              "sr": float(self.class_inputs["sr"])}
+        elif self.mode == "HetSIREN":
+            inputs_mayavi = {"path": self.path,
+                             "mode": self.mode,
+                             "weights": kwargs.get("weights"),
+                             "step": kwargs.get("step"),
+                             "sr": float(self.class_inputs["sr"])}
+        elif self.mode == "NMA":
+            inputs_mayavi = {"path": self.path,
+                             "mode": self.mode,
+                             "weights": kwargs.get("weights"),
+                             "sr": float(self.class_inputs["sr"]),
+                             "boxsize": int(self.class_inputs["boxsize"])}
         if view == "volume_viewer":
             self.mayavi_vw_view = MayaviQWidget(view=view, **inputs_mayavi)
         elif view == "landscape":
@@ -641,7 +653,7 @@ class MapView(HasTraits):
                 self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
             elif self.mode == "NMA":
                 self.generate_map(self.class_inputs["weights"], z,
-                                  self.path, sr=float(self.class_inputs["sr"]))
+                                  self.path, sr=float(self.class_inputs["sr"]), xsize=int(self.class_inputs["boxsize"]))
                 self.generated_map = self.readMap(os.path.join(self.path, "decoded_map_class_01.mrc"))
 
             volume = getattr(self, 'ipw_map')

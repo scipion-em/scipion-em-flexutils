@@ -442,7 +442,7 @@ class PointCloudView(HasTraits):
                     "outdir": self.path, "step": self.class_inputs["step"]}
         elif self.mode == "NMA":
             args = {"weigths_file": self.class_inputs["weights"], "c_nma": self.z_space[ind[0], :],
-                    "outdir": self.path, "sr": self.class_inputs["sr"]}
+                    "outdir": self.path, "sr": self.class_inputs["sr"], "xsize": int(self.class_inputs["boxsize"])}
 
         # Create worker in separate thread
         self.createThread(**args)

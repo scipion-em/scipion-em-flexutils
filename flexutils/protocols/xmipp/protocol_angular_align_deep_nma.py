@@ -48,13 +48,14 @@ import flexutils
 from flexutils.protocols import ProtFlexBase
 from flexutils.objects import ParticleFlex
 import flexutils.constants as const
+from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with automatic NMA selection. """
     _label = 'flexible align - DeepNMA'
     _lastUpdateVersion = VERSION_2_0
-    _subset = ["ca", "bb", None]
+    _subset = ["ca", "bb", "all"]
 
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
@@ -165,6 +166,17 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
+        form.addParam("multires", params.StringParam, default="2,4,8", label="Multiresolution levels",
+                      help="Number of multiresolution levels to be added to the cost function. A multiresolution level "
+                           "consists of a binning factor to be used to generate an extra image comparison in the cost "
+                           "function after applying the binning factor. Having extra multiresolution levels adds an "
+                           "useful regularization to find more meaningful local minima during the training process.")
+        form.addParam("angleReg", params.FloatParam, default=1e-4, label="Hedral angle regularization",
+                      help="Determines how strong the regularization of the hedral angles will be in the cost function. "
+                           "A higer value will try to keep the original hedral angles of the input structure.")
+        form.addParam("bondReg", params.FloatParam, default=1e-4, label="Bond regularization",
+                      help="Determines how strong the regularization of the bond distance will be in the cost function. "
+                           "A higer value will try to keep the original bond distances of the input structure.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -174,6 +186,7 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
+            'fnConnect': self._getExtraPath("connectivity.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -189,21 +202,29 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
     # --------------------------- STEPS functions -----------------------
     def writeMetaDataStep(self):
         imgsFn = self._getFileName('imgsFn')
-        structure = self._getFileName('fnStruct')
+        structure_file = self._getFileName('fnStruct')
+        connect_file = self._getFileName('fnConnect')
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
 
         # Structure reference
-        pd_struct = pd.parsePDB(self.inputStruct.get().getFileName(), subset=self._subset[self.atomSubset.get()],
-                                compressed=False)
-        pdb_coordinates = pd_struct.getCoords()
-        values = pd_struct.getBetas()
+        # pd_struct = pd.parsePDB(self.inputStruct.get().getFileName(), subset=self._subset[self.atomSubset.get()],
+        #                         compressed=False)
+        # pdb_coordinates = pd_struct.getCoords()
+        # values = pd_struct.getBetas()
+        # pdb_coordinates = np.c_[pdb_coordinates, values]
+        # # pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
+        # # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
+        # np.savetxt(structure, pdb_coordinates)
+
+        parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
+        pdb_coordinates, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+        values = np.ones(pdb_coordinates.shape[0])
         pdb_coordinates = np.c_[pdb_coordinates, values]
-        # pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
-        # pdb_coordinates = np.array(self.PDB2List(pdb_lines))
-        np.savetxt(structure, pdb_coordinates)
+        np.savetxt(structure_file, pdb_coordinates)
+        np.savetxt(connect_file, connectivity)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -229,13 +250,17 @@ class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
+        multires = self.multires.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        angleReg = self.angleReg.get()
+        bondReg = self.bondReg.get()
         args = "--md_file %s --out_path %s --n_modes %d --batch_size %d " \
-               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
+               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f " \
+               "--multires %s --angle_reg %f --bond_reg %f" \
                % (md_file, out_path, n_modes, batch_size, split_train, pad, sr,
-                  applyCTF, lr)
+                  applyCTF, lr, multires, angleReg, bondReg)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
