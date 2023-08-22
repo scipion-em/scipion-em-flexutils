@@ -83,7 +83,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
         group = form.addGroup("Refinement workflow parameters")
-        group.addParam('refString', params.StringParam, default="100m,100p",
+        group.addParam('refString', params.StringParam, default="20m,20p",
                        label='Refinement workflow',
                        help='Refinement workflow determining the training strategy for HomoSIREN. Each refinement '
                             'step is composed by a number (optional - number of epochs for this step) followed by a '
@@ -145,7 +145,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
