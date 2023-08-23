@@ -237,7 +237,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             else:
                 vol = VolumeFlex(progName=const.ZERNIKE3D)
                 vol.setSamplingRate(volumes.getSamplingRate())
-                vol.setFileName(self._getExtraPath("deformed_volume.mrc"))
+                vol.setFileName(self._getExtraPath("deformed_volume_0.mrc"))
                 vol.getFlexInfo().L1 = L1
                 vol.getFlexInfo().L2 = L2
                 vol.getFlexInfo().Rmax = Rmax
