@@ -80,32 +80,36 @@ def compute_Strain_Rotation(Gx, Gy, Gz, indices):
         jm2 = j - 2
         jp2 = j + 2
 
-        U[0, 0], U[0, 1], U[0, 2] = Dx(Gx), Dy(Gx), Dz(Gx)
-        U[1, 0], U[1, 1], U[1, 2] = Dx(Gy), Dy(Gy), Dz(Gy)
-        U[2, 0], U[2, 1], U[2, 2] = Dx(Gz), Dy(Gz), Dz(Gz)
+        if jp2 < boxsize and jm2 >= 0 and \
+           ip2 < boxsize and im2 >= 0 and \
+           kp2 < boxsize and km2 >= 0:
 
-        D[0, 0] = U[0, 0]
-        D[0, 1] = D[1, 0] = 0.5 * (U[0, 1] + U[1, 0])
-        D[0, 2] = D[2, 0] = 0.5 * (U[0, 2] + U[2, 0])
-        D[1, 1] = U[1, 1]
-        D[1, 2] = D[2, 1] = 0.5 * (U[1, 2] + U[2, 1])
-        D[2, 2] = U[2, 2]
+            U[0, 0], U[0, 1], U[0, 2] = Dx(Gx), Dy(Gx), Dz(Gx)
+            U[1, 0], U[1, 1], U[1, 2] = Dx(Gy), Dy(Gy), Dz(Gy)
+            U[2, 0], U[2, 1], U[2, 2] = Dx(Gz), Dy(Gz), Dz(Gz)
 
-        H[0, 1] = 0.5 * (U[0, 1] - U[1, 0])
-        H[0, 2] = 0.5 * (U[0, 2] - U[2, 0])
-        H[1, 2] = 0.5 * (U[1, 2] - U[2, 1])
-        H[1, 0] = -H[0, 1]
-        H[2, 0] = -H[0, 2]
-        H[2, 1] = -H[1, 2]
+            D[0, 0] = U[0, 0]
+            D[0, 1] = D[1, 0] = 0.5 * (U[0, 1] + U[1, 0])
+            D[0, 2] = D[2, 0] = 0.5 * (U[0, 2] + U[2, 0])
+            D[1, 1] = U[1, 1]
+            D[1, 2] = D[2, 1] = 0.5 * (U[1, 2] + U[2, 1])
+            D[2, 2] = U[2, 2]
 
-        LS[k, i, j] += np.abs(np.linalg.det(D))
+            H[0, 1] = 0.5 * (U[0, 1] - U[1, 0])
+            H[0, 2] = 0.5 * (U[0, 2] - U[2, 0])
+            H[1, 2] = 0.5 * (U[1, 2] - U[2, 1])
+            H[1, 0] = -H[0, 1]
+            H[2, 0] = -H[0, 2]
+            H[2, 1] = -H[1, 2]
 
-        eigs, _ = np.linalg.eig(H.astype(np.complex128))
-        for n in range(eigs.size):
-            imagabs = np.abs(eigs[n].imag)
-            if imagabs > 1e-6:
-                LR[k, i, j] += imagabs * 180 / np.pi
-                break
+            LS[k, i, j] += np.abs(np.linalg.det(D))
+
+            eigs, _ = np.linalg.eig(H.astype(np.complex128))
+            for n in range(eigs.size):
+                imagabs = np.abs(eigs[n].imag)
+                if imagabs > 1e-6:
+                    LR[k, i, j] += imagabs * 180 / np.pi
+                    break
 
     return LS, LR
 
