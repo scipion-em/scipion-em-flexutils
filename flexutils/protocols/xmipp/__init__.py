@@ -44,7 +44,7 @@ from .protocol_apply_field_nma import XmippApplyFieldNMA
 with weakImport("xmipp3.base"):
     from .protocol_resize_zernike_data import XmippProtCropResizeZernikeParticles, XmippProtCropResizeZernikeVolumes
 
-# from .protocol_deform_map_zernike3d import XmippProtVolumeDeformZernike3D
+from .protocol_deform_map_zernike3d import ProtFlexVolumeDeformZernike3D
 # from .protocol_structure_map_zernike3d import XmippProtStructureMapZernike3D
 
 from .protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
