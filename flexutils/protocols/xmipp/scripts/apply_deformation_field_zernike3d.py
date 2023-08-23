@@ -80,7 +80,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
 
     # Apply deformation field
     if mode == "volume":
-        indices_moved = (indices + d_f).astype(int)
+        indices_moved = np.round(indices + d_f).astype(int)
 
         # Scatter in volume
         def_vol = np.zeros((boxsize, boxsize, boxsize))
