@@ -145,7 +145,7 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
         inputVolume = self.inputVolume.get()
         xDim = inputVolume.getXDim()
         sr_i = inputVolume.getSamplingRate()
-        newXDim = self.boxsize.get()
+        newXDim = self.boxSize.get()
         fnOutVol = self._getFileName('fnOutVol')
         if newXDim != xDim:
             ImageHandler().scaleSplines(inputFn=fnOutVol, outputFn=fnOutVol,
@@ -156,7 +156,7 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
     def createOutputStep(self):
         inputVolume = self.inputVolume.get()
         xDim = inputVolume.getXDim()
-        newXDim = self.boxsize.get()
+        newXDim = self.boxSize.get()
         sr_i = inputVolume.getSamplingRate()
         basis_params, z_clnm = readZernikeFile(self._getExtraPath('Volumes_clnm.txt'))
         z_clnm *= xDim / newXDim
