@@ -35,6 +35,8 @@ from pwem.objects import Volume
 from pyworkflow import VERSION_2_0
 from pyworkflow.object import Integer, String
 
+import xmipp3
+
 from flexutils.objects import VolumeFlex
 from flexutils.utils import readZernikeFile
 import flexutils.constants as const
@@ -135,11 +137,11 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
                   self._getExtraPath('Volumes'), self.penalization.get())
 
         if self.useGpu.get():
-            self.runJob("xmipp_cuda_volume_deform_sph", params)
+            self.runJob("xmipp_cuda_volume_deform_sph", params, env=xmipp3.Plugin.getEnviron())
         else:
             if self.numberOfThreads.get() != 0:
                 params = params + ' --thr %d' % self.numberOfThreads.get()
-            self.runJob("xmipp_volume_deform_sph", params)
+            self.runJob("xmipp_volume_deform_sph", params, env=xmipp3.Plugin.getEnviron())
 
     def convertOutputStep(self):
         inputVolume = self.inputVolume.get()
@@ -194,21 +196,21 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
 
         # Filter the volumes to improve alignment quality
         params = " -i %s -o %s --fourier real_gaussian 2" % (fnInputVol, fnInputFilt)
-        self.runJob("xmipp_transform_filter", params)
+        self.runJob("xmipp_transform_filter", params, env=xmipp3.Plugin.getEnviron())
         params = " -i %s -o %s --fourier real_gaussian 2" % (fnRefVol, fnRefFilt)
-        self.runJob("xmipp_transform_filter", params)
+        self.runJob("xmipp_transform_filter", params, env=xmipp3.Plugin.getEnviron())
 
         # Find transformation needed to align the volumes
         params = ' --i1 %s --i2 %s --local --dontScale ' \
                  '--copyGeo %s' % \
                  (fnRefFilt, fnInputFilt, self._getExtraPath("geo.txt"))
-        self.runJob("xmipp_volume_align", params)
+        self.runJob("xmipp_volume_align", params, env=xmipp3.Plugin.getEnviron())
 
         # Apply transformation of filtered volume to original volume
         with open(self._getExtraPath("geo.txt"), 'r') as file:
             geo_str = file.read().replace('\n', ',')
         params = " -i %s -o %s --matrix %s" % (fnInputVol, fnOutVol, geo_str)
-        self.runJob("xmipp_transform_geometry", params)
+        self.runJob("xmipp_transform_geometry", params, env=xmipp3.Plugin.getEnviron())
 
     # ------------------------- VALIDATE functions -----------------------------
     def validate(self):
