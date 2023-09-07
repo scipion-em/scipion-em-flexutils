@@ -113,7 +113,7 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda env remove -n flexutils && mamba env create -f ' + CONDA_YML + " && "
+            installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
             installationCmd += "conda activate flexutils && "
             installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
             installationCmd += "touch flexutils_installed"
