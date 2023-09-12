@@ -55,7 +55,7 @@ def computeNewDeformationField(row, Z, Zpp, Ap):
     z_clnm = utl.resizeZernikeCoefficients(App)
     outRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm.tolist())
 
-    # For evaluation (debuggin purposes)
+    # For evaluation (debugging purposes)
     d = Zpp @ App.T
 
     # Compute mean deformation
