@@ -97,8 +97,8 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             z_clnm_file = self._getExtraPath("z_clnm_{0}.txt".format(i_pad))
             z_clnm = volume.getZFlex()
 
-            if self.applyPDB.get():
-                z_clnm *= volume.getSamplingRate()
+            # if self.applyPDB.get():
+            #     z_clnm *= volume.getSamplingRate()
 
             z_clnm = np.char.mod('%f', z_clnm)
             z_clnm = ",".join(z_clnm)
@@ -223,7 +223,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             z_clnm = volumes.getZFlex()
 
             if self.applyPDB.get():
-                outFile = pwutils.removeBaseExt(self.inputPDB.get().getFileName()) + '_deformed.pdb'
+                outFile = pwutils.removeBaseExt(self.inputPDB.get().getFileName()) + '_deformed_0.pdb'
                 pdb = AtomStructFlex(filename=self._getExtraPath(outFile), progName=const.ZERNIKE3D)
                 pdb.getFlexInfo().L1 = L1
                 pdb.getFlexInfo().L2 = L2
@@ -302,7 +302,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
         L1 = volume.getFlexInfo().L1.get()
         L2 = volume.getFlexInfo().L2.get()
         Rmax = int(0.5 * volume.getXDim())
-        Rmax = volume.getSamplingRate() * Rmax if self.applyPDB.get() else Rmax
+        # Rmax = volume.getSamplingRate() * Rmax if self.applyPDB.get() else Rmax
         with open(file, 'w') as fid:
             fid.write(' '.join(map(str, [L1, L2, Rmax])) + "\n")
             fid.write(z_clnm.replace(",", " ") + "\n")

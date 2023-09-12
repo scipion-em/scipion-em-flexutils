@@ -26,7 +26,8 @@
 # *
 # **************************************************************************
 
-import numpy as np
+
+import os
 from xmipp_metadata.image_handler import ImageHandler
 
 from pwem.protocols import ProtAnalysis3D
@@ -40,6 +41,7 @@ import xmipp3
 from flexutils.objects import VolumeFlex
 from flexutils.utils import readZernikeFile
 import flexutils.constants as const
+import flexutils
 
 
 class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
@@ -114,13 +116,13 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
         newXdim = self.boxSize.get()
 
         ih = ImageHandler()
-        ih.convert(self.refVolume.get().getFileName(), fnInputVol)
+        ih.convert(self.inputVolume.get().getFileName(), fnInputVol)
         if XdimI != newXdim:
             ImageHandler().scaleSplines(inputFn=fnInputVol, outputFn=fnInputVol, finalDimension=newXdim,
                                         overwrite=True)
 
 
-        ih.convert(self.inputVolume.get().getFileName(), fnRefVol)
+        ih.convert(self.refVolume.get().getFileName(), fnRefVol)
         if XdimR != newXdim:
             ImageHandler().scaleSplines(inputFn=fnRefVol, outputFn=fnRefVol, finalDimension=newXdim,
                                         overwrite=True)
@@ -129,8 +131,16 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
     def deformStep(self):
         fnRefVol = self._getFileName('fnRefVol')
         fnOutVol = self._getFileName('fnOutVol')
+        fnRefMask = self._getExtraPath("ref_mask.mrc")
+        fnOutMask = self._getExtraPath("ref_mask.mrc")
+        fnZclnm = self._getExtraPath('Volumes_clnm.txt')
 
         self.alignMaps()
+
+        mask_input = ImageHandler(fnOutVol).generateMask(iterations=50, boxsize=64, smoothStairEdges=False)
+        ImageHandler().write(mask_input, fnOutMask, overwrite=True)
+        mask_reference = ImageHandler(fnOutVol).generateMask(iterations=50, boxsize=64, smoothStairEdges=False)
+        ImageHandler().write(mask_reference, fnRefMask, overwrite=True)
 
         params = ' -i %s -r %s -o %s --analyzeStrain --l1 %d --l2 %d --sigma "%s" --oroot %s --regularization %f' % \
                  (fnOutVol, fnRefVol, fnOutVol, self.l1.get(), self.l2.get(), self.sigma.get(),
@@ -142,6 +152,13 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
             if self.numberOfThreads.get() != 0:
                 params = params + ' --thr %d' % self.numberOfThreads.get()
             self.runJob("xmipp_volume_deform_sph", params, env=xmipp3.Plugin.getEnviron())
+
+        # Invert deformation field
+        args = "--i %s --r %s --z_clnm %s --o %s" % \
+               (fnRefMask, fnOutMask, fnZclnm, fnZclnm)
+        program = os.path.join(const.XMIPP_SCRIPTS, "invert_zernike_field.py")
+        program = flexutils.Plugin.getProgram(program)
+        self.runJob(program, args)
 
     def convertOutputStep(self):
         inputVolume = self.inputVolume.get()
@@ -163,9 +180,10 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
         basis_params, z_clnm = readZernikeFile(self._getExtraPath('Volumes_clnm.txt'))
         z_clnm *= xDim / newXDim
 
-        # Create circular mask
-        zernike_mask = self._getExtraPath("zernike_sphere.mrc")
-        ImageHandler().createCircularMask(zernike_mask, boxSize=xDim)
+        # Create input map mask
+        zernike_mask = self._getExtraPath("zernike_mask.mrc")
+        mask_input = ImageHandler(inputVolume.getFileName()).generateMask(iterations=50, boxsize=64, smoothStairEdges=False)
+        ImageHandler().write(mask_input, zernike_mask, overwrite=True)
 
         # Deformed volume
         out_vol = Volume()
