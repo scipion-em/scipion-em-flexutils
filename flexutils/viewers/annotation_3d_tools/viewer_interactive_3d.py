@@ -156,7 +156,10 @@ class Annotate3D(object):
                                                           blending="additive", name="Landscape")
         points_layer.editable = False
 
-        boxsize = int(self.class_inputs["boxsize"])
+        if "boxsize" in self.class_inputs.keys():
+            boxsize = int(self.class_inputs["boxsize"])
+        else:
+            boxsize = 64
         dummy_vol = np.zeros((boxsize, boxsize, boxsize))
         self.dock_widget.viewer_model1.add_image(dummy_vol, name="Map", rendering="iso")
 
