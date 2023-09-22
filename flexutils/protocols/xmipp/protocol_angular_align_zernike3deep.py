@@ -47,7 +47,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName, coordsToMap, saveMap
 
 
@@ -68,7 +68,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         group = form.addGroup("Data")
-        group.addParam('inputParticles', params.PointerParam, label="Input particles", pointerClass='SetOfParticles')
+        group.addParam('inputParticles', params.PointerParam, label="Input particles",
+                       pointerClass='SetOfParticles,SetOfParticlesFlex')
         group.addParam('referenceType', params.EnumParam, choices=['Volume', 'Structure'],
                        default=0, label="Reference type", display=params.EnumParam.DISPLAY_HLIST,
                        help="Determine which type of reference will be used to compute the motions. "
@@ -173,13 +174,17 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "this parameter to True followed by a restart of this protocol to generate a more "
                             "informative logging file.")
         form.addSection(label='Cost function')
-        form.addParam('costFunction', params.EnumParam, choices=['Correlation', 'Fourier Phase Correlation'],
+        form.addParam('costFunction', params.EnumParam,
+                      choices=['Correlation', 'Fourier Phase Correlation', 'MSE', 'MAE'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
                       help="Determine the cost function to be minimized during the neural network training. Both, "
                            "Correlation and Fourier Phase Correlation will yield similar results. However, Fourier "
                            "Shell Correlation allows excluding high frequency information by masking in the Fourier "
                            "space. This might help preveting overfitting in scenarios with low Signal to Noise ratios "
-                           "at the expense of slightly increasing computation time.")
+                           "at the expense of slightly increasing computation time. MSE and MAE focuses more on "
+                           "voxel/pixel values, which might lead to more accurate results (although it may result in "
+                           "overfitting). Compared to MSE, MAE will give a lower weight to unwanted values, so it "
+                           "might be a little more robust results when SNR is low.")
         form.addParam('maskRadius', params.FloatParam, default=0.85, label="Mask radius (%)",
                       condition="costFunction==1",
                       help="Determine the radius (in percentage) of the circular mask to be applied to the Fourier "
@@ -216,6 +221,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
         structure = self._getFileName('fnStruct')
+        md_file = self._getFileName('imgsFn')
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
@@ -242,7 +248,19 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
             np.savetxt(structure, pdb_coordinates)
 
+        # Write particles
         writeSetOfParticles(inputParticles, imgsFn)
+
+        # Write extra attributes (if needed)
+        md = XmippMetaData(md_file)
+        if isinstance(inputParticles, SetOfParticlesFlex) and \
+            inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
+            md[:, "zernikeCoefficients"] = (Xdim / self.newXdim) * z_space
+        if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
+            labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
+            md[:, "subtomo_labels"] = labels
+        md.write(md_file, overwrite=True)
 
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
@@ -292,6 +310,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --cost fpc --radius_mask %f" % self.maskRadius.get()
             if self.smoothMask.get():
                 args += " --smooth_mask"
+        elif self.costFunction.get() == 2:
+            args += " --cost mse"
+        elif self.costFunction.get() == 3:
+            args += " --cost mae"
 
         if self.refinePose.get():
             args += " --refine_pose"

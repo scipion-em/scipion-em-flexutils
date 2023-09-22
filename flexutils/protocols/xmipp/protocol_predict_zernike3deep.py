@@ -47,7 +47,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -110,6 +110,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
         structure = self._getFileName('fnStruct')
+        md_file = self._getFileName('imgsFn')
 
         inputParticles = self.inputParticles.get()
         zernikeProtocol = self.zernikeProtocol.get()
@@ -138,6 +139,17 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             np.savetxt(structure, pdb_coordinates)
 
         writeSetOfParticles(inputParticles, imgsFn)
+
+        # Write extra attributes (if needed)
+        md = XmippMetaData(md_file)
+        if isinstance(inputParticles, SetOfParticlesFlex) and \
+                inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
+            md[:, "zernikeCoefficients"] = (Xdim / self.newXdim) * z_space
+        if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
+            labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
+            md[:, "subtomo_labels"] = labels
+        md.write(md_file, overwrite=True)
 
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
