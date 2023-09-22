@@ -38,6 +38,7 @@ from .protocol_structure_landscape import XmippProtStructureLanscapes
 from .protocol_cluster_structures_zernike3d import XmippProtClusterStructuresZernike3D
 from .protocol_apply_field_zernike3d import XmippApplyFieldZernike3D
 from .protocol_apply_field_nma import XmippApplyFieldNMA
+from .protocol_prepare_volumes_zernike3deep import XmippProtPrepareZernikeVolumes
 
 # Weak imports to avoid library incompatibilities in viewers due to Xmipp environment (this avoids loading
 # the Xmipp env and the Scipion libraries that interfere with flexutils ones)
