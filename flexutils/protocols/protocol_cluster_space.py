@@ -34,7 +34,7 @@ from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-from pyworkflow.object import Boolean
+from pyworkflow.object import Boolean, Integer
 
 from pwem.protocols import ProtAnalysis3D
 
@@ -176,6 +176,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
             enabledClass.enableAppend()
             for itemId in currIds:
                 item = particles[partIds[itemId]]
+                item._xmipp_subtomo_labels = Integer(clInx + 1)
                 enabledClass.append(item)
 
             flexClasses.update(enabledClass)
