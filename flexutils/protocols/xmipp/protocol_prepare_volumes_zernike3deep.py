@@ -42,6 +42,7 @@ from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
 # External plugin imports
+import xmipp3
 from xmipp3.convert import readSetOfImages, rowToParticle
 from flexutils.protocols import ProtFlexBase
 
@@ -177,7 +178,7 @@ class XmippProtPrepareZernikeVolumes(ProtAnalysis3D, ProtFlexBase):
         params += ' -o {}'.format(self.getProjectionAbsolutePath(volume))  # Path to output projection
         params += ' --method {}'.format(self.getMethodValue())             # Projection algorithm
         params += ' --params {}'.format(self.getXmippParamPath())          # Path to Xmipp phantom param file
-        self.runJob("xmipp_phantom_project", params, cwd='/home')
+        self.runJob("xmipp_phantom_project", params, cwd='/home', env=xmipp3.Plugin.getEnviron())
 
     def removeTempFiles(self):
         """
