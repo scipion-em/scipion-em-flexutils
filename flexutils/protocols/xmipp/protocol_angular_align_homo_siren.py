@@ -149,6 +149,10 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('xla', params.BooleanParam, default=True, label="Allow XLA compilation?",
+                       help="When XLA compilation is allowed, extra optimizations are applied during neural network "
+                            "training increasing the training performance. However, XLA will only work with compatible "
+                            "GPUs. If any error is experienced, set to No.")
         group = form.addGroup("Extra network parameters")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
@@ -278,6 +282,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d --refine_pose " \
                "--sr %f --apply_ctf %d --step %d --l1_reg %f --lr %f --multires %s " \
@@ -313,6 +318,9 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'homo_siren_model.h5'))
             args += " --weigths_file %s" % modelPath
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

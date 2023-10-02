@@ -154,6 +154,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('xla', params.BooleanParam, default=True, label="Allow XLA compilation?",
+                       help="When XLA compilation is allowed, extra optimizations are applied during neural network "
+                            "training increasing the training performance. However, XLA will only work with compatible "
+                            "GPUs. If any error is experienced, set to No.")
         group = form.addGroup("Extra network parameters")
         group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
                        help="If True, the neural network will be also trained to refine the angular "
@@ -289,6 +293,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
                "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
                % (md_file, out_path, L1, L2, batch_size, split_train, pad, sr,
@@ -327,6 +332,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type apply"
         elif self.ctfType.get() == 1:
             args += " --ctf_type wiener"
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

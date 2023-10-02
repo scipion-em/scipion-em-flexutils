@@ -142,6 +142,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('xla', params.BooleanParam, default=True, label="Allow XLA compilation?",
+                       help="When XLA compilation is allowed, extra optimizations are applied during neural network "
+                            "training increasing the training performance. However, XLA will only work with compatible "
+                            "GPUs. If any error is experienced, set to No.")
         group = form.addGroup("Extra network parameters")
         group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
                        help="If True, the neural network will be also trained to refine the angular "
@@ -282,6 +286,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d " \
                "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d --lr %f" \
@@ -319,6 +324,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
             args += " --weigths_file %s" % modelPath
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -362,6 +370,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.filterDecoded.get():
             args += " --apply_filter"
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

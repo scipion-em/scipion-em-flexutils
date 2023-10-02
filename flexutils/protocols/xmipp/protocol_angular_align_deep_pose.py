@@ -139,6 +139,10 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
+        group.addParam('xla', params.BooleanParam, default=True, label="Allow XLA compilation?",
+                       help="When XLA compilation is allowed, extra optimizations are applied during neural network "
+                            "training increasing the training performance. However, XLA will only work with compatible "
+                            "GPUs. If any error is experienced, set to No.")
         group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
@@ -261,6 +265,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d " \
                "--sr %f --apply_ctf %d --lr %f --multires %s" \
@@ -297,6 +302,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'deep_pose_model.h5'))
             args += " --weigths_file %s" % modelPath
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
