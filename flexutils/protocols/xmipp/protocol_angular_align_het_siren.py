@@ -351,6 +351,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
                "--apply_ctf %d --het_dim %d --num_vol %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol)

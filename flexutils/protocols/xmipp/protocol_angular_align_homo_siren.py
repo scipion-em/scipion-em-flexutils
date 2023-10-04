@@ -343,6 +343,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
         args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
                "--apply_ctf %d" \
                % (md_file, weigths_file, pad, sr, applyCTF)
@@ -359,6 +360,9 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
 
         if self.filterDecoded.get():
             args += " --apply_filter"
+
+        if xla:
+            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
