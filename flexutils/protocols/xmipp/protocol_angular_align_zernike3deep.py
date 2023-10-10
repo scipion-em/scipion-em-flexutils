@@ -359,7 +359,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
-        xla = self.xla.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d --pad %d --sr %f " \
                "--apply_ctf %d" \
                % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
@@ -376,9 +375,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
-
-        if xla:
-            args += " --jit_compile"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
