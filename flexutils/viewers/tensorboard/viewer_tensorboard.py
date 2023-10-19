@@ -29,14 +29,13 @@ import os
 from pathos.multiprocessing import ProcessingPool as Pool
 import subprocess
 
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, Viewer
+from pyworkflow.viewer import Viewer
 from pyworkflow.utils.process import buildRunCommand
 
 from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
 from flexutils.protocols.xmipp.protocol_angular_align_deep_pose import TensorflowProtAngularAlignmentDeepPose
 from flexutils.protocols.xmipp.protocol_angular_align_homo_siren import TensorflowProtAngularAlignmentHomoSiren
-from flexutils.protocols.xmipp.protocol_angular_align_deep_nma import TensorflowProtAngularAlignmentDeepNMA
 
 import flexutils.constants as const
 import flexutils
@@ -48,8 +47,7 @@ class TensorboardViewer(Viewer):
     _targets = [TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtAngularAlignmentHetSiren,
                 TensorflowProtAngularAlignmentDeepPose,
-                TensorflowProtAngularAlignmentHomoSiren,
-                TensorflowProtAngularAlignmentDeepNMA]
+                TensorflowProtAngularAlignmentHomoSiren]
 
     def __init__(self, **kwargs):
         Viewer.__init__(self, **kwargs)
