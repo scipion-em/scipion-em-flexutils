@@ -122,9 +122,9 @@ class Plugin(pwplugin.Plugin):
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
             installationCmd = f"{conda_init} conda activate flexutils && " \
-                              f"pip install -e " \
-                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@tf_datasets#egg=flexutils-toolkit" \
-                              f" -v && "
+                              f"git clone -b new_installation  https://github.com/I2PC/Flexutils-Toolkit.git && " \
+                              f"cd Flexutils-Toolkit && " \
+                              f"bash install.sh && cd .. && "
             installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
 
