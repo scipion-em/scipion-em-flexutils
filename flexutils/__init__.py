@@ -33,6 +33,8 @@ import importlib
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
+from pwem import Config as emConfig
+
 import flexutils
 from flexutils.constants import CONDA_YML
 
@@ -128,11 +130,32 @@ class Plugin(pwplugin.Plugin):
             installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
 
+        def getUpdateCommands():
+            conda_init = cls.getCondaActivationCmd()
+            updateCmd = f"{conda_init} conda activate flexutils && "
+            updateCmd += "echo '###### Updating NN binaries.... ######' && "
+            updateCmd += "cd Flexutils-Toolkit && "
+            updateCmd += "git pull && "
+            updateCmd += "bash install.sh && "
+            updateCmd += "cd .. && "
+            updateCmd += "echo '###### Binaries updated succesfully! ######' && "
+            updateCmd += "touch flexutils_tensorflow_updated"
+            return updateCmd
+
+        binary_path = os.path.join(emConfig.EM_ROOT, f'flexutils-{__version__}')
         commands = []
-        installationEnv = getCondaInstallationFlexutils()
-        installationTensorflow = getCondaInstallationTensorflow()
-        commands.append((installationEnv, ["flexutils_installed"]))
-        commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
+
+        if not os.path.isfile(os.path.join(binary_path, "flexutils_installed")):
+            installationEnv = getCondaInstallationFlexutils()
+            commands.append((installationEnv, ["flexutils_installed"]))
+
+        if not os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_installed")):
+            installationTensorflow = getCondaInstallationTensorflow()
+            commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
+
+        if os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_updated")):
+            os.remove(os.path.join(binary_path, "flexutils_tensorflow_updated"))
+        commands.append((getUpdateCommands(), ["flexutils_tensorflow_updated"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,
