@@ -327,10 +327,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --step %d --sr %f --mode HetSIREN" \
+                   "--weights %s --step %d --architecture %s --sr %f --mode HetSIREN" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
+                      particles.getFlexInfo().architecture.get(),
                       particles.getSamplingRate())
 
         elif particles.getFlexInfo().getProgName() == const.NMA:

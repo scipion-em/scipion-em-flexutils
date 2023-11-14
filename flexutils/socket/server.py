@@ -91,7 +91,25 @@ class Server:
 
     def prepareMapGeneration(self):
         if self.mode == "Zernike3D":
-            pass
+            import flexutils.protocols.xmipp.utils.utils as utl
+            from xmipp_metadata.image_handler import ImageHandler
+            mask = ImageHandler(self.metadata["mask"]).getData()
+            volume = ImageHandler(self.metadata["volume"]).getData()
+            indices = np.asarray(np.where(mask > 0))
+            self.indices = np.transpose(np.asarray([indices[2, :], indices[1, :], indices[0, :]]))
+            coords = self.indices - 0.5 * self.metadata["boxSize"]
+            groups = mask[self.indices[:, 2], self.indices[:, 1], self.indices[:, 0]]
+            self.values = volume[self.indices[:, 2], self.indices[:, 1], self.indices[:, 0]]
+            self.outPath = os.path.join(self.metadata["outdir"], "deformed.mrc")
+            if np.unique(groups).size > 1:
+                centers = []
+                for group in np.unique(groups):
+                    centers.append(np.mean(coords[groups == group], axis=0))
+                centers = np.asarray(centers)
+            else:
+                groups, centers = None, None
+            self.Z = utl.computeBasis(L1=int(self.metadata["L1"]), L2=int(self.metadata["L2"]),
+                                      pos=coords, r=0.5 * self.metadata["boxSize"], groups=groups, centers=centers)
         elif self.mode == "CryoDrgn":
             import torch
             from cryodrgn.models import HetOnlyVAE
@@ -160,7 +178,25 @@ class Server:
         z = pickle.loads(z)
 
         if self.mode == "Zernike3D":
-            pass
+            import flexutils.protocols.xmipp.utils.utils as utl
+            from xmipp_metadata.image_handler import ImageHandler
+            from scipy.ndimage import gaussian_filter
+            for zz in z:
+                A = utl.resizeZernikeCoefficients(zz)
+                d_f = self.Z @ A.T
+                indices_moved = np.round(self.indices + d_f).astype(int)
+
+                # Scatter in volume
+                boxsize = int(self.metadata["boxSize"])
+                def_vol = np.zeros((boxsize, boxsize, boxsize))
+                indices_moved = np.clip(indices_moved, 0, boxsize - 1)
+                def_vol[indices_moved[:, 2], indices_moved[:, 1], indices_moved[:, 0]] += self.values
+
+                # Gaussian filter map
+                def_vol = gaussian_filter(def_vol, sigma=1.0)
+
+                # Save results
+                ImageHandler().write(def_vol, filename=self.outPath, overwrite=True)
         elif self.mode == "CryoDrgn":
             from cryodrgn.mrc import write
             for zz in z:

@@ -250,7 +250,27 @@ class Annotate3D(object):
         self.thread_chimerax = None
 
         # Volume generation socket
-        if self.mode == "CryoDrgn":
+        if self.mode == "Zernike3D":
+            flexutils.Plugin._defineVariables()
+            metadata = {"mask": os.path.join(self.path, "mask_reference_original.mrc"),
+                        "volume": os.path.join(self.path, "reference_original.mrc"),
+                        "L1": self.class_inputs["L1"],
+                        "L2": self.class_inputs["L2"],
+                        "boxSize": ImageHandler(os.path.join(self.path, "reference_original.mrc")).getDimensions()[-1],
+                        "outdir": self.path}
+            program = flexutils.Plugin.getProgram(os.path.join(flexutils.__path__[0],
+                                                               "socket", "server.py"), python=True)
+            env = flexutils.Plugin.getEnviron()
+        elif self.mode == "HetSIREN":
+            flexutils.Plugin._defineVariables()
+            metadata = {"weights": self.class_inputs["weights"],
+                        "lat_dim": self.z_space.shape[1],
+                        "architecture": self.class_inputs["architecture"],
+                        "outdir": self.path}
+            program = flexutils.Plugin.getTensorflowProgram(os.path.join(flexutils.__path__[0],
+                                                                         "socket", "server.py"), python=True)
+            env = flexutils.Plugin.getEnviron()
+        elif self.mode == "CryoDrgn":
             import cryodrgn
             cryodrgn.Plugin._defineVariables()
             metadata = {"weights": self.class_inputs["weights"],
