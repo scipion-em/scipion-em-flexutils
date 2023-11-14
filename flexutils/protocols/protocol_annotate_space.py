@@ -27,6 +27,7 @@
 
 import os
 import numpy as np
+from glob import glob
 from sklearn.neighbors import KDTree
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -72,13 +73,6 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN'",
                       help="Volumes generated from the CryoDrgn network will be resampled to the "
                            "chosen box size (only for the visualization).")
-        form.addParam("viewer3D", EnumParam, label="Select viewing tool",
-                      condition="particles and particles.getFirstItem().getZRed().size == 3",
-                      choices=["Annotation 3D", "Annotation Hybrid"], default=0, display=EnumParam.DISPLAY_HLIST,
-                      help="* Annotation 3D provides a 3D intraface for the annotation of conformational "
-                           "landscapes based on point clouds\n"
-                           "* Annotation Hybrid provides a 2D+3D interface for annotation of conformational "
-                           "landscapes based on particle densities")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
 
@@ -107,93 +101,112 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             from flexutils.objects import VolumeFlex as Rep
             from flexutils.objects import SetOfClassesFlex as SetOfClasses
 
-        # Read selected coefficients
-        z_space_vw = []
-        with open(self._getExtraPath('saved_selections.txt')) as f:
-            lines = f.readlines()
-            for line in lines:
-                z_space_vw.append(np.fromstring(line, dtype=float, sep=' '))
-        z_space_vw = np.asarray(z_space_vw[self.num_vol:])
-
-        # Read space
-        z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
-
-        # Create KDTree
-        kdtree = KDTree(z_space)
-
         # Create SetOfFlexClasses
         suffix = getOutputSuffix(self, SetOfClasses)
         flexClasses = createFn(particles, suffix, progName=progName)
 
-        # Popoulate SetOfClasses3D with KMean particles
-        for clInx in range(z_space_vw.shape[0]):
-            _, currIds = kdtree.query(z_space_vw[clInx].reshape(1, -1), k=neighbors+10)
-            currIds = currIds[0]
+        # Read selected coefficients
+        clInx = 1
+        for file in glob(self._getExtraPath('saved_selections*')):
+            z_space_vw = []
+            with open(file) as f:
+                lines = f.readlines()
+                for line in lines:
+                    z_space_vw.append(np.fromstring(line, dtype=float, sep=' '))
+            z_space_vw = np.asarray(z_space_vw)
+            # z_space_vw = np.asarray(z_space_vw[self.num_vol:])
 
-            newClass = Class()
-            newClass.copyInfo(particles)
-            newClass.setHasCTF(particles.hasCTF())
-            newClass.setAcquisition(particles.getAcquisition())
-            representative = Rep(progName=progName)
-            if hasattr(representative, "setSamplingRate"):
-                representative.setSamplingRate(sr)
+            if "_cluster" in file:
+                # Read space
+                z_space = z_space_vw[1:]
+                z_space_vw = z_space_vw[0][None, ...]
+            else:
+                # Read space
+                z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
 
-            # ****** Fill representative information *******
-            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-                reference = particles.getFlexInfo().refMap.get()
+                # Create KDTree
+                kdtree = KDTree(z_space)
 
-                # Resize coefficients
-                factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
-                z_space_vw[clInx] *= factor
+            # Popoulate SetOfClasses3D with KMean particles
+            for z_idx in range(z_space_vw.shape[0]):
+                if "_cluster" in file:
+                    currIds = range(z_space.shape[0])
+                else:
+                    _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
+                    currIds = currIds[0]
 
-                representative.setLocation(reference)
+                newClass = Class()
+                newClass.copyInfo(particles)
+                newClass.setHasCTF(particles.hasCTF())
+                newClass.setAcquisition(particles.getAcquisition())
+                representative = Rep(progName=progName)
+                if hasattr(representative, "setSamplingRate"):
+                    representative.setSamplingRate(sr)
 
-            elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-                from cryodrgn.utils import generateVolumes
-                generateVolumes(z_space_vw[clInx], particles.getFlexInfo()._cryodrgnWeights.get(),
-                                particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
-                                downsample=self.boxSize.get(), apix=particles.getSamplingRate())
-                ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx,
-                                            finalDimension=particles.getXDim(), overwrite=True)
-                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                # ****** Fill representative information *******
+                if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                    reference = particles.getFlexInfo().refMap.get()
 
-            elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-                from flexutils.utils import generateVolumesHetSIREN
-                generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
-                                        self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
-                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_01.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx,
-                                            finalDimension=particles.getXDim(), overwrite=True)
-                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                    # Resize coefficients
+                    factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
+                    z_space_vw[z_idx] *= factor
 
-            elif particles.getFlexInfo().getProgName() == const.NMA:
-                reference = particles.getFlexInfo().refStruct.get()
-                subset = particles.getFlexInfo().atomSubset
+                    representative.setLocation(reference)
 
-                representative.getFlexInfo().atomSubset = subset
-                representative.setLocation(reference)
+                elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+                    from cryodrgn.utils import generateVolumes
+                    generateVolumes(z_space_vw[z_idx], particles.getFlexInfo()._cryodrgnWeights.get(),
+                                    particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
+                                    downsample=self.boxSize.get(), apix=particles.getSamplingRate())
+                    ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
+                                                self._getExtraPath('class_%d.mrc') % clInx,
+                                                finalDimension=particles.getXDim(), overwrite=True)
+                    representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
-            representative.setZFlex(z_space_vw[clInx])
-            representative.getFlexInfo().copyInfo(particles.getFlexInfo())
-            # ********************
+                elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                    from flexutils.utils import generateVolumesHetSIREN
+                    generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[z_idx],
+                                            self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
+                    ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_01.mrc'),
+                                                self._getExtraPath('class_%d.mrc') % clInx,
+                                                finalDimension=particles.getXDim(), overwrite=True)
+                    representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
 
-            newClass.setRepresentative(representative)
+                elif particles.getFlexInfo().getProgName() == const.NMA:
+                    reference = particles.getFlexInfo().refStruct.get()
+                    subset = particles.getFlexInfo().atomSubset
 
-            flexClasses.append(newClass)
+                    representative.getFlexInfo().atomSubset = subset
+                    representative.setLocation(reference)
 
-            enabledClass = flexClasses[newClass.getObjId()]
-            enabledClass.enableAppend()
-            for idx in range(neighbors):
-                itemId = currIds[idx]
-                while itemId >= num_part:
-                    currIds = np.delete(currIds, idx)
-                    itemId = currIds[idx]
-                item = particles[partIds[itemId]]
-                item._xmipp_subtomo_labels = Integer(clInx + 1)
-                enabledClass.append(item)
+                representative.setZFlex(z_space_vw[z_idx])
+                representative.getFlexInfo().copyInfo(particles.getFlexInfo())
+                # ********************
 
-            flexClasses.update(enabledClass)
+                newClass.setRepresentative(representative)
+
+                flexClasses.append(newClass)
+
+                enabledClass = flexClasses[newClass.getObjId()]
+                enabledClass.enableAppend()
+
+                if "_cluster" in file:
+                    for itemId in currIds:
+                        item = particles[partIds[itemId]]
+                        item._xmipp_subtomo_labels = Integer(clInx)
+                        enabledClass.append(item)
+                else:
+                    for idx in range(neighbors):
+                        itemId = currIds[idx]
+                        while itemId >= num_part:
+                            currIds = np.delete(currIds, idx)
+                            itemId = currIds[idx]
+                        item = particles[partIds[itemId]]
+                        item._xmipp_subtomo_labels = Integer(clInx)
+                        enabledClass.append(item)
+
+                flexClasses.update(enabledClass)
+                clInx += 1
 
         # Save new output
         name = self.OUTPUT_PREFIX + suffix
@@ -327,20 +340,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate(), particles.getXDim())
 
-        dimensions = red_space.shape[1]
-        if dimensions == 2:
-            program = os.path.join(const.VIEWERS, "annotation_2d_tools", "viewer_interactive_2d.py")
-        elif dimensions == 3:
-            if self.viewer3D.get() == 0:
-                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
-            elif self.viewer3D.get() == 1:
-                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_2d_3d.py")
+        program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args)
+        self.runJob(program, args, env=pwutils.Environ(os.environ))
 
         # *********
 
-        if os.path.isfile(self._getExtraPath("saved_selections.txt")) and \
+        if len(glob(self._getExtraPath("saved_selections*"))) > 0 and \
            askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
 
