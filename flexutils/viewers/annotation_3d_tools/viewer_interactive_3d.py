@@ -190,6 +190,19 @@ class Annotate3D(object):
                                                           blending="additive", name="Landscape")
         points_layer.editable = True
 
+        # Set extra data layer (like priors) in viewer
+        if "z_space_vol" in self.class_inputs:
+            extra_data = np.loadtxt(self.class_inputs["z_space_vol"])
+            _, inds = self.kdtree_z_pace.query(extra_data, k=1)
+            inds = np.array(inds).flatten()
+            extra_data = np.copy(self.data)[inds, :3]
+            extra_layer = self.dock_widget.viewer.add_points(extra_data, size=1, shading='spherical',
+                                                             edge_width=0,
+                                                             antialiasing=0,
+                                                             visible=False,
+                                                             blending="additive", name="Priors")
+            extra_layer.editable = True
+
         # Create volume from data points
         indeces = np.round(self.data).astype(int)
         vol = np.zeros((boxsize, boxsize, boxsize))
@@ -349,7 +362,7 @@ class Annotate3D(object):
                 name = layer.name
                 names = []
                 selected_z = []
-                if "Landscape" not in layer.name:
+                if "Landscape" not in layer.name and "Priors" not in layer.name:
                     layer.save(os.path.join(pathFile, layer.name))
                     points = layer.data
 
@@ -744,6 +757,8 @@ class Annotate3D(object):
         if data_is_empty:
             self.dock_widget.viewer_model1.reset_view()
             layer.iso_threshold = 3.0 * np.std(map[map >= 0.0])
+
+        layer.contrast_limits = [0.0, np.amax(map)]
 
     def launchChimeraX(self):
         sel_names = self.client.file_names

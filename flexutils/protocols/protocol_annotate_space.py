@@ -148,8 +148,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                     reference = particles.getFlexInfo().refMap.get()
 
                     # Resize coefficients
-                    factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
-                    z_space_vw[z_idx] *= factor
+                    # factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
+                    # z_space_vw[z_idx] *= factor
 
                     representative.setLocation(reference)
 
@@ -271,14 +271,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                         for volume in item.iterItems():
                             z_space_vol.append(volume.getZFlex())
             z_space_vol = np.asarray(z_space_vol)
-
-            # Get useful parameters
-            self.num_vol = z_space_vol.shape[0]
-            if self.num_vol > 0:
-                z_space = np.vstack([z_space, z_space_vol])
+            file_z_vol = self._getExtraPath("z_space_vol.txt")
+            np.savetxt(file_z_vol, z_space_vol)
 
             # Resize coefficients
-            z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
+            # z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
         # ********************
 
         # Generate files to call command line
@@ -312,9 +309,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             L1 = particles.getFlexInfo().L1.get()
             L2 = particles.getFlexInfo().L2.get()
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--L1 %d --L2 %d --n_vol %d --boxsize 64 --mode Zernike3D" \
+                   "--L1 %d --L2 %d --boxsize 64 --mode Zernike3D" \
                    % (file_coords, file_z_space, file_interp_val, path,
-                      L1, L2, self.num_vol)
+                      L1, L2)
+            if volumes:
+                args += "--z_space_vol %s" % file_z_vol
 
         elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
             needsPackages = [const.CRYODRGN, ]
