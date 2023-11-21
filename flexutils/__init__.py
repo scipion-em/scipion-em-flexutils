@@ -104,8 +104,9 @@ class Plugin(pwplugin.Plugin):
             # pywem_path = os.path.join(pwem.__path__[0], "..")
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d python %(program)s ' % locals()
+        else:
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
