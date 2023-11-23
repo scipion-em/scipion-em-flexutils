@@ -48,7 +48,7 @@ import xmipp3
 
 import flexutils
 from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
+from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
@@ -86,6 +86,20 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             'the estimation the deformation field for each particle. Note that output particles will '
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
+        group.addParam('outSize', params.IntParam, allowsNull=True,
+                       label='Decoded volume size', expertLevel=params.LEVEL_ADVANCED,
+                       help='Determines the box size of the volumes to be decoded by the network (i.e. the maximum '
+                            'resolution achievable). If empty, it will match the downsampled box size. Otherwise, '
+                            'it must be set to a value higher than or equal to the downsampled box size')
+        group.addParam('trainSize', params.IntParam, allowsNull=True,
+                       label='Image training size', expertLevel=params.LEVEL_ADVANCED,
+                       help='By default, the size of the images used to train the network will match the value '
+                            'specified for the downsampling parameter. However, in many cases it is useful to perform '
+                            'a multi-resolution training by presenting the network first a further downsampled version '
+                            'of the images to posteriorly perform a fine tuning on higher resolutions. This parameter '
+                            'controls the current resolution/box size the network will see during training. If empty, '
+                            'training image size will match the downsampling size. Otherwise, it must be set to a '
+                            'number smaller than or equal to the downsampled size')
         group = form.addGroup("Latent Space")
         group.addParam('hetDim', params.IntParam, default=10, label='Latent space dimension',
                        expertLevel=params.LEVEL_ADVANCED,
@@ -124,7 +138,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
-                       default=0, label="How to compute total epochs?",
+                       default=1, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
                        help="* *Samples*: Epochs will be obtained from the total number of samples "
                             "the network will see\n"
@@ -138,7 +152,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
@@ -190,7 +204,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "decrease the amount of noise in the map learned by the network. We do not recommend to touch "
                            "this parameter")
         form.addSection(label='Output')
-        form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
+        form.addParam("filterDecoded", params.BooleanParam, default=True, label="Filter decoded map?",
                       help="If True, the maps decoded after training the network will be convoluted with a Gaussian filter. "
                            "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
                            "greater than 1")
@@ -228,26 +242,27 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        self.vol_mask_dim = self.outSize.get() if self.outSize.get() is not None else self.newXdim
 
         if self.inputVolume.get():  # Map reference
             ih = ImageHandler()
             inputVolume = self.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            if Xdim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if self.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = self.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                if Xdim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.vol_mask_dim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -275,6 +290,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         out_path = self._getExtraPath('network')
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
+        inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         batch_size = self.batch_size.get()
         step = self.step.get()
@@ -285,13 +301,19 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         applyCTF = self.applyCTF.get()
         xla = self.xla.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d " \
-               "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d --lr %f" \
+               "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d --lr %f " \
+               "--trainSize %d --outSize %d" \
                % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, step,
-                  l1Reg, hetDim, lr)
+                  l1Reg, hetDim, lr, trainSize, outSize)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
@@ -344,16 +366,22 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
         weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         hetDim = self.hetDim.get()
         numVol = self.numVol.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         applyCTF = self.applyCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
-               "--apply_ctf %d --het_dim %d --num_vol %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol)
+               "--apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
 
         if self.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -382,6 +410,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         model_path = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -433,6 +466,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
+        partSet.getFlexInfo().outSize = Integer(outSize)
+        partSet.getFlexInfo().trainSize = Integer(trainSize)
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -520,4 +555,21 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
+
+        inputParticles = self.inputParticles.get()
+        boxSize = self.boxSize.get()
+        trainSize = self.trainSize.get()
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize
+        else:
+            outSize = self.outSize.get()
+
+        if outSize is not None and outSize < boxSize:
+            errors.append("Decoded image size must be larger than or equal to the downsampled box"
+                          " size (currently set to %d)" % boxSize)
+
+        if trainSize is not None and trainSize > boxSize:
+            errors.append("Train image size must be smaller than or equal to the downsampled box"
+                          " size (currently set to %d)" % boxSize)
+
         return errors
