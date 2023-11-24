@@ -129,6 +129,15 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
         form.addSection(label='Network')
+        form.addParam('fineTune', params.BooleanParam, default=False, label="Fine tune previous network?",
+                      help="If True, a previously trained deepPose network will be fine tuned based on the "
+                           "new input parameters. Note that when this option is set, the input particles "
+                           "must have a trained deepPose network associated (i.e. particles must come from "
+                           "a **'angular align - deepPose'** protocol.")
+        form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
+                      allowsNull=True,
+                      pointerClass='TensorflowProtAngularAlignmentZernike3Deep',
+                      condition="fineTune")
         group = form.addGroup("Network hyperparameters")
         group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
@@ -158,6 +167,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="When XLA compilation is allowed, extra optimizations are applied during neural network "
                             "training increasing the training performance. However, XLA will only work with compatible "
                             "GPUs. If any error is experienced, set to No.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
         group = form.addGroup("Extra network parameters")
         group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
                        help="If True, the neural network will be also trained to refine the angular "
@@ -295,6 +309,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         xla = self.xla.get()
+        tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
                "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
                % (md_file, out_path, L1, L2, batch_size, split_train, pad, sr,
@@ -324,6 +339,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.refinePose.get():
             args += " --refine_pose"
 
+        if self.fineTune.get():
+            netProtocol = self.netProtocol.get()
+            modelPath = netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+            args += " --weigths_file %s" % modelPath
+
         if self.architecture.get() == 0:
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
@@ -336,6 +356,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         if xla:
             args += " --jit_compile"
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

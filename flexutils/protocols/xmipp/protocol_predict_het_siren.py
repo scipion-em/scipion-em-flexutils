@@ -269,10 +269,12 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().coordStep = Integer(hetSirenProtocol.step.get())
 
         if hetSirenProtocol.inputVolume.get():
-            inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
             partSet.getFlexInfo().refMap = String(inputVolume)
+
+        if hetSirenProtocol.inputVolumeMask.get():
+            inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
+            partSet.getFlexInfo().refMask = String(inputMask)
 
         if hetSirenProtocol.architecture.get() == 0:
             partSet.getFlexInfo().architecture = String("convnn")

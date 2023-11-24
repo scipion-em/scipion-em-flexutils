@@ -143,6 +143,11 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
                        help="When XLA compilation is allowed, extra optimizations are applied during neural network "
                             "training increasing the training performance. However, XLA will only work with compatible "
                             "GPUs. If any error is experienced, set to No.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
         group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
@@ -266,6 +271,7 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         xla = self.xla.get()
+        tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d " \
                "--sr %f --apply_ctf %d --lr %f --multires %s" \
@@ -305,6 +311,9 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
 
         if xla:
             args += " --jit_compile"
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
