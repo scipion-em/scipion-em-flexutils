@@ -49,12 +49,14 @@ import flexutils.constants as const
 from flexutils.protocols import ProtFlexBase
 from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName, coordsToMap, saveMap
+from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with the Zernike3Deep algortihm. """
     _label = 'flexible align - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
+    _subset = ["ca", "bb", "all"]
 
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
@@ -75,9 +77,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="Determine which type of reference will be used to compute the motions. "
                             "In general, Structure will lead to faster and more accurate estimations "
                             "if available.")
-        group.addParam('inputVolume', params.PointerParam, condition="referenceType==0",
+        group.addParam('inputVolume', params.PointerParam,
                        label="Input volume", pointerClass='Volume')
-        group.addParam('inputVolumeMask', params.PointerParam, condition="referenceType==0",
+        group.addParam('inputVolumeMask', params.PointerParam,
                        label="Input volume mask", pointerClass='VolumeMask',
                        help="Two different type of mask could be provided:\n"
                             "     * Macromolecular mask: A binary (non-smooth) mask telling where the protein is in "
@@ -91,10 +93,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="Reference structure should be aligned within Scipion to the map reconstructed "
                             "from the input particles. This will ensure that the structure coordinates are "
                             "properly placed in the expected reference frame.")
-        group.addParam("onlyBackbone", params.BooleanParam, default=False, label="Use only backbone atoms?",
-                       condition="referenceType==1",
-                       help="If yes, only backbone atoms will be considered during the estimation to speed up "
-                            "computations. It might decrease the accuracy of the estimations.")
+        group.addParam("atomSubset", params.EnumParam, label="Atoms considered",
+                       choices=['CA', 'Backbone', 'Full'], default=0, condition="referenceType==1",
+                       help="Atoms to be considered for the computation of the normal modes. Options include: \n"
+                            "\t **CA**: Use carbon alpha only\n"
+                            "\t **Backbone**: Use protein backbone only\n"
+                            "\t **Full**: Use all the atomic structure")
         group.addParam('boxSize', params.IntParam, default=128,
                        label='Downsample particles to this box size', expertLevel=params.LEVEL_ADVANCED,
                        help='In general, downsampling the particles will increase performance without compromising '
@@ -145,7 +149,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
-                       default=0, label="How to compute total epochs?",
+                       default=1, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
                        help="* *Samples*: Epochs will be obtained from the total number of samples "
                             "the network will see\n"
@@ -155,11 +159,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
                        label="Samples",
                        help='Maximum number of samples seen during network training')
-        group.addParam('batch_size', params.IntParam, default=32, label='Number of images in batch',
+        group.addParam('batch_size', params.IntParam, default=8, label='Number of images in batch',
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
@@ -212,6 +216,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
+        form.addParam("regBond", params.FloatParam, default=0.01, label="Bond loss regularization",
+                      condition="referenceType==1",
+                      help="Regularization factor determining how stiff bond distances will be when deforming the "
+                           "atomic model")
+        form.addParam("regAngle", params.FloatParam, default=0.01, label="Hedra loss regularization",
+                      condition="referenceType==1",
+                      help="Regularization factor determining how stiff hedra angles distances will be when deforming "
+                           "the atomic model")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -221,6 +233,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
+            'fnConnect': self._getExtraPath("connectivity.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -238,7 +251,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
         md_file = self._getFileName('imgsFn')
 
         inputParticles = self.inputParticles.get()
@@ -246,25 +258,37 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
-        if self.referenceType.get() == 0:  # Map reference
-            ih = ImageHandler()
-            inputVolume = self.inputVolume.get().getFileName()
-            ih.convert(getXmippFileName(inputVolume), fnVol)
+        # Map reference
+        ih = ImageHandler()
+        inputVolume = self.inputVolume.get().getFileName()
+        ih.convert(getXmippFileName(inputVolume), fnVol)
+        if Xdim != self.newXdim:
+            self.runJob("xmipp_image_resize",
+                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+
+        inputMask = self.inputVolumeMask.get().getFileName()
+        if inputMask:
+            ih.convert(getXmippFileName(inputMask), fnVolMask)
             if Xdim != self.newXdim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
 
-            inputMask = self.inputVolumeMask.get().getFileName()
-            if inputMask:
-                ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
-                    self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
-                                env=xmipp3.Plugin.getEnviron())
-        else:  # Structure reference
-            pdb_lines = self.readPDB(self.inputStruct.get().getFileName())
-            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
-            np.savetxt(structure, pdb_coordinates)
+        if self.referenceType.get() == 1:  # Structure reference
+            inputVolume = self.inputVolume.get().getFileName()
+            structure_file = self._getFileName('fnStruct')
+            connect_file = self._getFileName('fnConnect')
+            parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
+            pdb_coordinates, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+            pdb_coordinates *= i_sr
+            ih = ImageHandler(getXmippFileName(inputVolume))
+            vol = ih.getData()
+            factor = 0.5 * ih.getDimensions()[-1]
+            pdb_indices = np.round(pdb_coordinates + factor).astype(int)
+            values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
+            pdb_coordinates = np.c_[pdb_coordinates, values]
+            np.savetxt(structure_file, pdb_coordinates)
+            np.savetxt(connect_file, connectivity)
 
         # Write particles
         writeSetOfParticles(inputParticles, imgsFn)
@@ -323,7 +347,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.referenceType.get() == 0:
             args += " --step %d" % step
         else:
-            args += " --step 1"
+            args += " --step 1 --regBond %f --regAngle %f" % (self.regBond.get(), self.regAngle.get())
 
         if self.costFunction.get() == 0:
             args += " --cost corr"
@@ -473,28 +497,30 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
 
-        if self.referenceType.get() == 0:
-            inputMask = self.inputVolumeMask.get().getFileName()
-            inputVolume = self.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
-            partSet.getFlexInfo().refMap = String(inputVolume)
-        else:
+        inputMask = self.inputVolumeMask.get().getFileName()
+        inputVolume = self.inputVolume.get().getFileName()
+        partSet.getFlexInfo().refMask = String(inputMask)
+        partSet.getFlexInfo().refMap = String(inputVolume)
+
+        if self.referenceType.get() == 1:
             structure = self.inputStruct.get().getFileName()
             partSet.getFlexInfo().refStruct = String(structure)
 
-            i_sr = 1. / inputParticles.getSamplingRate()
-            pdb_lines = self.readPDB(structure)
-            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
-
-            volume, mask = coordsToMap(pdb_coordinates[:, :-1],
-                                       pdb_coordinates[:, -1], Xdim, 0.001)
-            volume_file = self._getExtraPath("ref_map_from_model.mrc")
-            mask_file = self._getExtraPath("ref_mask_from_model.mrc")
-            saveMap(volume_file, volume)
-            saveMap(mask_file, mask)
-
-            partSet.getFlexInfo().refMask = String(mask_file)
-            partSet.getFlexInfo().refMap = String(volume_file)
+            # i_sr = 1. / inputParticles.getSamplingRate()
+            # parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
+            # pdb_coordinates, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+            # values = np.ones(pdb_coordinates.shape[0])
+            # pdb_coordinates = np.c_[i_sr * pdb_coordinates, values]
+            #
+            # volume, mask = coordsToMap(pdb_coordinates[:, :-1],
+            #                            pdb_coordinates[:, -1], Xdim, 0.001)
+            # volume_file = self._getExtraPath("ref_map_from_model.mrc")
+            # mask_file = self._getExtraPath("ref_mask_from_model.mrc")
+            # saveMap(volume_file, volume)
+            # saveMap(mask_file, mask)
+            #
+            # partSet.getFlexInfo().refMask = String(mask_file)
+            # partSet.getFlexInfo().refMap = String(volume_file)
 
         if self.refinePose.get():
             partSet.getFlexInfo().refPose = Boolean(True)

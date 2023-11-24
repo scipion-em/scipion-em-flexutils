@@ -107,7 +107,7 @@ def coordsToMap(coords, values, xsize, thr=None):
 
 
 def saveMap(filename, map):
-    ImageHandler().write(map, filename)
+    ImageHandler().write(map, filename, overwrite=True)
 
 
 def generateVolumesHetSIREN(weigths_file, x_het, outdir, step):
