@@ -112,7 +112,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             ih = ImageHandler()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.vol_mask_dim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
@@ -121,7 +122,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.vol_mask_dim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
