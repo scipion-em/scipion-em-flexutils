@@ -208,7 +208,7 @@ class Server:
                 )
         elif self.mode == "HetSIREN":
             from xmipp_metadata.image_handler import ImageHandler
-            decoded_maps = self.autoencoder.eval_volume_het(z, allCoords=True, filter=self.metadata["filter"])
+            decoded_maps = self.autoencoder.eval_volume_het(z, allCoords=True, filter=True)
             ImageHandler().write(decoded_maps, self.outPath, overwrite=True)
         elif self.mode == "NMA":
             pass
