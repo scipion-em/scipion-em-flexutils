@@ -33,7 +33,8 @@ from xmipp_metadata.image_handler import ImageHandler
 
 from pyworkflow import BETA
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam, EnumParam
+from pyworkflow.protocol.params import (PointerParam, IntParam, MultiPointerParam, BooleanParam, StringParam,
+                                        USE_GPU, GPU_LIST)
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
@@ -60,6 +61,14 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='General parameters')
+        form.addHidden(USE_GPU, BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                                     Select the one you want to use.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Particles to annotate",
                       pointerClass='SetOfParticlesFlex', important=True,
                       help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
@@ -75,6 +84,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                            "chosen box size (only for the visualization).")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
+
 
 
     # --------------------------- INSERT steps functions ----------------------
@@ -340,9 +350,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate(), particles.getXDim())
 
+        env = pwutils.Environ(os.environ)
+        if self.usesGpu():
+            env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
+
         program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args, env=pwutils.Environ(os.environ))
+        self.runJob(program, args, env=env)
 
         # *********
 
