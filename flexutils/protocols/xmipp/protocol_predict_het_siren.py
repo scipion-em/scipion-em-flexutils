@@ -82,6 +82,12 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
                       help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
                            "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
                            "greater than 1")
+        form.addParam("onlyPos", params.BooleanParam, default=False, label="Remove negative values?",
+                      help="If True, the negative values from map decoded after training the network will be removed.")
+        form.addParam("numVol", params.IntParam, default=20, label="Number of decoded maps",
+                      help="Determines in how many regions the trained latent space will be splitted by "
+                           "KMeans, allowing to decode a state based on the representative of each cluster. "
+                           "This provides and initial summary/exploration of the trained landscape")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -118,7 +124,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             ih = ImageHandler()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.vol_mask_dim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
@@ -127,7 +134,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.vol_mask_dim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
@@ -165,7 +173,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
-        numVol = hetSirenProtocol.numVol.get()
+        numVol = self.numVol.get()
         trainSize = hetSirenProtocol.trainSize.get()
         outSize = hetSirenProtocol.outSize.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
@@ -187,6 +195,9 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.filterDecoded.get():
             args += " --apply_filter"
+
+        if self.onlyPos.get():
+            args += " --only_pos"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -297,7 +308,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         outVols = self._createSetOfVolumes()
         outVols.setSamplingRate(inputParticles.getSamplingRate())
-        for idx in range(hetSirenProtocol.numVol.get()):
+        for idx in range(self.numVol.get()):
             outVol = Volume()
             outVol.setSamplingRate(inputParticles.getSamplingRate())
 

@@ -240,7 +240,8 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             ih = ImageHandler()
             inputVolume = self.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
@@ -249,7 +250,8 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             inputMask = self.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.newXdim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
