@@ -94,13 +94,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
                            "option requires that the particles have a set of Zernike3D coefficients associated. "
                            "Otherwise, the parameter should be set to 'No'")
-        # form.addParam('mask', params.PointerParam, pointerClass='VolumeMask',
-        #               allowsNull=True,
-        #               condition="useZernike and not hasattr(inputParticles,'refMask')",
-        #               label="Reconstruction mask",
-        #               help="Mask used to restrict the reconstruction space to increase performance. "
-        #                    "Note that here the mask can be tight, as internally the protocol will process "
-        #                    "it to make it wider")
+        form.addParam('recMask', params.PointerParam, pointerClass='VolumeMask',
+                      allowsNull=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Reconstruction mask",
+                      help="Mask used to restrict the reconstruction space to increase performance.")
         form.addParam('niter', params.IntParam, default=13,
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
@@ -109,8 +107,16 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       label='ART lambda',
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
                            "Note that larger values may lead to divergence.")
+        form.addParam('dThr', params.FloatParam, default=1e-6,
+                      condition="useGpu",
+                      label="Denoising threshold",
+                      help="Larger values will decrease the noise levels more efficiently, although protein signal "
+                           "might suffer unwanted modifications if the value is too large.")
         form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
                       label="Save partial reconstructions for every ZART iteration?")
+        form.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                      condition="useGpu",
+                      label="Remove negative values from reconstructed volume?")
         form.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
                       default=0, display=params.EnumParam.DISPLAY_HLIST,
                       label="Reconstruction mode",
@@ -132,11 +138,12 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         convert = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
         depsConvert.append(convert)
         refFile = self.initialMap.get().getFileName() if self.initialMap.get() else None
+        recMask = self.recMask.get().getFileName() if self.recMask.get() else None
         if self.mode.get() == 0:
             particlesMd = self._getTmpPath('corrected_particles.xmd')
             reconstruct = self._insertFunctionStep(self.reconstructStep, particlesMd,
                                                    "final_reconstruction.mrc", refFile, 2,
-                                                   self.niter.get(), None,
+                                                   self.niter.get(), recMask,
                                                    prerequisites=depsConvert)
             depsReconstruct.append(reconstruct)
         elif self.mode.get() == 1:
@@ -145,7 +152,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             for idx, fileMd in enumerate(particlesHalvesMd):
                 outFile = "final_reconstruction_%d.mrc" % (idx + 1)
                 reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, refFile,
-                                                       2, self.niter.get(), None,
+                                                       2, self.niter.get(), recMask,
                                                        prerequisites=depsConvert)
                 depsReconstruct.append(reconstruct)
         elif self.mode.get() == 2:
@@ -159,7 +166,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             for idx, fileMd in enumerate(particlesHalvesMd):
                 outFile = "final_reconstruction_%d_level_%d.mrc" % (idx + 1, level)
                 reconstruct = self._insertFunctionStep(self.reconstructStep, fileMd, outFile, refFile,
-                                                       2, 2, None,
+                                                       2, 2, recMask,
                                                        prerequisites=depsConvert)
                 depsReconstruct.append(reconstruct)
 
@@ -347,6 +354,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     
     #--------------------------- UTILS functions --------------------------------------------
     def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
+        useGPU = self.useGpu.get()
         params = ' -i %s' % inputMd
         params += ' -o %s' % outFile
         params += ' --odir %s' % self._getExtraPath()
@@ -370,12 +378,19 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             particles = self.inputParticles.get()
             params += " --useZernike --l1 %d --l2 %d" % (particles.getFlexInfo().L1.get(),
                                                          particles.getFlexInfo().L2.get())
-            # zernikeMask = particles.refMask.get() if hasattr(particles, "refMask") else self.mask.get()
+            # zernikeMask = particles.recMask.get() if hasattr(particles, "recMask") else self.mask.get()
             # if zernikeMask:
             #     params += " --mask %s" % zernikeMask
 
         if mask:
-            params += ' --maskf %s' % mask
+            params += ' --maskf %s --maskb %s' % (mask, mask)
+
+        # GPU parameters
+        if useGPU:
+            onlyPositive = self.onlyPositive.get()
+            params += ' --dThr %f' % self.dThr.get()
+            if onlyPositive:
+                params += " --onlyPositive"
 
         return params
 
