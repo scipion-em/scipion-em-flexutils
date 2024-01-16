@@ -220,7 +220,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       condition="referenceType==1",
                       help="Regularization factor determining how stiff bond distances will be when deforming the "
                            "atomic model")
-        form.addParam("regAngle", params.FloatParam, default=0.01, label="Hedra loss regularization",
+        form.addParam("regAngle", params.FloatParam, default=0.001, label="Hedra loss regularization",
                       condition="referenceType==1",
                       help="Regularization factor determining how stiff hedra angles distances will be when deforming "
                            "the atomic model")
