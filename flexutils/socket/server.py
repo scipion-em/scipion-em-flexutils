@@ -78,9 +78,10 @@ class Server:
         self.allowConnection()
         while True:
             try:
+                raw_msglen = self.recMsg(4)
                 # data = self.client_socket.recv(4096, socket.MSG_DONTWAIT | socket.MSG_PEEK)
-                # if data:
-                self.generateMap()
+                if raw_msglen:
+                    self.generateMap(raw_msglen)
             except ConnectionResetError:
                 return False
 
@@ -171,8 +172,8 @@ class Server:
         elif self.mode == "NMA":
             pass
 
-    def generateMap(self):
-        raw_msglen = self.recMsg(4)
+    def generateMap(self, raw_msglen):
+        # raw_msglen = self.recMsg(4)
         msglen = struct.unpack('>I', raw_msglen)[0]
         z = self.recMsg(msglen)
         z = pickle.loads(z)

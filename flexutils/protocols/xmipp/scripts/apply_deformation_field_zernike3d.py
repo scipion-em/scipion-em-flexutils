@@ -56,7 +56,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
         else:
             groups, centers = None, None
 
-    elif ref_file.suffix == ".pdb":
+    elif ref_file.suffix == ".pdb" or ref_file.suffix == ".cif":
         mode = "structure"
         pd_struct = pd.parsePDB(str(ref_file), subset=None, compressed=False)
         coords = pd_struct.getCoords()

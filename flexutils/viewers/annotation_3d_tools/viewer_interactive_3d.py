@@ -37,7 +37,7 @@ import pickle
 import warnings
 
 from PyQt5.QtGui import QIntValidator, QIcon
-from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QSizePolicy
+from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QSizePolicy, QComboBox
 from PyQt5.QtCore import QThread
 
 from sklearn.neighbors import KDTree
@@ -92,11 +92,16 @@ class QtViewerWrap(QtViewer):
 
 
 class MenuWidget(QWidget):
-    def __init__(self):
+    def __init__(self, ndims):
         super().__init__()
+        dims = [f"Dim {dim + 1}" for dim in range(ndims)]
         self.save_btn = QPushButton("Save selections")
         self.cluster_btn = QPushButton("Compute KMeans")
         self.cluster_num = QLineEdit()
+        self.dimension_sel = QComboBox()
+        _ = [self.dimension_sel.addItem(item) for item in dims]
+        self.dimension_sel.setCurrentIndex(0)
+        self.dimension_btn = QPushButton("Cluster along dimension")
         self.morph_button = QPushButton("Morph ChimeraX")
         self.morph_button.setIcon(QIcon(os.path.join(os.path.dirname(flexutils.__file__), "chimerax_logo.png")))
         onlyInt = QIntValidator()
@@ -105,11 +110,17 @@ class MenuWidget(QWidget):
         layout_main = QVBoxLayout()
         layout_cluster = QHBoxLayout()
         widget_cluster = QWidget()
+        layout_button = QHBoxLayout()
+        widget_button = QWidget()
         layout_cluster.addWidget(self.cluster_num)
-        layout_cluster.addWidget(self.cluster_btn)
+        layout_cluster.addWidget(self.dimension_sel)
+        layout_button.addWidget(self.cluster_btn)
+        layout_button.addWidget(self.dimension_btn)
         widget_cluster.setLayout(layout_cluster)
+        widget_button.setLayout(layout_button)
         layout_main.addWidget(self.save_btn)
         layout_main.addWidget(widget_cluster)
+        layout_main.addWidget(widget_button)
         layout_main.addWidget(self.morph_button)
         layout_main.addStretch(1)
         self.setLayout(layout_main)
@@ -126,7 +137,7 @@ class MultipleViewerWidget(QSplitter):
         self.qt_viewer1 = QtViewerWrap(self.viewer_model1, self.viewer_model1)
 
         self.tab_widget = QTabWidget()
-        self.menu_widget = MenuWidget()
+        self.menu_widget = MenuWidget(ndims)
         dims = [f"Dim {dim + 1}" for dim in range(ndims)]
         items = [("X axis", dims), ("Y axis", dims), ("Z axis", dims)]
         value = ["Dim 1", "Dim 2", "Dim 3"]
@@ -248,6 +259,7 @@ class Annotate3D(object):
         self.dock_widget.viewer.bind_key("Alt", self.alt_detection)
         self.dock_widget.menu_widget.save_btn.clicked.connect(self.saveSelections)
         self.dock_widget.menu_widget.cluster_btn.clicked.connect(self._compute_kmeans_fired)
+        self.dock_widget.menu_widget.dimension_btn.clicked.connect(self._compute_dim_cluster_fired)
         self.dock_widget.menu_widget.morph_button.clicked.connect(self._morph_chimerax_fired)
         self.dock_widget.viewer.layers.events.inserted.connect(self.on_insert_add_callback)
         self.dock_widget.right_widgets[0].changed.connect(lambda event: self.selectAxis(0, event))
@@ -509,9 +521,10 @@ class Annotate3D(object):
         self.clusters_data = []
 
         # Remove previous clusters and kmeans
-        for layer in self.dock_widget.viewer.layers:
-            if "Cluster_" in layer.name or "KMeans" in layer.name:
-                self.dock_widget.viewer.layers.remove(layer.name)
+        layer_names = [layer.name for layer in self.dock_widget.viewer.layers]
+        for layer_name in layer_names:
+            if "Cluster_" in layer_name or "KMeans" in layer_name:
+                self.dock_widget.viewer.layers.remove(layer_name)
 
         # Compute KMeans and save automatic selection
         n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
@@ -536,6 +549,47 @@ class Annotate3D(object):
             self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=True,
                                                shading='spherical', edge_width=0, antialiasing=0,
                                                face_color=color, metadata={"needs_closest": False, "save": True})
+
+    def _compute_dim_cluster_fired(self):
+        landscape = self.dock_widget.viewer.layers["Landscape"].data
+        axis = int(self.dock_widget.menu_widget.dimension_sel.currentText().replace("Dim ", "")) - 1
+        self.kmeans_data = []
+        self.clusters_data = []
+
+        # Remove previous clusters and kmeans
+        layer_names = [layer.name for layer in self.dock_widget.viewer.layers]
+        for layer_name in layer_names:
+            if "Cluster_" in layer_name or "KMeans" in layer_name:
+                self.dock_widget.viewer.layers.remove(layer_name)
+
+        # Compute clusters along dimension and save automatic selection
+        n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
+        sort_ind = np.argsort(landscape[..., axis])
+        sort_ind_split = np.array_split(sort_ind, n_clusters)
+        centers = np.vstack([np.mean(landscape[ind], axis=0) for ind in sort_ind_split])
+        labels = np.empty_like(sort_ind)
+        for idx in range(len(sort_ind_split)):
+            labels[sort_ind_split[idx]] = idx
+        self.interp_val = labels
+        _, inds = self.kdtree_data.query(centers, k=1)
+        inds = np.array(inds).flatten()
+        selected_data = np.copy(landscape[inds])
+        self.kmeans_data.append(np.copy(self.data[inds]))
+        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans", metadata={"needs_closest": False,
+                                                                                           "save": False})
+
+        # Add points for each cluster independently with colors
+        self.dock_widget.viewer.layers["Landscape"].visible = False
+        cm = get_cmap("viridis")
+        color_ids = np.linspace(0.0, 1.0, n_clusters)
+        for label, color_id in zip(np.unique(self.interp_val), color_ids):
+            self.kmeans_data.append(np.copy(self.data[self.interp_val == label]))
+            cluster_points = np.copy(landscape[self.interp_val == label])
+            color = np.asarray(cm(color_id))
+            self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=True,
+                                               shading='spherical', edge_width=0, antialiasing=0,
+                                               face_color=color, metadata={"needs_closest": False, "save": True})
+
 
     def _morph_chimerax_fired(self):
         # Morph maps in chimerax based on different ordering methods
