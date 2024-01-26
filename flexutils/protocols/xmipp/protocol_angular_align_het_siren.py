@@ -132,10 +132,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       pointerClass='TensorflowProtAngularAlignmentHetSiren',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
-        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+        group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
                        default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                       help="* *ConvNN*: convolutional neural network\n"
+                       help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
+                            "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
                        default=1, label="How to compute total epochs?",
@@ -204,10 +205,23 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
-        form.addParam("l1Reg", params.FloatParam, default=0.2, label="L1 loss regularization",
+        form.addParam("l1Reg", params.FloatParam, default=0.1, label="L1 loss regularization",
                       help="Determines the weight of the L1 map minimization in the cost function. L1 is moslty used to "
                            "decrease the amount of noise in the map learned by the network. We do not recommend to touch "
                            "this parameter")
+        form.addParam("tvReg", params.FloatParam, default=0.1, label="Total variation loss regularization",
+                      help="Determines the weight of the TV map minimization in the cost function. TV is moslty used to "
+                           "promote densitiy smoothness while focusing on the preservation of edges present in "
+                           "the CryoEM map.")
+        form.addParam("mseReg", params.FloatParam, default=0.1, label="MSE loss regularization",
+                      help="Determines the weight of the MSE variation map minimization in the cost function. "
+                           "MSE is moslty used to promote density smoothnes while focusing on ensuring a continuous "
+                           "transition of the density values")
+        form.addParam("multires", params.FloatParam, allowsNull=True, label="Multiresolution levels",
+                      help="Determines the number of multiresolution filter used to compare the reconstructed map and "
+                           "the experimental images at different resolutions. If empty, no multiresolution strategy is "
+                           "applied in the cost function. Multiresolution helps making the training more robust by "
+                           "sacrifying the resolution of the decoded maps.")
         form.addSection(label='Output')
         form.addParam("filterDecoded", params.BooleanParam, default=True, label="Filter decoded map?",
                       help="If True, the maps decoded after training the network will be convoluted with a Gaussian filter. "
@@ -306,6 +320,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         split_train = self.split_train.get()
         lr = self.lr.get()
         l1Reg = self.l1Reg.get()
+        tvReg = self.tvReg.get()
+        mseReg = self.mseReg.get()
         hetDim = self.hetDim.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -320,10 +336,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d " \
-               "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d --lr %f " \
+               "--sr %f --apply_ctf %d --step %d --l1_reg %f --tv_reg %f --mse_reg %f --het_dim %d --lr %f " \
                "--trainSize %d --outSize %d" \
                % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, step,
-                  l1Reg, hetDim, lr, trainSize, outSize)
+                  l1Reg, tvReg, mseReg, hetDim, lr, trainSize, outSize)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
@@ -340,8 +356,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                 args += " --smooth_mask"
 
         if self.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif self.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 2:
             args += " --architecture mlpnn"
 
         if self.ctfType.get() == 0:
@@ -354,6 +372,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.onlyPos.get():
             args += " --only_pos"
+
+        if self.multires.get():
+            args += " --multires %d" % self.multires.get()
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
@@ -405,8 +426,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if self.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif self.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 2:
             args += " --architecture mlpnn"
 
         if self.refinePose.get():
