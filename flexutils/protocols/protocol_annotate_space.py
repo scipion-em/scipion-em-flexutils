@@ -355,6 +355,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         if self.usesGpu():
             env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
 
+        env["NAPARI_ASYNC"] = "1"
+
         program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
         self.runJob(program, args, env=env)
