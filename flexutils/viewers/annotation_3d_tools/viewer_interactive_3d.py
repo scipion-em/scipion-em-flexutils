@@ -256,7 +256,7 @@ class Annotate3D(object):
         else:
             boxsize = 64
         dummy_vol = np.zeros((boxsize, boxsize, boxsize))
-        self.dock_widget.viewer_model1.add_image(dummy_vol, name="Map", rendering="iso")
+        self.dock_widget.viewer_model1.add_image(dummy_vol, name="Map", rendering="mip")
 
         # Selections layers
         self.reloadView()
