@@ -604,7 +604,7 @@ class Annotate3D(object):
         z_tr_data = self.pca.inverse_transform(centers)
         self.kmeans_data.append(np.copy(z_tr_data))
 
-        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans along PCA {:d}".format(axis),
+        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans along PCA {:d}".format(axis + 1),
                                            metadata={"needs_closest": False, "save": False})
 
         # Add points for each cluster independently with colors
