@@ -27,9 +27,12 @@
 
 import numpy as np
 from scipy import signal
+from sklearn.decomposition import PCA
 import os
 import shutil
 from glob import glob
+import psutil
+
 from xmipp_metadata.image_handler import ImageHandler
 from matplotlib.pyplot import get_cmap
 from matplotlib.path import Path
@@ -37,7 +40,7 @@ import pickle
 import warnings
 
 from PyQt5.QtGui import QIntValidator, QIcon
-from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QSizePolicy, QComboBox
+from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QSizePolicy, QComboBox, QApplication
 from PyQt5.QtCore import QThread
 
 from sklearn.neighbors import KDTree
@@ -56,7 +59,8 @@ import napari
 from napari.components.viewer_model import ViewerModel
 from napari.qt import QtViewer
 from napari._qt.layer_controls import QtLayerControlsContainer
-from napari.utils.notifications import show_warning
+from napari._qt.utils import _maybe_allow_interrupt
+from napari.utils.notifications import show_warning, notification_manager
 from napari.utils import progress
 
 from magicgui.widgets import ComboBox, Container, Slider, Button
@@ -101,7 +105,7 @@ class MenuWidget(QWidget):
         self.dimension_sel = QComboBox()
         _ = [self.dimension_sel.addItem(item) for item in dims]
         self.dimension_sel.setCurrentIndex(0)
-        self.dimension_btn = QPushButton("Cluster along dimension")
+        self.dimension_btn = QPushButton("Cluster along PCA dimension")
         self.morph_button = QPushButton("Morph ChimeraX")
         self.morph_button.setIcon(QIcon(os.path.join(os.path.dirname(flexutils.__file__), "chimerax_logo.png")))
         onlyInt = QIntValidator()
@@ -193,6 +197,10 @@ class Annotate3D(object):
         self.view.window._qt_window.setWindowIcon(QIcon(os.path.join(os.path.dirname(flexutils.__file__),
                                                                      "icon_square.png")))
         self.dock_widget = MultipleViewerWidget(self.view, self.data.shape[1])
+
+        # PCA for clustering along dimension
+        self.pca = PCA(n_components=self.data.shape[1])
+        self.pca.fit(self.z_space)
 
         # Set data in viewers
         points_layer = self.dock_widget.viewer.add_points(np.copy(self.data[:, :3]), size=1, shading='spherical',
@@ -309,17 +317,21 @@ class Annotate3D(object):
             pickle.dump(metadata, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
         # Start server
-        port = Server.getFreePort()
-        self.server = ServerQThread(program, metadata_file, self.mode, port, env)
+        self.port = Server.getFreePort()
+        self.server = ServerQThread(program, metadata_file, self.mode, self.port, env)
         self.server.start()
 
         # Start client
-        self.client = ClientQThread(port, self.path, self.mode)
+        self.client = ClientQThread(self.port, self.path, self.mode)
         self.client.volume.connect(self.updateEmittedMap)
         self.client.chimera.connect(self.launchChimeraX)
 
         # Run viewer
-        napari.run()
+        self.app = QApplication.instance()
+        self.app.aboutToQuit.connect(self.on_close_callback)
+        with notification_manager, _maybe_allow_interrupt(self.app):
+            self.app.exec_()
+        # napari.run()
 
     # ---------------------------------------------------------------------------
     # Read functions
@@ -413,6 +425,13 @@ class Annotate3D(object):
     # ---------------------------------------------------------------------------
     # Callbacks
     # ---------------------------------------------------------------------------
+    def on_close_callback(self):
+        # If viewer is closed, remove socket
+        for proc in psutil.process_iter():
+            cmdline = " ".join(proc.cmdline())
+            if "--port {:d}".format(self.port) in cmdline and "server.py" in cmdline:
+                proc.kill()
+
     def lassoSelector(self, viewer, event):
         # viewer = self.view
 
@@ -571,12 +590,22 @@ class Annotate3D(object):
         for idx in range(len(sort_ind_split)):
             labels[sort_ind_split[idx]] = idx
         self.interp_val = labels
+
+        # Cluster on current space (PCA, UMAP) based on NN
+        # _, inds = self.kdtree_data.query(centers, k=1)
+        # inds = np.array(inds).flatten()
+        # selected_data = np.copy(landscape[inds])
+        # self.kmeans_data.append(np.copy(self.data[inds]))
+
+        # Cluster always along PCA space
         _, inds = self.kdtree_data.query(centers, k=1)
         inds = np.array(inds).flatten()
         selected_data = np.copy(landscape[inds])
-        self.kmeans_data.append(np.copy(self.data[inds]))
-        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans", metadata={"needs_closest": False,
-                                                                                           "save": False})
+        z_tr_data = self.pca.inverse_transform(centers)
+        self.kmeans_data.append(np.copy(z_tr_data))
+
+        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans along PCA {:d}".format(axis),
+                                           metadata={"needs_closest": False, "save": False})
 
         # Add points for each cluster independently with colors
         self.dock_widget.viewer.layers["Landscape"].visible = False
@@ -602,6 +631,8 @@ class Annotate3D(object):
                     inds = np.array(inds).flatten()
                     sel_names = ["vol_%03d" % (idx + 1) for idx in range(points.shape[0])]
                     z_space = self.z_space[inds]
+                    if "along PCA" in layer.name:
+                        z_space = self.pca.inverse_transform(self.pca.transform(z_space))
                     if z_space.ndim == 1:
                         z_space = z_space[None, ...]
 
