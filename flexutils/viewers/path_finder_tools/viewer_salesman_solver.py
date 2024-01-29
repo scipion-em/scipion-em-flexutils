@@ -33,7 +33,7 @@ def compute_distances(coordinates):
     M, N = coordinates.shape
 
     diff = coordinates[:, np.newaxis, :] - coordinates[np.newaxis, :, :]
-    squared_diff = diff**2
+    squared_diff = diff ** 2.
     distances = np.sqrt(np.sum(squared_diff, axis=2))
 
     u, v = np.meshgrid(np.arange(M), np.arange(M), indexing='ij')
@@ -55,7 +55,8 @@ def salesmanSolver(coords, outpath):
     fitness_coords = mlrose.TravellingSales(distances=distances)
     problem_fit = mlrose.TSPOpt(length=num_clusters, fitness_fn=fitness_coords,
                                 maximize=False)
-    best_state, best_fitness = mlrose.simulated_annealing(problem_fit, max_attempts=100,
+    best_state, best_fitness = mlrose.simulated_annealing(problem_fit, max_attempts=10,  # We might try 100
+                                                          random_state=np.arange(num_clusters),
                                                           schedule=mlrose.ArithDecay(init_temp=10.0))
 
     # Save optimum path and fitness
@@ -85,7 +86,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read and generate data
-    coords = readZernike3DFile(args.coords, args.num_vol)
+    coords = np.loadtxt(args.coords)[args.num_vol:]
+    # coords = readZernike3DFile(args.coords, args.num_vol)
 
     # Initialize volume slicer
     salesmanSolver(coords=coords, outpath=args.outpath)
