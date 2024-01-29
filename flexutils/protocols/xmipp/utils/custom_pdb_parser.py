@@ -121,7 +121,10 @@ class PDBUtils:
         # Get atom coordinates
         atom_coordinates = structure.getCoords()
 
-        return atom_coordinates, dihedrals
+        # Alpha carbon indices
+        ca_indices = structure.select("name CA").getIndices()
+
+        return atom_coordinates, ca_indices, dihedrals
 
 
     @staticmethod

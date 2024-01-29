@@ -224,6 +224,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       condition="referenceType==1",
                       help="Regularization factor determining how stiff hedra angles distances will be when deforming "
                            "the atomic model")
+        form.addParam("regClashes", params.FloatParam, default=0.001, label="Clashes regularization",
+                      allowsNull=True,
+                      condition="referenceType==1",
+                      help="Regularization factor determining how the importance of bonded and non-bonded clashes in "
+                           "the cost function. NOTE: Clashes will only be used if Tensorflow version is (>= 2.15.0). "
+                           "If this is not the case, you may update the plugin to update Tensorflow to the last "
+                           "compatible version of your system. If clashes are not to be included in the cost, leave "
+                           "this field empty.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -234,6 +242,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
             'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -256,7 +265,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        i_sr = 1. / inputParticles.getSamplingRate()
+        correctionFactor = Xdim / self.newXdim
+        i_sr = 1. / (correctionFactor * inputParticles.getSamplingRate())
 
         # Map reference
         ih = ImageHandler()
@@ -280,8 +290,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             inputVolume = self.inputVolume.get().getFileName()
             structure_file = self._getFileName('fnStruct')
             connect_file = self._getFileName('fnConnect')
+            ca_file = self._getFileName('fnCA')
             parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
-            pdb_coordinates, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
             pdb_coordinates *= i_sr
             ih = ImageHandler(getXmippFileName(inputVolume))
             vol = ih.getData()
@@ -291,6 +302,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             pdb_coordinates = np.c_[pdb_coordinates, values]
             np.savetxt(structure_file, pdb_coordinates)
             np.savetxt(connect_file, connectivity)
+            np.savetxt(ca_file, ca_indices)
 
         # Write particles
         writeSetOfParticles(inputParticles, imgsFn)
@@ -349,7 +361,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.referenceType.get() == 0:
             args += " --step %d" % step
         else:
+            regClashes = self.regClashes.get()
             args += " --step 1 --regBond %f --regAngle %f" % (self.regBond.get(), self.regAngle.get())
+
+            if regClashes is not None:
+                args += " --regClashes %f" % regClashes
 
         if self.costFunction.get() == 0:
             args += " --cost corr"
