@@ -446,74 +446,77 @@ class Annotate3D(object):
 
             # Layer to select from
             layer = viewer.layers.selection._current
-            ndims = layer._view_data.shape[1]
 
-            # Lasso layer
-            lasso_layer = viewer.add_shapes(name='lasso', shape_type='path', edge_width=0.01, face_color=[0] * 4,
-                                            edge_color="blue")
+            if isinstance(layer, napari.layers.Points):
+                ndims = layer._view_data.shape[1]
 
-            # Add first clicked point to lasso path
-            cursor = list(viewer.cursor.position)
-            # cursor[0] = viewer.dims.current_step[0]
-            lasso_path.append(cursor)
-            yield
+                # Lasso layer
+                lasso_layer = viewer.add_shapes(name='lasso', shape_type='path', edge_width=0.01, face_color=[0] * 4,
+                                                edge_color="blue")
 
-            # Keep on adding points on dragging
-            while event.type == 'mouse_move' and not event.type == 'mouse_release':
-                cursor = list(viewer.cursor.position)
+                # Add first clicked point to lasso path
+                cursor = np.asarray(list(viewer.cursor.position))
                 # cursor[0] = viewer.dims.current_step[0]
                 lasso_path.append(cursor)
-                if len(lasso_path) > 1:
-                    try:
-                        lasso_layer.data = [np.array(lasso_path)]
-                    except AttributeError:  # If we are selecting an empty selection just skip it
-                        pass
                 yield
 
-            # Once mouse is released, project points to 2D view if needed
-            if ndims == 3:
-                points = layer._view_data
-                # points_proj = np.asarray([layer.world_to_data(x) for x in points])
-                # lasso_path_proj = np.asarray([layer.world_to_data(x) for x in lasso_path])
-                # projection_direction = np.asarray(layer.world_to_data(viewer.camera.view_direction))
-                points_proj = np.asarray(points)
-                lasso_path_proj = np.asarray(lasso_path)
-                projection_direction = np.asarray(viewer.camera.view_direction)
-                rot = rotation_matrix_from_vectors(projection_direction, np.asarray([0, 0, 1]))
-                points_proj = project_points(points_proj, projection_direction).dot(rot.T)[..., :2]
-                lasso_path_proj = project_points(lasso_path_proj, projection_direction).dot(rot.T)[..., :2]
-            else:
-                points = layer.data
-                lasso_path_proj = np.asarray(lasso_path)
-                if points.shape[1] == 3:
-                    ids = int(lasso_path_proj[0, viewer.dims.not_displayed])
-                    ids = np.argwhere(np.logical_not(np.isclose(points[:, viewer.dims.not_displayed],
-                                                                ids, 1e-2)))[..., 0]
-                    points_proj = points[..., viewer.dims.displayed]
-                    points_proj[ids] *= 10000
+                # Keep on adding points on dragging
+                while event.type == 'mouse_move' and not event.type == 'mouse_release':
+                    cursor = (np.asarray(list(viewer.cursor.position)) +  # We might need to make scale smaller!
+                              np.random.normal(loc=0, scale=0.001, size=3))  # Custom scale based on smallest distance?
+                    # cursor[0] = viewer.dims.current_step[0]
+                    lasso_path.append(cursor)
+                    if len(lasso_path) > 1:
+                        try:
+                            lasso_layer.data = [np.array(lasso_path)]
+                        except AttributeError:  # If we are selecting an empty selection just skip it
+                            pass
+                    yield
 
+                # Once mouse is released, project points to 2D view if needed
+                if ndims == 3:
+                    points = layer._view_data
+                    # points_proj = np.asarray([layer.world_to_data(x) for x in points])
+                    # lasso_path_proj = np.asarray([layer.world_to_data(x) for x in lasso_path])
+                    # projection_direction = np.asarray(layer.world_to_data(viewer.camera.view_direction))
+                    points_proj = np.asarray(points)
+                    lasso_path_proj = np.asarray(lasso_path)
+                    projection_direction = np.asarray(viewer.camera.view_direction)
+                    rot = rotation_matrix_from_vectors(projection_direction, np.asarray([0, 0, 1]))
+                    points_proj = project_points(points_proj, projection_direction).dot(rot.T)[..., :2]
+                    lasso_path_proj = project_points(lasso_path_proj, projection_direction).dot(rot.T)[..., :2]
                 else:
-                    points_proj = points[..., viewer.dims.displayed]
-                lasso_path_proj = lasso_path_proj[..., viewer.dims.displayed]
+                    points = layer.data
+                    lasso_path_proj = np.asarray(lasso_path)
+                    if points.shape[1] == 3:
+                        ids = int(lasso_path_proj[0, viewer.dims.not_displayed])
+                        ids = np.argwhere(np.logical_not(np.isclose(points[:, viewer.dims.not_displayed],
+                                                                    ids, 1e-2)))[..., 0]
+                        points_proj = points[..., viewer.dims.displayed]
+                        points_proj[ids] *= 10000
 
-            # Once mouse is released, create Lasso path and select points
-            path = Path(lasso_path_proj)
-            inside = path.contains_points(points_proj)
-            selected_data = set(np.nonzero(inside)[0])
+                    else:
+                        points_proj = points[..., viewer.dims.displayed]
+                    lasso_path_proj = lasso_path_proj[..., viewer.dims.displayed]
 
-            if self.control_pressed:
-                layer.selected_data = layer.selected_data | selected_data
-            elif self.alt_pressed:
-                layer.selected_data = layer.selected_data - selected_data
-            else:
-                layer.selected_data = set(np.nonzero(inside)[0])
-            lasso_path.clear()
+                # Once mouse is released, create Lasso path and select points
+                path = Path(lasso_path_proj)
+                inside = path.contains_points(points_proj)
+                selected_data = set(np.nonzero(inside)[0])
 
-            # Remove Lasso layer
-            viewer.layers.remove(lasso_layer)
+                if self.control_pressed:
+                    layer.selected_data = layer.selected_data | selected_data
+                elif self.alt_pressed:
+                    layer.selected_data = layer.selected_data - selected_data
+                else:
+                    layer.selected_data = set(np.nonzero(inside)[0])
+                lasso_path.clear()
 
-            # Keep selected layer active
-            viewer.layers.selection.active = layer
+                # Remove Lasso layer
+                viewer.layers.remove(lasso_layer)
+
+                # Keep selected layer active
+                viewer.layers.selection.active = layer
 
             # Bring back warnings
             warnings.filterwarnings('default')
