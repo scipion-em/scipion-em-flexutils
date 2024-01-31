@@ -108,14 +108,12 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
                            "Note that larger values may lead to divergence.")
         form.addParam('dThr', params.FloatParam, default=1e-6,
-                      condition="useGpu",
                       label="Denoising threshold",
                       help="Larger values will decrease the noise levels more efficiently, although protein signal "
                            "might suffer unwanted modifications if the value is too large.")
         form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
                       label="Save partial reconstructions for every ZART iteration?")
         form.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
-                      condition="useGpu",
                       label="Remove negative values from reconstructed volume?")
         form.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
                       default=0, display=params.EnumParam.DISPLAY_HLIST,
