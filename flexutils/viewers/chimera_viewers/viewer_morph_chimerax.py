@@ -49,58 +49,17 @@ class FlexMorphChimeraX(QObject):
     VIEW = "view\n"
     finished = pyqtSignal()
 
-    def __init__(self, _z_space, _file_names, _mode, _path, **kwargs):
+    def __init__(self, _z_space, _file_names, _path):
         super(QObject, self).__init__()
         self.z_space = _z_space
-        self.mode = _mode
         self.file_names = _file_names
         self.path = _path
-        self.other_inputs = kwargs
-
-        if "origin" in self.file_names:
-            index = self.file_names.index("origin")
-            self.file_names.remove("origin")
-            self.z_space = np.delete(self.z_space, index, axis=0)
 
     def showSalesMan(self, param=None):
         # Get shortest path
         self.computeSalesManPath()
         path = self.readPath()[0] - 1
         path = path.astype(int)
-
-        # Generate maps
-        if self.mode == const.ZERNIKE3D:
-            from flexutils.protocols.xmipp.utils.utils import applyDeformationField
-            d = ImageHandler().read(os.path.join(self.path, "reference_original.mrc")).getDimensions()[0]
-            factor = d / 64
-            for idz in path:
-                applyDeformationField("reference_original.mrc", "mask_reference_original.mrc",
-                                      self.file_names[idz] + ".mrc", self.path, factor * self.z_space[idz],
-                                      int(self.other_inputs["L1"]), int(self.other_inputs["L2"]), 0.5 * d)
-        elif self.mode == const.CRYODRGN:
-            import cryodrgn
-            from cryodrgn.utils import generateVolumes
-            cryodrgn.Plugin._defineVariables()
-            for idz in path:
-                generateVolumes(self.z_space[idz, :], self.other_inputs["weights"],
-                                self.other_inputs["config"], self.path, downsample=int(self.other_inputs["boxsize"]),
-                                apix=int(self.other_inputs["sr"]))
-                ImageHandler().convert(os.path.join(self.path, "vol_000.mrc"),
-                                       os.path.join(self.path, self.file_names[idz] + ".mrc"), overwrite=True)
-        elif self.mode == const.HETSIREN:
-            from flexutils.utils import generateVolumesHetSIREN
-            for idz in path:
-                generateVolumesHetSIREN(self.other_inputs["weights"], self.z_space[idz, :],
-                                        self.path, step=self.other_inputs["step"])
-                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_01.mrc"),
-                                       os.path.join(self.path, self.file_names[idz] + ".mrc"), overwrite=True)
-        elif self.mode == const.NMA:
-            from flexutils.utils import generateVolumesDeepNMA
-            for idz in path:
-                generateVolumesDeepNMA(self.other_inputs["weights"], self.z_space[idz, :],
-                                        self.path, sr=self.other_inputs["sr"], xsize=self.other_inputs["boxsize"])
-                ImageHandler().convert(os.path.join(self.path, "decoded_map_class_01.mrc"),
-                                       os.path.join(self.path, self.file_names[idz] + ".mrc"), overwrite=True)
         self.file_names = [self.file_names[i] for i in path]
 
         # # Useful parameters
@@ -127,17 +86,6 @@ class FlexMorphChimeraX(QObject):
 
     def showRandomWalk(self):
         path = self.computeRandomWalkPath()
-
-        # Generate maps
-        if self.mode == "Zernike3D":
-            from flexutils.protocols.xmipp.utils.utils import applyDeformationField
-            d = ImageHandler().read(os.path.join(self.path, "reference_original.mrc")).getDimensions()[0]
-            for idz in np.unique(path):
-                print(idz)
-                applyDeformationField("reference_original.mrc", "mask_reference_original.mrc",
-                                      self.file_names[idz] + ".mrc", self.path, self.z_space[idz],
-                                      int(self.other_inputs["L1"]), int(self.other_inputs["L2"]), 0.5 * d)
-
         self.file_names = self.file_names[np.unique(path)]
 
         scriptFile = os.path.join(self.path, 'morph_orig_ref_chimera.cxc')

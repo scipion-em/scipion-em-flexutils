@@ -28,7 +28,7 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.object import CsvList
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
@@ -46,7 +46,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
     """ Reduced structure based conformational landscape """
 
     _label = 'structure landscape'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'outputParticles'
     DIMENSIONS = [2, 3]
     SAVE = ["structures", "residuals"]

@@ -25,7 +25,7 @@
 # **************************************************************************
 
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.object import Boolean
 
@@ -38,7 +38,7 @@ class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):
     """ Associate flexible spaces and info to a different set of particles """
 
     _label = 'associate flex space to particles'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'flexParticles'
 
     # --------------------------- DEFINE param functions ----------------------

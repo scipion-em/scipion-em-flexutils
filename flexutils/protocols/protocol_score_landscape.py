@@ -28,7 +28,7 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.object import Float
@@ -45,7 +45,7 @@ class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):
     """
 
     _label = 'score/filter landscape'
-    _devStatus = BETA
+    _devStatus = NEW
 
     def _defineParams(self, form):
         form.addSection(label='Input')

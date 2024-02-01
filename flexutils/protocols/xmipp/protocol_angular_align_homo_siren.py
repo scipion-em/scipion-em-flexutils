@@ -153,6 +153,11 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
                        help="When XLA compilation is allowed, extra optimizations are applied during neural network "
                             "training increasing the training performance. However, XLA will only work with compatible "
                             "GPUs. If any error is experienced, set to No.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
         group = form.addGroup("Extra network parameters")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
@@ -235,7 +240,8 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             ih = ImageHandler()
             inputVolume = self.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.newXdim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
@@ -244,7 +250,8 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
             inputMask = self.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.newXdim:
                     self.runJob("xmipp_image_resize",
                                 "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
@@ -283,6 +290,7 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         xla = self.xla.get()
+        tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad %d --refine_pose " \
                "--sr %f --apply_ctf %d --step %d --l1_reg %f --lr %f --multires %s " \
@@ -321,6 +329,9 @@ class TensorflowProtAngularAlignmentHomoSiren(ProtAnalysis3D):
 
         if xla:
             args += " --jit_compile"
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

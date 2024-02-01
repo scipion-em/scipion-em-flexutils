@@ -372,7 +372,7 @@ def computeZernikes3D(l1, n, l2, m, pos, r_max):
         elif m == -6:
             Y = sinth*((costh2)*1.0135125E+6-6.75675E+4)*np.power(costh2-1.0,3.0)*-7.878532816224526E-6
         elif m == -5:
-            Y = sinth*np.power((costh2)*-1.0+1.0,5.0/2.0)*(costh*6.75675E+4-(costh2*costh)*3.378375E+5)*-5.105872826582925E-56
+            Y = sinth*np.power((costh2)*-1.0+1.0,5.0/2.0)*(costh*6.75675E+4-(costh2*costh)*3.378375E+5)*-5.105872826582925E-5
         elif m == -4:
             Y = sinth*np.power(costh2-1.0,2.0)*((costh2)*-3.378375E+4+(costh2*costh2)*8.4459375E+4+1.299375E+3)*3.681897256448963E-4
         elif m == -3:

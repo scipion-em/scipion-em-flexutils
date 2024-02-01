@@ -29,13 +29,35 @@ import numpy as np
 import mlrose
 
 
+def compute_distances(coordinates):
+    M, N = coordinates.shape
+
+    diff = coordinates[:, np.newaxis, :] - coordinates[np.newaxis, :, :]
+    squared_diff = diff ** 2.
+    distances = np.sqrt(np.sum(squared_diff, axis=2))
+
+    u, v = np.meshgrid(np.arange(M), np.arange(M), indexing='ij')
+
+    # Filter out the diagonal entries where u == v
+    mask = u != v
+    filtered_u = u[mask]
+    filtered_v = v[mask]
+    filtered_distances = distances[mask]
+
+    result = np.stack((filtered_u, filtered_v, filtered_distances), axis=1)
+
+    return result
+
 def salesmanSolver(coords, outpath):
     # Find optimum path
     num_clusters = coords.shape[0]
-    fitness_coords = mlrose.TravellingSales(coords=coords)
+    distances = compute_distances(coords)
+    fitness_coords = mlrose.TravellingSales(distances=distances)
     problem_fit = mlrose.TSPOpt(length=num_clusters, fitness_fn=fitness_coords,
                                 maximize=False)
-    best_state, best_fitness = mlrose.genetic_alg(problem_fit, random_state=2)
+    best_state, best_fitness = mlrose.simulated_annealing(problem_fit, max_attempts=10,  # We might try 100
+                                                          random_state=np.arange(num_clusters),
+                                                          schedule=mlrose.ArithDecay(init_temp=10.0))
 
     # Save optimum path and fitness
     with open(outpath, 'w') as fid:
@@ -64,7 +86,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read and generate data
-    coords = readZernike3DFile(args.coords, args.num_vol)
+    coords = np.loadtxt(args.coords)[args.num_vol:]
+    # coords = readZernike3DFile(args.coords, args.num_vol)
 
     # Initialize volume slicer
     salesmanSolver(coords=coords, outpath=args.outpath)

@@ -37,7 +37,7 @@ from xmipp_metadata.image_handler import ImageHandler
 # Scipion em imports
 from pwem.protocols import ProtAnalysis3D
 from pwem.objects import SetOfParticles, Volume, Integer
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
@@ -62,7 +62,7 @@ class XmippProtPrepareZernikeVolumes(ProtAnalysis3D, ProtFlexBase):
 
     # Protocol constants
     _label = 'prepare volumes - Zernike3Deep'
-    _devStatus = BETA
+    _devStatus = NEW
     _possibleOutputs = {OUTPUTATTRIBUTE: SetOfParticles}
 
     # Form constants

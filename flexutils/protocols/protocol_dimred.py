@@ -28,7 +28,7 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.object import CsvList, Boolean
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
@@ -46,9 +46,8 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
     """ Dimensionality reduction of spaces based on different methods """
 
     _label = 'dimred space'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'outputParticles'
-    DIMENSIONS = [2, 3]
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -117,11 +116,10 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                            "adding the cosine distance mapping to the cost function will lead to more discriminative "
                            "embeddings, at the expense of having possible visual artefacts. By default it is set to "
                            "1.0 consider it in the cost function.")
-        form.addParam('dimensions', EnumParam, choices=['2D', '3D'],
-                      default=0, display=EnumParam.DISPLAY_HLIST,
-                      label="Landscape space dimensions?",
-                      help="Determine if the original landscape will be reduced to have "
-                           "2 or 3 dimensions.")
+        form.addParam('dimensions', IntParam, default=3,
+                      label="Reduced landscape space dimensions?",
+                      help="Determine the number of dimensions the reduced landscape will have. It must be a value "
+                           "larger than three and smaller or equal to the number of dimension in the original space.")
         form.addParallelSection(threads=4, mpi=0)
 
 
@@ -179,7 +177,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
             args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
                    "--n_components %d --thr %d" \
                    % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
-                      self.DIMENSIONS[self.dimensions.get()], self.numberOfThreads.get())
+                      self.dimensions.get(), self.numberOfThreads.get())
             if self.densmap_umap.get():
                 args += " --densmap"
             program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
@@ -187,7 +185,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
             self.runJob(program, args)
         elif mode == 1:
             args = "--input %s --pca --n_components %d --output %s" \
-                   % (file_z_space, self.DIMENSIONS[self.dimensions.get()], file_coords)
+                   % (file_z_space, self.dimensions.get(), file_coords)
             program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
@@ -196,7 +194,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                    "--end_power %f --vae_sigma %f --lat_dim %d --loss_lambda %f" \
                     % (file_z_space, file_coords, self.clusters.get(), self.init_power.get(),
                        self.end_power.get(), self.vae_sigma.get(),
-                       self.DIMENSIONS[self.dimensions.get()], self.loss_lambda.get())
+                       self.dimensions.get(), self.loss_lambda.get())
 
             if self.useGpu.get():
                 gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -219,3 +217,22 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
         return [
             "Dimensionality reduction of spaces based on different methods",
         ]
+
+    def _validate(self):
+        errors = []
+
+        # Check number of reduced dimensions
+        particles = self.particles.get()
+        original_dimensions = len(particles.getFirstItem().getZFlex())
+        dimensions = self.dimensions.get()
+        if dimensions < 3:
+            errors.append(f"The number of dimensions in the reduced space must be larger than 3. Currently "
+                          f"it is set to {dimensions}")
+        if dimensions > original_dimensions:
+            errors.append(f"The number of dimensions in the reduced space must be smalller than or equal to "
+                          f"the number of dimensions in the original space (original dimensions "
+                          f"= {original_dimensions}. Currently set to {dimensions}."
+                          "it is set to {dimensions}")
+
+        return errors
+

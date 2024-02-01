@@ -40,6 +40,8 @@ from flexutils.objects import SetOfParticlesFlex
 from flexutils.protocols.protocol_base import ProtFlexBase
 import flexutils.constants as const
 
+import xmipp3
+
 
 def _getSize(imgSet):
     """ get the size of an object"""
@@ -253,13 +255,13 @@ class XmippProtCropResizeZernikeVolumes(XmippProcessVolumes):
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def filterStep(self, isFirstStep, args):
-        XmippResizeHelper.filterStep(self, self._ioArgs(isFirstStep) + args)
+        self.runJob("xmipp_transform_filter", self._ioArgs(isFirstStep) + args, env=xmipp3.Plugin.getEnviron())
 
     def resizeStep(self, isFirstStep, args):
-        XmippResizeHelper.resizeStep(self, self._ioArgs(isFirstStep) + args)
+        self.runJob("xmipp_image_resize", self._ioArgs(isFirstStep) + args, env=xmipp3.Plugin.getEnviron())
 
     def windowStep(self, isFirstStep, args):
-        XmippResizeHelper.windowStep(self, self._ioArgs(isFirstStep) + args)
+        self.runJob("xmipp_transform_window", self._ioArgs(isFirstStep) + args, env=xmipp3.Plugin.getEnviron())
 
     def _preprocessOutput(self, volumes):
         # We use the preprocess only whne input is a set

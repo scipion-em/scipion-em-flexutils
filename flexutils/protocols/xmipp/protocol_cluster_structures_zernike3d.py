@@ -28,7 +28,7 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.object import Boolean
 from pyworkflow.protocol.params import PointerParam, FloatParam
 
@@ -45,7 +45,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Automatic clustering at atomic structure level based on a threshold distance """
 
     _label = 'structure clustering - Zernike3D'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'clusteredStructures'
 
     # --------------------------- DEFINE param functions ----------------------

@@ -78,10 +78,16 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
         form.addSection(label='Output')
-        form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
+        form.addParam("filterDecoded", params.BooleanParam, default=True, label="Filter decoded map?",
                       help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
                            "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
                            "greater than 1")
+        form.addParam("onlyPos", params.BooleanParam, default=False, label="Remove negative values?",
+                      help="If True, the negative values from map decoded after training the network will be removed.")
+        form.addParam("numVol", params.IntParam, default=20, label="Number of decoded maps",
+                      help="Determines in how many regions the trained latent space will be splitted by "
+                           "KMeans, allowing to decode a state based on the representative of each cluster. "
+                           "This provides and initial summary/exploration of the trained landscape")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -112,26 +118,29 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
+        self.vol_mask_dim = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() is not None else self.newXdim
 
         if hetSirenProtocol.inputVolume.get():  # Map reference
             ih = ImageHandler()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if hetSirenProtocol.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.vol_mask_dim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -164,10 +173,12 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
-        numVol = hetSirenProtocol.numVol.get()
+        numVol = self.numVol.get()
+        trainSize = hetSirenProtocol.trainSize.get()
+        outSize = hetSirenProtocol.outSize.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
-               "--sr %f --apply_ctf %d --het_dim %d --num_vol %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol)
+               "--sr %f --apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
 
         if hetSirenProtocol.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -185,6 +196,9 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         if self.filterDecoded.get():
             args += " --apply_filter"
 
+        if self.onlyPos.get():
+            args += " --only_pos"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
@@ -197,6 +211,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
+        outSize = hetSirenProtocol.outSize.get()
+        trainSize = hetSirenProtocol.trainSize.get()
         model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -267,12 +283,16 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(hetSirenProtocol.step.get())
+        partSet.getFlexInfo().outSize = Integer(outSize)
+        partSet.getFlexInfo().trainSize = Integer(trainSize)
 
         if hetSirenProtocol.inputVolume.get():
-            inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
             partSet.getFlexInfo().refMap = String(inputVolume)
+
+        if hetSirenProtocol.inputVolumeMask.get():
+            inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
+            partSet.getFlexInfo().refMask = String(inputMask)
 
         if hetSirenProtocol.architecture.get() == 0:
             partSet.getFlexInfo().architecture = String("convnn")
@@ -288,7 +308,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         outVols = self._createSetOfVolumes()
         outVols.setSamplingRate(inputParticles.getSamplingRate())
-        for idx in range(hetSirenProtocol.numVol.get()):
+        for idx in range(self.numVol.get()):
             outVol = Volume()
             outVol.setSamplingRate(inputParticles.getSamplingRate())
 

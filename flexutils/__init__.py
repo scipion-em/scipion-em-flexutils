@@ -33,11 +33,13 @@ import importlib
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
+from pwem import Config as emConfig
+
 import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.0.2"
+__version__ = "3.1.0"
 _logo = "icon.png"
 _references = []
 
@@ -102,8 +104,9 @@ class Plugin(pwplugin.Plugin):
             # pywem_path = os.path.join(pwem.__path__[0], "..")
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d python %(program)s ' % locals()
+        else:
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
@@ -122,17 +125,38 @@ class Plugin(pwplugin.Plugin):
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
             installationCmd = f"{conda_init} conda activate flexutils && " \
-                              f"pip install -e " \
-                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@tf_datasets#egg=flexutils-toolkit" \
-                              f" -v && "
+                              f"git clone -b master https://github.com/I2PC/Flexutils-Toolkit.git && " \
+                              f"cd Flexutils-Toolkit && " \
+                              f"bash install.sh && cd .. && "
             installationCmd += "touch flexutils_tensorflow_installed"
             return installationCmd
 
+        def getUpdateCommands():
+            conda_init = cls.getCondaActivationCmd()
+            updateCmd = f"{conda_init} conda activate flexutils && "
+            updateCmd += "echo '###### Updating NN binaries.... ######' && "
+            updateCmd += "cd Flexutils-Toolkit && "
+            updateCmd += "git pull && "
+            updateCmd += "bash install.sh && "
+            updateCmd += "cd .. && "
+            updateCmd += "echo '###### Binaries updated succesfully! ######' && "
+            updateCmd += "touch flexutils_tensorflow_updated"
+            return updateCmd
+
+        binary_path = os.path.join(emConfig.EM_ROOT, f'flexutils-{__version__}')
         commands = []
-        installationEnv = getCondaInstallationFlexutils()
-        installationTensorflow = getCondaInstallationTensorflow()
-        commands.append((installationEnv, ["flexutils_installed"]))
-        commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
+
+        if not os.path.isfile(os.path.join(binary_path, "flexutils_installed")):
+            installationEnv = getCondaInstallationFlexutils()
+            commands.append((installationEnv, ["flexutils_installed"]))
+
+        if not os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_installed")):
+            installationTensorflow = getCondaInstallationTensorflow()
+            commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
+
+        if os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_updated")):
+            os.remove(os.path.join(binary_path, "flexutils_tensorflow_updated"))
+        commands.append((getUpdateCommands(), ["flexutils_tensorflow_updated"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,

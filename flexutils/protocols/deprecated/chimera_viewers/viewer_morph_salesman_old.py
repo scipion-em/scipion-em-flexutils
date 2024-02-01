@@ -38,7 +38,7 @@ from pwem.objects import SetOfClasses3D
 
 import flexutils
 from flexutils.protocols.protocol_annotate_space import ProtFlexAnnotateSpace
-from flexutils.protocols.protocol_cluster_space import ProtFlexClusterSpace
+from flexutils.protocols.deprecated.protocol_cluster_space import ProtFlexClusterSpace
 from flexutils.utils import getOutputSuffix
 
 import xmipp3

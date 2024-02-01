@@ -106,26 +106,29 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
+        self.vol_mask_dim = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() is not None else self.newXdim
 
         if hetSirenProtocol.inputVolume.get():  # Map reference
             ih = ImageHandler()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if hetSirenProtocol.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.vol_mask_dim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
@@ -152,9 +155,11 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.ctfType.get()
         hetDim = hetSirenProtocol.hetDim.get()
+        trainSize = hetSirenProtocol.trainSize.get()
+        outSize = hetSirenProtocol.outSize.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
-               "--sr %f --apply_ctf %d --het_dim %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim)
+               "--sr %f --apply_ctf %d --het_dim %d --trainSize %d --outSize %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, trainSize, outSize)
 
         if hetSirenProtocol.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -186,6 +191,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
+        trainSize = hetSirenProtocol.trainSize.get()
+        outSize = hetSirenProtocol.outSize.get()
         model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -259,6 +266,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(hetSirenProtocol.step.get())
+        partSet.getFlexInfo().outSize = Integer(outSize)
+        partSet.getFlexInfo().trainSize = Integer(trainSize)
 
         if hetSirenProtocol.inputVolume.get():
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()

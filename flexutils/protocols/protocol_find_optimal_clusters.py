@@ -30,7 +30,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 
 from pwem.protocols import ProtAnalysis3D
@@ -42,7 +42,7 @@ class ProtFlexOptimalClusters(ProtAnalysis3D):
     """ Optimal cluster number analysis for flexibility spaces """
 
     _label = 'find optimal clusters'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'selectedReference'
     CHOICES = ["KMeans"]
 

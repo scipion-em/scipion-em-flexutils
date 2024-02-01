@@ -28,7 +28,7 @@
 import numpy as np
 from xmipp_metadata.image_handler import ImageHandler
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
 import pyworkflow.utils as pwutils
 from pyworkflow.object import Boolean
@@ -51,7 +51,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
      a SetOfParticles """
 
     _label = 'select views'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'selectedParticles'
 
     # --------------------------- DEFINE param functions ----------------------

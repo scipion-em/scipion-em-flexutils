@@ -33,7 +33,7 @@ import pyvistaqt as pvqt
 class pointCloudPlot(object):
 
     def __init__(self, points=None, deformation=None):
-        self.points = points
+        self.points = points[:, :3]
         self.deformation = deformation
 
         # Define actors
