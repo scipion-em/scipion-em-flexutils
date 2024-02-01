@@ -71,7 +71,5 @@ jobs:
     # Installing Flexutils
     - name: Install Flexutils and show log
       working-directory: ${{ github.workspace }}/../
-      env:
-        BUILD_TESTS: True
       run: |
         ./scipion/scipion3 installp -p ./scipion-em-flexutils --devel
