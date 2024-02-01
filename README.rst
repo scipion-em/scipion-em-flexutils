@@ -45,7 +45,7 @@ The installation of the Plugin also requires Conda to be installed in the system
 
     CONDA_ACTIVATION_CMD = eval "$(/path/to/your/conda/installation/condabin/conda shell.bash hook)"
 
-Additionally, the optional component `Open3D` can be installed to add extra functionalities during the network training phase. In order to install this package, the following requirements must be satisfied:
+Additionally, the optional component *Open3D* can be installed to add extra functionalities during the network training phase. In order to install this package, the following requirements must be satisfied:
 
 - CUDA must be installed in your system and properly added to the ``PATH`` and ``LD_LIBRARY_PATH`` variables
 - You should check the following dependencies are installed in your system:
@@ -54,7 +54,7 @@ Additionally, the optional component `Open3D` can be installed to add extra func
 
     sudo apt install xorg-dev libxcb-shm0 libglu1-mesa-dev python3-dev clang libc++-dev libc++abi-dev libsdl2-dev ninja-build libxi-dev libtbb-dev libosmesa6-dev libudev-dev autoconf libtool
 
-If the previous requirements are not met, `Open3D` installation will be just skipped.
+If the previous requirements are not met, *Open3D* installation will be just skipped.
 
 ==========================
 Tutorials
