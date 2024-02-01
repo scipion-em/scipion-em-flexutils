@@ -41,7 +41,7 @@ Thee following libraries are also needed by PyQt.
 
 The viewers associated to this plugin require OpenGL 3.2 or later and Mesa 11.2 or later.
 
-The installation of the Plugin also requires Conda to be installed in the system. In addition, Scipion needs to know where Conda has been installed. This can be done by adding to your ``scipion.conf`` file the following variable:
+The installation of the Plugin also requires Conda to be installed in the system. In addition, Scipion needs to know where Conda has been installed. This can be done by adding to your scipion.conf file the following variable:
 
 .. code-block::
 
@@ -49,7 +49,7 @@ The installation of the Plugin also requires Conda to be installed in the system
 
 Additionally, the optional component *Open3D* can be installed to add extra functionalities during the network training phase. In order to install this package, the following requirements must be satisfied:
 
-- CUDA must be installed in your system and properly added to the ``PATH`` and ``LD_LIBRARY_PATH`` variables
+- CUDA must be installed in your system and properly added to the PATH and LD_LIBRARY_PATH variables
 - You should check the following dependencies are installed in your system:
 
 .. code-block::
