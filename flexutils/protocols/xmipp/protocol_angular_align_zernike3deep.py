@@ -56,7 +56,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for flexible angular alignment with the Zernike3Deep algortihm. """
     _label = 'flexible align - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
-    _subset = ["ca", "bb", "all"]
+    _subset = ["bb", "all"]
 
     # --------------------------- DEFINE param functions --------------------------------------------
     def _defineParams(self, form):
@@ -94,9 +94,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "from the input particles. This will ensure that the structure coordinates are "
                             "properly placed in the expected reference frame.")
         group.addParam("atomSubset", params.EnumParam, label="Atoms considered",
-                       choices=['CA', 'Backbone', 'Full'], default=0, condition="referenceType==1",
+                       choices=['Backbone', 'Full'], default=0, condition="referenceType==1",
                        help="Atoms to be considered for the computation of the normal modes. Options include: \n"
-                            "\t **CA**: Use carbon alpha only\n"
                             "\t **Backbone**: Use protein backbone only\n"
                             "\t **Full**: Use all the atomic structure")
         group.addParam('boxSize', params.IntParam, default=128,
