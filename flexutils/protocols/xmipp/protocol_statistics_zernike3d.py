@@ -28,7 +28,7 @@
 import os
 
 import xmipp3
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam
 
 from pwem.protocols import ProtAnalysis3D
@@ -47,7 +47,7 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
     """ 3D visualization of motion statistics """
 
     _label = 'motion statistics - Zernike3D'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'zernike3DClasses'
 
     # --------------------------- DEFINE param functions ----------------------

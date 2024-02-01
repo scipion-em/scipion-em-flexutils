@@ -31,7 +31,7 @@ from glob import glob
 from sklearn.neighbors import KDTree
 from xmipp_metadata.image_handler import ImageHandler
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import (PointerParam, IntParam, MultiPointerParam, BooleanParam, StringParam,
                                         USE_GPU, GPU_LIST)
@@ -55,7 +55,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     """ Interactive annotation of conformational spaces """
 
     _label = 'annotate space'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'flexible3DClasses'
 
     # --------------------------- DEFINE param functions ----------------------

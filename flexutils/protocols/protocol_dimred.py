@@ -28,7 +28,7 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.object import CsvList, Boolean
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
@@ -46,7 +46,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
     """ Dimensionality reduction of spaces based on different methods """
 
     _label = 'dimred space'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'outputParticles'
 
     # --------------------------- DEFINE param functions ----------------------
