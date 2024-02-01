@@ -30,8 +30,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install setuptools wheel twine
-        pip install numpy==1.23.0 scipy==1.8.1 cython==0.28.5
-        pip install -r requirements.txt
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
