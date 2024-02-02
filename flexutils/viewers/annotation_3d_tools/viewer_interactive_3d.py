@@ -133,38 +133,40 @@ class MenuWidget(QWidget):
 class MultipleViewerWidget(QSplitter):
     """The main widget of the example."""
 
-    def __init__(self, viewer: napari.Viewer, ndims):
+    def __init__(self, viewer: napari.Viewer, ndims, interactive):
         super().__init__()
         self.viewer = viewer
-        self.viewer_model1 = ViewerModel(title="map_view", ndisplay=3)
 
-        self.qt_viewer1 = QtViewerWrap(self.viewer_model1, self.viewer_model1)
+        if interactive:
+            self.viewer_model1 = ViewerModel(title="map_view", ndisplay=3)
 
-        self.tab_widget = QTabWidget()
-        self.menu_widget = MenuWidget(ndims)
-        dims = [f"Dim {dim + 1}" for dim in range(ndims)]
-        items = [("X axis", dims), ("Y axis", dims), ("Z axis", dims)]
-        value = ["Dim 1", "Dim 2", "Dim 3"]
-        self.right_widgets = [ComboBox(choices=c, label=l, value=val) for [l, c], val in zip(items, value)]
-        self.right_widgets.append(Slider(value=20, min=1, max=50, label="Landscape-Vol sigma"))
-        self.right_widgets.append(Button(label="Extract selection to layer"))
-        self.right_widgets.append(ComboBox(choices=[], label="# layer"))
-        self.right_widgets.append(Button(label="Add selection to # layer"))
-        self.right_widgets.append(Slider(value=100, min=1, max=300, label="Landscape-Vol-Labels #"))
-        self.select_axis_container = Container(widgets=self.right_widgets)
-        w1 = QtLayerControlsContainer(self.viewer_model1)
-        self.tab_widget.addTab(w1, "Map view")
-        self.tab_widget.addTab(self.menu_widget, "Menu")
-        self.tab_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+            self.qt_viewer1 = QtViewerWrap(self.viewer_model1, self.viewer_model1)
 
-        self.viewer.window.add_dock_widget(self.tab_widget, area="bottom")
-        self.viewer.window.add_dock_widget(self.qt_viewer1, area="bottom")
-        self.viewer.window.add_dock_widget(self.select_axis_container, area="right", name="Landscape controls")
+            self.tab_widget = QTabWidget()
+            self.menu_widget = MenuWidget(ndims)
+            dims = [f"Dim {dim + 1}" for dim in range(ndims)]
+            items = [("X axis", dims), ("Y axis", dims), ("Z axis", dims)]
+            value = ["Dim 1", "Dim 2", "Dim 3"]
+            self.right_widgets = [ComboBox(choices=c, label=l, value=val) for [l, c], val in zip(items, value)]
+            self.right_widgets.append(Slider(value=20, min=1, max=50, label="Landscape-Vol sigma"))
+            self.right_widgets.append(Button(label="Extract selection to layer"))
+            self.right_widgets.append(ComboBox(choices=[], label="# layer"))
+            self.right_widgets.append(Button(label="Add selection to # layer"))
+            self.right_widgets.append(Slider(value=100, min=1, max=300, label="Landscape-Vol-Labels #"))
+            self.select_axis_container = Container(widgets=self.right_widgets)
+            w1 = QtLayerControlsContainer(self.viewer_model1)
+            self.tab_widget.addTab(w1, "Map view")
+            self.tab_widget.addTab(self.menu_widget, "Menu")
+            self.tab_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
+
+            self.viewer.window.add_dock_widget(self.tab_widget, area="bottom")
+            self.viewer.window.add_dock_widget(self.qt_viewer1, area="bottom")
+            self.viewer.window.add_dock_widget(self.select_axis_container, area="right", name="Landscape controls")
 
 
 class Annotate3D(object):
 
-    def __init__(self, data, z_space, mode, path=".", **kwargs):
+    def __init__(self, data, z_space, mode=None, path=".", interactive=True, **kwargs):
         # Prepare attributes
         self.class_inputs = kwargs
         self.data = data
@@ -196,7 +198,10 @@ class Annotate3D(object):
         self.view = napari.Viewer(ndisplay=3, title="Flexutils 3D Annotation")
         self.view.window._qt_window.setWindowIcon(QIcon(os.path.join(os.path.dirname(flexutils.__file__),
                                                                      "icon_square.png")))
-        self.dock_widget = MultipleViewerWidget(self.view, self.data.shape[1])
+        self.dock_widget = MultipleViewerWidget(self.view, self.data.shape[1], interactive=interactive)
+
+        # Load in view or interactive mode
+        self.view.window.qt_viewer.dockLayerControls.setVisible(interactive)
 
         # PCA for clustering along dimension
         self.pca = PCA(n_components=self.data.shape[1])
@@ -251,84 +256,90 @@ class Annotate3D(object):
         self.view.add_labels(labels, name='Landscape-Vol-Labels', visible=False)
         # vol_layer.editable = False
 
-        if "boxsize" in self.class_inputs.keys():
-            boxsize = int(self.class_inputs["boxsize"])
-        else:
-            boxsize = 64
-        dummy_vol = np.zeros((boxsize, boxsize, boxsize))
-        self.dock_widget.viewer_model1.add_image(dummy_vol, name="Map", rendering="mip")
+        if interactive:
+            if "boxsize" in self.class_inputs.keys():
+                boxsize = int(self.class_inputs["boxsize"])
+            else:
+                boxsize = 64
+            dummy_vol = np.zeros((boxsize, boxsize, boxsize))
+            self.dock_widget.viewer_model1.add_image(dummy_vol, name="Map", rendering="mip")
 
         # Selections layers
-        self.reloadView()
+        if interactive:
+            self.reloadView()
 
         # Add callbacks
-        self.dock_widget.viewer.mouse_drag_callbacks.append(self.lassoSelector)
-        self.dock_widget.viewer.bind_key("Control", self.control_detection)
-        self.dock_widget.viewer.bind_key("Alt", self.alt_detection)
-        self.dock_widget.menu_widget.save_btn.clicked.connect(self.saveSelections)
-        self.dock_widget.menu_widget.cluster_btn.clicked.connect(self._compute_kmeans_fired)
-        self.dock_widget.menu_widget.dimension_btn.clicked.connect(self._compute_dim_cluster_fired)
-        self.dock_widget.menu_widget.morph_button.clicked.connect(self._morph_chimerax_fired)
-        self.dock_widget.viewer.layers.events.inserted.connect(self.on_insert_add_callback)
-        self.dock_widget.right_widgets[0].changed.connect(lambda event: self.selectAxis(0, event))
-        self.dock_widget.right_widgets[1].changed.connect(lambda event: self.selectAxis(1, event))
-        self.dock_widget.right_widgets[2].changed.connect(lambda event: self.selectAxis(2, event))
-        self.dock_widget.right_widgets[3].changed.connect(self.updateVolSigma)
-        self.dock_widget.right_widgets[5].choices = self.getLayerChoices
-        self.dock_widget.right_widgets[4].changed.connect(self.extractSelectionToLayer)
-        self.dock_widget.right_widgets[6].changed.connect(self.addSelectionToLayer)
-        self.dock_widget.right_widgets[7].changed.connect(self.updateVolLabels)
+        if interactive:
+            self.dock_widget.viewer.mouse_drag_callbacks.append(self.lassoSelector)
+            self.dock_widget.viewer.bind_key("Control", self.control_detection)
+            self.dock_widget.viewer.bind_key("Alt", self.alt_detection)
+            self.dock_widget.menu_widget.save_btn.clicked.connect(self.saveSelections)
+            self.dock_widget.menu_widget.cluster_btn.clicked.connect(self._compute_kmeans_fired)
+            self.dock_widget.menu_widget.dimension_btn.clicked.connect(self._compute_dim_cluster_fired)
+            self.dock_widget.menu_widget.morph_button.clicked.connect(self._morph_chimerax_fired)
+            self.dock_widget.viewer.layers.events.inserted.connect(self.on_insert_add_callback)
+            self.dock_widget.right_widgets[0].changed.connect(lambda event: self.selectAxis(0, event))
+            self.dock_widget.right_widgets[1].changed.connect(lambda event: self.selectAxis(1, event))
+            self.dock_widget.right_widgets[2].changed.connect(lambda event: self.selectAxis(2, event))
+            self.dock_widget.right_widgets[3].changed.connect(self.updateVolSigma)
+            self.dock_widget.right_widgets[5].choices = self.getLayerChoices
+            self.dock_widget.right_widgets[4].changed.connect(self.extractSelectionToLayer)
+            self.dock_widget.right_widgets[6].changed.connect(self.addSelectionToLayer)
+            self.dock_widget.right_widgets[7].changed.connect(self.updateVolLabels)
 
-        # Worker threads
-        self.thread_chimerax = None
+            # Worker threads
+            self.thread_chimerax = None
 
-        # Volume generation socket
-        if self.mode == "Zernike3D":
-            flexutils.Plugin._defineVariables()
-            metadata = {"mask": os.path.join(self.path, "mask_reference_original.mrc"),
-                        "volume": os.path.join(self.path, "reference_original.mrc"),
-                        "L1": self.class_inputs["L1"],
-                        "L2": self.class_inputs["L2"],
-                        "boxSize": ImageHandler(os.path.join(self.path, "reference_original.mrc")).getDimensions()[-1],
-                        "outdir": self.path}
-            program = flexutils.Plugin.getProgram(os.path.join(flexutils.__path__[0],
-                                                               "socket", "server.py"), python=True)
-            env = flexutils.Plugin.getEnviron()
-        elif self.mode == "HetSIREN":
-            flexutils.Plugin._defineVariables()
-            metadata = {"weights": self.class_inputs["weights"],
-                        "lat_dim": self.z_space.shape[1],
-                        "architecture": self.class_inputs["architecture"],
-                        "outdir": self.path}
-            program = flexutils.Plugin.getTensorflowProgram(os.path.join(flexutils.__path__[0],
-                                                                         "socket", "server.py"), python=True)
-            env = flexutils.Plugin.getEnviron()
-        elif self.mode == "CryoDrgn":
-            import cryodrgn
-            cryodrgn.Plugin._defineVariables()
-            metadata = {"weights": self.class_inputs["weights"],
-                        "config": self.class_inputs["config"], "outdir": self.path}
-            program = cryodrgn.Plugin.getActivationCmd() + " && python " + \
-                      os.path.join(flexutils.__path__[0], "socket", "server.py")
-            env = cryodrgn.Plugin.getEnviron()
+            # Volume generation socket
+            if self.mode == "Zernike3D":
+                flexutils.Plugin._defineVariables()
+                metadata = {"mask": os.path.join(self.path, "mask_reference_original.mrc"),
+                            "volume": os.path.join(self.path, "reference_original.mrc"),
+                            "L1": self.class_inputs["L1"],
+                            "L2": self.class_inputs["L2"],
+                            "boxSize": ImageHandler(os.path.join(self.path, "reference_original.mrc")).getDimensions()[-1],
+                            "outdir": self.path}
+                program = flexutils.Plugin.getProgram(os.path.join(flexutils.__path__[0],
+                                                                   "socket", "server.py"), python=True)
+                env = flexutils.Plugin.getEnviron()
+            elif self.mode == "HetSIREN":
+                flexutils.Plugin._defineVariables()
+                metadata = {"weights": self.class_inputs["weights"],
+                            "lat_dim": self.z_space.shape[1],
+                            "architecture": self.class_inputs["architecture"],
+                            "outdir": self.path}
+                program = flexutils.Plugin.getTensorflowProgram(os.path.join(flexutils.__path__[0],
+                                                                             "socket", "server.py"), python=True)
+                env = flexutils.Plugin.getEnviron()
+            elif self.mode == "CryoDrgn":
+                import cryodrgn
+                cryodrgn.Plugin._defineVariables()
+                metadata = {"weights": self.class_inputs["weights"],
+                            "config": self.class_inputs["config"], "outdir": self.path}
+                program = cryodrgn.Plugin.getActivationCmd() + " && python " + \
+                          os.path.join(flexutils.__path__[0], "socket", "server.py")
+                env = cryodrgn.Plugin.getEnviron()
 
-        metadata_file = os.path.join(self.path, "metadata.p")
-        with open(metadata_file, 'wb') as fp:
-            pickle.dump(metadata, fp, protocol=pickle.HIGHEST_PROTOCOL)
+            metadata_file = os.path.join(self.path, "metadata.p")
+            with open(metadata_file, 'wb') as fp:
+                pickle.dump(metadata, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Start server
-        self.port = Server.getFreePort()
-        self.server = ServerQThread(program, metadata_file, self.mode, self.port, env)
-        self.server.start()
+            # Start server
+            self.port = Server.getFreePort()
+            self.server = ServerQThread(program, metadata_file, self.mode, self.port, env)
+            self.server.start()
 
-        # Start client
-        self.client = ClientQThread(self.port, self.path, self.mode)
-        self.client.volume.connect(self.updateEmittedMap)
-        self.client.chimera.connect(self.launchChimeraX)
+            # Start client
+            self.client = ClientQThread(self.port, self.path, self.mode)
+            self.client.volume.connect(self.updateEmittedMap)
+            self.client.chimera.connect(self.launchChimeraX)
 
         # Run viewer
         self.app = QApplication.instance()
-        self.app.aboutToQuit.connect(self.on_close_callback)
+
+        if interactive:
+            self.app.aboutToQuit.connect(self.on_close_callback)
+
         with notification_manager, _maybe_allow_interrupt(self.app):
             self.app.exec_()
         # napari.run()
@@ -897,8 +908,9 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, required=True)
     parser.add_argument('--z_space', type=str, required=True)
     parser.add_argument('--interp_val', type=str, required=True)
-    parser.add_argument('--path', type=str, required=True)
-    parser.add_argument('--mode', type=str, required=True)
+    parser.add_argument('--path', type=str, required=False)
+    parser.add_argument('--mode', type=str, required=False)
+    parser.add_argument('--onlyView', action='store_true')
 
     def float_or_str(s):
         try:
@@ -923,6 +935,7 @@ if __name__ == '__main__':
     input_dict = vars(args)
     input_dict['data'] = data
     input_dict['z_space'] = z_space
+    input_dict['interactive'] = not args.onlyView
     # input_dict['interp_val'] = interp_val
 
     # Initialize volume slicer
