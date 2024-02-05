@@ -30,7 +30,8 @@ import numpy as np
 import os
 from xmipp_metadata.image_handler import ImageHandler
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import VolumeFlex, AtomStructFlex
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
@@ -39,8 +40,6 @@ from pyworkflow.object import Float
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import VolumeFlex, AtomStructFlex
 import flexutils.constants as const
 from flexutils.protocols.xmipp.utils.utils import computeBasis, readMap, getCoordsAtLevel, \
     getXmippOrigin, resizeZernikeCoefficients

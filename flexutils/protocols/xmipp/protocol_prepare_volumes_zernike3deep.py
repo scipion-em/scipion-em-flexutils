@@ -35,7 +35,7 @@ from xmipp_metadata.image_handler import ImageHandler
 
 
 # Scipion em imports
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 from pwem.objects import SetOfParticles, Volume, Integer
 from pyworkflow import NEW
 from pyworkflow.protocol import params
@@ -44,7 +44,7 @@ import pyworkflow.utils as pwutils
 # External plugin imports
 import xmipp3
 from xmipp3.convert import readSetOfImages, rowToParticle
-from flexutils.protocols import ProtFlexBase
+
 
 # Protocol output variable name
 OUTPUTATTRIBUTE = 'volumeProjections'

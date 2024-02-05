@@ -30,7 +30,8 @@ import prody as pd
 from pathlib import Path
 import os
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import AtomStructFlex
 
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
@@ -38,8 +39,6 @@ import pyworkflow.utils as pwutils
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import AtomStructFlex
 import flexutils.constants as const
 from flexutils.protocols.xmipp.utils.utils import inscribedRadius
 

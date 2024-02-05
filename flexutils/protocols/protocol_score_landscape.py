@@ -32,11 +32,11 @@ from pyworkflow import NEW
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.object import Float
-from pwem.protocols import ProtAnalysis3D
+
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols import ProtFlexBase
 
 
 class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):

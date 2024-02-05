@@ -24,7 +24,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .protocol_base import ProtFlexBase
 
 from .protocol_select_views import ProtFlexSelectViews
 from .protocol_annotate_space import ProtFlexAnnotateSpace

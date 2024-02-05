@@ -33,9 +33,9 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils import removeExt
 
 from pwem.viewers import ChimeraView
+from pwem import objects
 
 from flexutils.protocols.xmipp.protocol_apply_field_zernike3d import XmippApplyFieldZernike3D
-from flexutils import objects
 
 
 class XmippApplyFieldZernike3DView(ProtocolViewer):

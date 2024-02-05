@@ -32,6 +32,7 @@ from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam
 
 from pwem.protocols import ProtAnalysis3D
+from pwem.objects import SetOfParticlesFlex
 
 import flexutils
 import flexutils.constants as const
@@ -39,7 +40,6 @@ import flexutils.constants as const
 import pwem.emlib.metadata as md
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 
-from flexutils.objects import SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
