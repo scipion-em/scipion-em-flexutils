@@ -134,7 +134,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         group = form.addGroup("Network hyperparameters")
         group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
