@@ -174,8 +174,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
         numVol = self.numVol.get()
-        trainSize = hetSirenProtocol.trainSize.get()
-        outSize = hetSirenProtocol.outSize.get()
+        trainSize = hetSirenProtocol.trainSize.get() if hetSirenProtocol.trainSize.get() else self.newXdim
+        outSize = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() else self.newXdim
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
@@ -186,8 +186,10 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if hetSirenProtocol.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif hetSirenProtocol.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif hetSirenProtocol.architecture.get() == 2:
             args += " --architecture mlpnn"
 
         if hetSirenProtocol.refinePose.get():
