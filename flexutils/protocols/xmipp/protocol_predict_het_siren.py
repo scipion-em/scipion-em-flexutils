@@ -295,8 +295,10 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().refMask = String(inputMask)
 
         if hetSirenProtocol.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("convnn")
+            partSet.getFlexInfo().architecture = String("deepconv")
         elif hetSirenProtocol.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif hetSirenProtocol.architecture.get() == 2:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if hetSirenProtocol.ctfType.get() == 0:

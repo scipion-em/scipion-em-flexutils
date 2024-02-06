@@ -518,8 +518,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("convnn")
+            partSet.getFlexInfo().architecture = String("deepconv")
         elif self.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif self.architecture.get() == 2:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if self.ctfType.get() == 0:
