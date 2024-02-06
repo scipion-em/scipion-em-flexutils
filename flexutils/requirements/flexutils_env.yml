@@ -42,3 +42,4 @@ dependencies:
     #- opticalflow3d
     - pathos
     - scipion-em-xmipp
+    - python_tsp==0.3.1
