@@ -309,8 +309,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         md = XmippMetaData(md_file)
         if isinstance(inputParticles, SetOfParticlesFlex) and \
             inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            scale_fator = 1. / correctionFactor
             z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
-            z_space = (Xdim / self.newXdim) * z_space
+            z_space = scale_fator * z_space
             md[:, "zernikeCoefficients"] = np.asarray([",".join(item) for item in z_space.astype(str)])
         if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
             labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
