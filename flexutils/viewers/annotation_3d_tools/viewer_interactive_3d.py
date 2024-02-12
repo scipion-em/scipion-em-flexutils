@@ -98,7 +98,7 @@ class QtViewerWrap(QtViewer):
 class MenuWidget(QWidget):
     def __init__(self, ndims):
         super().__init__()
-        dims = [f"Dim {dim + 1}" for dim in range(ndims)]
+        dims = [f"Dim {dim + 1}" for dim in range(3)]
         self.save_btn = QPushButton("Save selections")
         self.cluster_btn = QPushButton("Compute KMeans")
         self.cluster_num = QLineEdit()
@@ -169,6 +169,7 @@ class Annotate3D(object):
     def __init__(self, data, z_space, mode=None, path=".", interactive=True, **kwargs):
         # Prepare attributes
         self.class_inputs = kwargs
+        # self.pca_data = data
         self.data = data
         self.z_space = z_space
         self.path = path
@@ -204,8 +205,9 @@ class Annotate3D(object):
         self.view.window.qt_viewer.dockLayerControls.setVisible(interactive)
 
         # PCA for clustering along dimension
-        self.pca = PCA(n_components=self.data.shape[1])
+        self.pca = PCA(n_components=3)
         self.pca.fit(self.z_space)
+        self.pca_data = self.pca.transform(self.z_space)
 
         # Set data in viewers
         points_layer = self.dock_widget.viewer.add_points(np.copy(self.data[:, :3]), size=1, shading='spherical',
@@ -595,30 +597,59 @@ class Annotate3D(object):
             if "Cluster_" in layer_name or "KMeans" in layer_name:
                 self.dock_widget.viewer.layers.remove(layer_name)
 
-        # Compute clusters along dimension and save automatic selection
+        # Determine the range of PCA DIM and divide into X equal intervals
         n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
-        sort_ind = np.argsort(landscape[..., axis])
-        sort_ind_split = np.array_split(sort_ind, n_clusters)
-        centers = np.vstack([np.mean(landscape[ind], axis=0) for ind in sort_ind_split])
-        labels = np.empty_like(sort_ind)
-        for idx in range(len(sort_ind_split)):
-            labels[sort_ind_split[idx]] = idx
-        self.interp_val = labels
+        pca_axis = self.pca_data[..., axis]
+        min_pca1, max_pca1 = pca_axis.min(), pca_axis.max()
+        intervals = np.linspace(min_pca1, max_pca1, n_clusters + 1)
 
-        # Cluster on current space (PCA, UMAP) based on NN
-        # _, inds = self.kdtree_data.query(centers, k=1)
-        # inds = np.array(inds).flatten()
-        # selected_data = np.copy(landscape[inds])
-        # self.kmeans_data.append(np.copy(self.data[inds]))
+        # Initialize lists to hold group means and point indices
+        group_means = []
+        # group_points = []
+        labels = np.empty_like(pca_axis)
+
+        # Compute clusters along dimension and save automatic selection
+        for i in range(n_clusters):
+            # Find points that fall within the current interval
+            in_interval = (pca_axis >= intervals[i]) & (pca_axis < intervals[i + 1])
+            if i == n_clusters - 1:
+                # Ensure the last group includes the max value
+                in_interval = (pca_axis >= intervals[i]) & (pca_axis <= intervals[i + 1])
+            points_in_group = self.pca_data[in_interval, axis]
+
+            if len(points_in_group) > 0:
+                # Assign labels
+                labels[in_interval] = i
+
+                # Compute mean for points in the interval along PCA1
+                mean_pca = np.zeros(3)
+                mean_pca[axis] = points_in_group.mean()
+
+                # Store the mean and the points
+                group_means.append(mean_pca)
+                # group_points.append(points_in_group)
+
+        group_means = np.vstack(group_means)
+        self.interp_val = labels.astype(int)
+
+        # Compute clusters along dimension and save automatic selection
+        # sort_ind = np.argsort(landscape[..., axis])
+        # sort_ind_split = np.array_split(sort_ind, n_clusters)
+        # centers = np.vstack([np.mean(landscape[ind], axis=0) for ind in sort_ind_split])
+        # labels = np.empty_like(sort_ind)
+        # for idx in range(len(sort_ind_split)):
+        #     labels[sort_ind_split[idx]] = idx
+        # self.interp_val = labels
 
         # Cluster always along PCA space
-        _, inds = self.kdtree_data.query(centers, k=1)
-        inds = np.array(inds).flatten()
-        selected_data = np.copy(landscape[inds])
-        z_tr_data = self.pca.inverse_transform(centers)
+        # _, inds = self.kdtree_data.query(group_means, k=1)
+        # inds = np.array(inds).flatten()
+        # selected_data = np.copy(landscape[inds])
+        z_tr_data = self.pca.inverse_transform(group_means)
         self.kmeans_data.append(np.copy(z_tr_data))
 
-        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans along PCA {:d}".format(axis + 1),
+        group_means = 127 * (group_means - np.amin(self.pca_data)) / (np.amax(self.pca_data) - np.amin(self.pca_data))
+        self.dock_widget.viewer.add_points(group_means, size=5, name="KMeans along PCA {:d}".format(axis + 1),
                                            metadata={"needs_closest": False, "save": False})
 
         # Add points for each cluster independently with colors
