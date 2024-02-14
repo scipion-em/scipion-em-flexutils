@@ -39,6 +39,7 @@ import pyworkflow.utils as pwutils
 from pwem import emlib
 from pwem.objects import Volume
 from pwem.protocols import ProtReconstruct3D
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
 # from xmipp3.base import isXmippCudaPresent
@@ -46,7 +47,6 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 

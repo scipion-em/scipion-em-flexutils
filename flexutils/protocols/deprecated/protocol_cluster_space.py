@@ -36,12 +36,11 @@ from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 from pyworkflow.object import Boolean, Integer
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import SetOfVolumesFlex, VolumeFlex
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import SetOfVolumesFlex, VolumeFlex
 import flexutils.constants as const
 
 import xmipp3
@@ -90,14 +89,14 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
         # Get right imports
         if progName == const.NMA:
             createFn = self._createSetOfClassesStructFlex
-            from flexutils.objects import ClassStructFlex as Class
-            from flexutils.objects import AtomStructFlex as Rep
-            from flexutils.objects import SetOfClassesStructFlex as SetOfClasses
+            from pwem.objects import ClassStructFlex as Class
+            from pwem.objects import AtomStructFlex as Rep
+            from pwem.objects import SetOfClassesStructFlex as SetOfClasses
         else:
             createFn = self._createSetOfClassesFlex
-            from flexutils.objects import ClassFlex as Class
-            from flexutils.objects import VolumeFlex as Rep
-            from flexutils.objects import SetOfClassesFlex as SetOfClasses
+            from pwem.objects import ClassFlex as Class
+            from pwem.objects import VolumeFlex as Rep
+            from pwem.objects import SetOfClassesFlex as SetOfClasses
 
         # Read KMean coefficients
         z_space_vw = []

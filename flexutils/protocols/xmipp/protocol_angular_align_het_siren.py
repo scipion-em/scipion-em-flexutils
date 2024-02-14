@@ -37,18 +37,16 @@ from pyworkflow.object import String, Integer, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import Volume
+from pwem.objects import Volume, ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
@@ -134,7 +132,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         group = form.addGroup("Network hyperparameters")
         group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
@@ -520,8 +518,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("convnn")
+            partSet.getFlexInfo().architecture = String("deepconv")
         elif self.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif self.architecture.get() == 2:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if self.ctfType.get() == 0:

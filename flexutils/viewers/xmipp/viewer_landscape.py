@@ -98,8 +98,8 @@ class XmippLandscapeViewer(ProtocolViewer):
 
     def _doShowSpace(self, param=None):
         particles = self.protocol.outputParticles
-        file_z_clnm = self.protocol._getExtraPath("z_clnm.txt")
-        file_deformation = self.protocol._getExtraPath("deformation.txt")
+        file_z_space = self.protocol._getExtraPath("z_space.txt")
+        file_interp = self.protocol._getExtraPath("interp_values.txt")
         mode = self.mode.get()
 
         if mode == 0:
@@ -110,7 +110,7 @@ class XmippLandscapeViewer(ProtocolViewer):
             mode = [mode, ]
 
         def launchViewerNonBlocking(args):
-            (particles, file_z_clnm, file_deformation, file_coords, mode) = args
+            (particles, file_z_space, file_interp, file_coords, mode) = args
 
             z_clnm = []
             for particle in particles.iterItems():
@@ -120,14 +120,14 @@ class XmippLandscapeViewer(ProtocolViewer):
                 raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
             # Generate files to call command line
-            np.savetxt(file_z_clnm, z_clnm)
+            np.savetxt(file_z_space, z_clnm)
 
             # Compute/Read UMAP or PCA
             if mode[0] == 0:
                 if not os.path.isfile(file_coords):
                     args = "--input %s --umap --output %s --n_neighbors %d " \
                            "--n_epochs %d --n_components 3 --thr %d" \
-                           % (file_z_clnm, file_coords, mode[1], mode[2], mode[3])
+                           % (file_z_space, file_coords, mode[1], mode[2], mode[3])
                     if mode[4]:
                         args += " --densmap"
                     program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
@@ -137,7 +137,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                     p.wait()
             elif mode[0] == 1:
                 if not os.path.isfile(file_coords):
-                    args = "--input %s --pca --output %s --n_components 3" % (file_z_clnm, file_coords)
+                    args = "--input %s --pca --output %s --n_components 3" % (file_z_space, file_coords)
                     program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
                     program = flexutils.Plugin.getProgram(program)
                     command = buildRunCommand(program, args, 1)
@@ -150,20 +150,21 @@ class XmippLandscapeViewer(ProtocolViewer):
                 deformation = np.zeros(z_clnm.shape)
 
             # Generate files to call command line
-            np.savetxt(file_deformation, deformation)
+            np.savetxt(file_interp, deformation)
 
             # Run slicer
-            args = "--coords %s --deformation %s" \
-                   % (file_coords, file_deformation)
-            program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
+            args = "--data %s --z_space %s --interp_val %s --onlyView" \
+                   % (file_coords, file_z_space, file_interp)
+            program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
             program = flexutils.Plugin.getProgram(program)
+
             command = buildRunCommand(program, args, 1)
             subprocess.Popen(command, shell=True)
 
         # Launch with Pathos
         p = Pool()
         # p.restart()
-        p.apipe(launchViewerNonBlocking, args=(particles, file_z_clnm, file_deformation, file_coords, mode))
+        p.apipe(launchViewerNonBlocking, args=(particles, file_z_space, file_interp, file_coords, mode))
         # p.join()
         # p.close()
 

@@ -58,11 +58,12 @@ class XmippReducedSpaceViewer(Viewer):
 
     def _visualize(self, obj, **kwargs):
         file_red_space = self.protocol._getExtraPath("red_coords.txt")
-        file_deformation = self.protocol._getExtraPath("deformation.txt")
+        file_z_space = self.protocol._getExtraPath("z_space.txt")
+        file_interp = self.protocol._getExtraPath("interp_values.txt")
         particles = self.protocol.outputParticles
 
         def launchViewerNonBlocking(args):
-            (particles, file_red_space, file_deformation) = args
+            (particles, file_red_space, file_z_space, file_interp) = args
             red_space = []
             z_clnm = []
             for particle in particles.iterItems():
@@ -75,6 +76,7 @@ class XmippReducedSpaceViewer(Viewer):
 
             # Generate files to call command line
             np.savetxt(file_red_space, red_space)
+            # np.savetxt(file_z_space, z_clnm)
 
             if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
                 deformation = computeNormRows(z_clnm)
@@ -82,12 +84,12 @@ class XmippReducedSpaceViewer(Viewer):
                 deformation = np.zeros(z_clnm.shape)
 
             # Generate files to call command line
-            np.savetxt(file_deformation, deformation)
+            np.savetxt(file_interp, deformation)
 
             # Run slicer
-            args = "--coords %s --deformation %s" \
-                   % (file_red_space, file_deformation)
-            program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
+            args = "--data %s --z_space %s --interp_val %s --onlyView" \
+                   % (file_red_space, file_z_space, file_interp)
+            program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
             program = flexutils.Plugin.getProgram(program)
 
             command = buildRunCommand(program, args, 1)
@@ -96,7 +98,7 @@ class XmippReducedSpaceViewer(Viewer):
         # Launch with Pathos
         p = Pool()
         # p.restart()
-        p.apipe(launchViewerNonBlocking, args=(particles, file_red_space, file_deformation))
+        p.apipe(launchViewerNonBlocking, args=(particles, file_red_space, file_z_space, file_interp))
         # p.join()
         # p.close()
 

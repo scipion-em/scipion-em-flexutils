@@ -29,9 +29,7 @@ from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.object import Boolean
 
-from pwem.protocols import ProtAnalysis3D
-
-from flexutils.protocols import ProtFlexBase
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 
 
 class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):

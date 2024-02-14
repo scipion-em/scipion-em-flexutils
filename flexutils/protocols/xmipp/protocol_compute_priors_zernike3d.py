@@ -38,15 +38,13 @@ from pyworkflow import VERSION_2_0
 from pyworkflow.utils import removeExt, moveFile, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 
-from pwem.protocols import ProtAnalysis3D
-from pwem.objects import SetOfVolumes, Volume
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import SetOfVolumes, Volume, VolumeFlex
 
 import xmipp3
 
 import flexutils.constants as const
 from flexutils.utils import readZernikeFile, getXmippFileName
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import VolumeFlex
 import flexutils
 
 

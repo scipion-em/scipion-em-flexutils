@@ -39,7 +39,7 @@ import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 _logo = "icon.png"
 _references = []
 
@@ -119,6 +119,13 @@ class Plugin(pwplugin.Plugin):
             installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
             installationCmd += "conda activate flexutils && "
             installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
+            installationCmd += "mkdir -p $CONDA_PREFIX/etc/conda/activate.d && "
+            installationCmd += ("echo \'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/\\n\' "
+                                ">> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh && ")
+            installationCmd += ("echo \'export XLA_FLAGS=--xla_gpu_cuda_data_dir=$CONDA_PREFIX/lib/\\n\' >> " 
+                               "$CONDA_PREFIX/etc/conda/activate.d/env_vars.sh && ")
+            installationCmd += "mkdir -p $CONDA_PREFIX/lib/nvvm/libdevice && "
+            installationCmd += "cp $CONDA_PREFIX/lib/libdevice.10.bc $CONDA_PREFIX/lib/nvvm/libdevice/ && "
             installationCmd += "touch flexutils_installed"
             return installationCmd
 

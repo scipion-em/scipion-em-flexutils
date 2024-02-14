@@ -38,17 +38,16 @@ from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 import pyworkflow.utils as pwutils
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
@@ -155,8 +154,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = hetSirenProtocol.ctfType.get()
         hetDim = hetSirenProtocol.hetDim.get()
-        trainSize = hetSirenProtocol.trainSize.get()
-        outSize = hetSirenProtocol.outSize.get()
+        trainSize = hetSirenProtocol.trainSize.get() if hetSirenProtocol.trainSize.get() else self.newXdim
+        outSize = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() else self.newXdim
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d --het_dim %d --trainSize %d --outSize %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, trainSize, outSize)
@@ -167,8 +166,10 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if hetSirenProtocol.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif hetSirenProtocol.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif hetSirenProtocol.architecture.get() == 2:
             args += " --architecture mlpnn"
 
         if hetSirenProtocol.refinePose.get():
@@ -276,8 +277,10 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().refMap = String(inputVolume)
 
         if hetSirenProtocol.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("convnn")
+            partSet.getFlexInfo().architecture = String("deepconv")
         elif hetSirenProtocol.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif hetSirenProtocol.architecture.get() == 2:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if hetSirenProtocol.ctfType.get() == 0:

@@ -29,16 +29,14 @@ import os
 import numpy as np
 
 from pyworkflow import NEW
-from pyworkflow.object import Boolean
 from pyworkflow.protocol.params import PointerParam, FloatParam
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import ClassStructFlex, AtomStructFlex, SetOfClassesStructFlex, SetOfParticlesFlex
 
 import flexutils
 import flexutils.constants as const
 from flexutils.utils import getOutputSuffix
-from flexutils.objects import ClassStructFlex, AtomStructFlex, SetOfClassesStructFlex, SetOfParticlesFlex
-from flexutils.protocols.protocol_base import ProtFlexBase
 
 
 class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):

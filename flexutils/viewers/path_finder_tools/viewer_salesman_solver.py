@@ -26,7 +26,8 @@
 
 
 import numpy as np
-import mlrose
+from scipy.spatial.distance import cdist
+from python_tsp.heuristics import solve_tsp_simulated_annealing, solve_tsp_local_search
 
 
 def compute_distances(coordinates):
@@ -50,19 +51,28 @@ def compute_distances(coordinates):
 
 def salesmanSolver(coords, outpath):
     # Find optimum path
-    num_clusters = coords.shape[0]
-    distances = compute_distances(coords)
-    fitness_coords = mlrose.TravellingSales(distances=distances)
-    problem_fit = mlrose.TSPOpt(length=num_clusters, fitness_fn=fitness_coords,
-                                maximize=False)
-    best_state, best_fitness = mlrose.simulated_annealing(problem_fit, max_attempts=10,  # We might try 100
-                                                          random_state=np.arange(num_clusters),
-                                                          schedule=mlrose.ArithDecay(init_temp=10.0))
+    # num_clusters = coords.shape[0]
+
+    # Compute distance matrix
+    distance_matrix = cdist(coords, coords)
+    distance_matrix[:, 0] = 0  # No need to be a closed path
+
+    # Shortest path
+    permutation_mh, distance_mh = solve_tsp_simulated_annealing(distance_matrix)
+    permutation_mh_lc, distance_mh_lc = solve_tsp_local_search(distance_matrix, x0=permutation_mh,
+                                                               perturbation_scheme="ps3")
+
+    # fitness_coords = mlrose.TravellingSales(distances=distances)
+    # problem_fit = mlrose.TSPOpt(length=num_clusters, fitness_fn=fitness_coords,
+    #                             maximize=False)
+    # best_state, best_fitness = mlrose.simulated_annealing(problem_fit, max_attempts=10,  # We might try 100
+    #                                                       random_state=np.arange(num_clusters),
+    #                                                       schedule=mlrose.ArithDecay(init_temp=10.0))
 
     # Save optimum path and fitness
     with open(outpath, 'w') as fid:
-        fid.write(','.join(map(str, [state + 1 for state in best_state])) + "\n")
-        fid.write(('%.2f' % best_fitness) + "\n")
+        fid.write(','.join(map(str, [state + 1 for state in permutation_mh_lc])) + "\n")
+        fid.write(('%.2f' % distance_mh_lc) + "\n")
 
 def readZernike3DFile(path, num_vol):
     # Read selected coefficients

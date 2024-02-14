@@ -1,5 +1,5 @@
 scipion-pyworkflow
-scipion-em >= 3.0.8
+scipion-em >= 3.5.0
 h5py
 xmipp_metadata==1.0.13
 scikit-image>=0.17.2,<=0.20.0

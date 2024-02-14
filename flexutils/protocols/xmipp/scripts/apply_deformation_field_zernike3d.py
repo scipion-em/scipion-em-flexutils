@@ -38,7 +38,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
     ref_file = Path(ref_file)
 
     # Get coords
-    if ref_file.suffix == ".mrc":
+    if ref_file.suffix in [".mrc", ".vol"]:
         mode = "volume"
         mask = ImageHandler(ref_file).getData()
         volume = ImageHandler(vol_file).getData()
@@ -56,7 +56,7 @@ def apply_deformation_field_zernike3d(ref_file, vol_file, z_file, out_file, boxs
         else:
             groups, centers = None, None
 
-    elif ref_file.suffix == ".pdb" or ref_file.suffix == ".cif":
+    elif ref_file.suffix in [".pdb", ".cif"]:
         mode = "structure"
         pd_struct = pd.parsePDB(str(ref_file), subset=None, compressed=False)
         coords = pd_struct.getCoords()

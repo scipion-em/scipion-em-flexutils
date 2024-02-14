@@ -36,9 +36,10 @@ from pyworkflow.object import Integer, Float, String, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -46,9 +47,8 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
+from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -91,6 +91,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
+            'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -118,27 +120,41 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = zernikeProtocol.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
-        if zernikeProtocol.referenceType.get() == 0:
-            ih = ImageHandler()
-            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
-            ih.convert(getXmippFileName(inputVolume), fnVol)
-            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
-            if curr_vol_dim != self.newXdim:
-                self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+        ih = ImageHandler()
+        inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+        ih.convert(getXmippFileName(inputVolume), fnVol)
+        curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+        if curr_vol_dim != self.newXdim:
+            self.runJob("xmipp_image_resize",
+                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-            inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
-            if inputMask:
-                ih.convert(getXmippFileName(inputMask), fnVolMask)
-                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
-                if curr_mask_dim != self.newXdim:
-                    self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
-                                env=xmipp3.Plugin.getEnviron())
-        else:
-            pdb_lines = self.readPDB(zernikeProtocol.inputStruct.get().getFileName())
-            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
-            np.savetxt(structure, pdb_coordinates)
+        inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
+        if inputMask:
+            ih.convert(getXmippFileName(inputMask), fnVolMask)
+            curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+            if curr_mask_dim != self.newXdim:
+                self.runJob("xmipp_image_resize",
+                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
+
+        if zernikeProtocol.referenceType.get() == 1:  # Structure reference
+            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+            inputStruct = zernikeProtocol.inputStruct.get().getFileName()
+            structure_file = self._getFileName('fnStruct')
+            connect_file = self._getFileName('fnConnect')
+            ca_file = self._getFileName('fnCA')
+            parser = PDBUtils(selectionString=zernikeProtocol._subset[zernikeProtocol.atomSubset.get()])
+            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(inputStruct)
+            pdb_coordinates *= i_sr
+            ih = ImageHandler(getXmippFileName(inputVolume))
+            vol = ih.getData()
+            factor = 0.5 * ih.getDimensions()[-1]
+            pdb_indices = np.round(pdb_coordinates + factor).astype(int)
+            values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
+            pdb_coordinates = np.c_[pdb_coordinates, values]
+            np.savetxt(structure_file, pdb_coordinates)
+            np.savetxt(connect_file, connectivity)
+            np.savetxt(ca_file, ca_indices)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
