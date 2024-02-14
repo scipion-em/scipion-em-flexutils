@@ -28,10 +28,13 @@
 import numpy as np
 from scipy import signal
 from sklearn.decomposition import PCA
+from umap import ParametricUMAP
+from umap.parametric_umap import load_ParametricUMAP
 import os
 import shutil
 from glob import glob
 import psutil
+import tensorflow as tf
 
 from xmipp_metadata.image_handler import ImageHandler
 from matplotlib.pyplot import get_cmap
@@ -76,6 +79,22 @@ from flexutils.socket.server import Server
 NAPARI_GE_4_16 = parse_version(napari.__version__) > parse_version("0.4.16")
 
 
+class PCA_UMAP:
+    '''Auxiliar class to align an UMAP cloud along its principal components'''
+    def __init__(self, umap):
+        self.umap = umap
+        self.pca = PCA(n_components=umap.n_components)
+
+    def fit(self, data):
+        self.pca.fit(self.umap.transform(data))
+
+    def transform(self, data):
+        return self.pca.transform(self.umap.transform(data))
+
+    def inverse_transform(self, data):
+        return self.umap.inverse_transform(self.pca.inverse_transform(data))
+
+
 class QtViewerWrap(QtViewer):
     def __init__(self, main_viewer, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -98,7 +117,7 @@ class QtViewerWrap(QtViewer):
 class MenuWidget(QWidget):
     def __init__(self, ndims):
         super().__init__()
-        dims = [f"Dim {dim + 1}" for dim in range(3)]
+        dims = [f"Dim {dim + 1}" for dim in range(ndims)]
         self.save_btn = QPushButton("Save selections")
         self.cluster_btn = QPushButton("Compute KMeans")
         self.cluster_num = QLineEdit()
@@ -166,7 +185,7 @@ class MultipleViewerWidget(QSplitter):
 
 class Annotate3D(object):
 
-    def __init__(self, data, z_space, mode=None, path=".", interactive=True, **kwargs):
+    def __init__(self, data, z_space, mode=None, path=".", interactive=True, reduce="umap", **kwargs):
         # Prepare attributes
         self.class_inputs = kwargs
         # self.pca_data = data
@@ -188,12 +207,8 @@ class Annotate3D(object):
         # self.data = (300 / bounding) * self.data
         # OldRange = (np.amax(self.data) - np.amin(self.data))
         # NewRange = ((boxsize - 5) - 5)
-        self.data = (boxsize - 1) * (self.data - np.amin(self.data)) / (np.amax(self.data) - np.amin(self.data))
+        # self.data = (boxsize - 1) * (self.data - np.amin(self.data)) / (np.amax(self.data) - np.amin(self.data))
         # self.data = (((self.data - np.amin(self.data)) * NewRange) / OldRange) + 5
-
-        # Create KDTree
-        self.kdtree_data = KDTree(self.data[:, :3])
-        self.kdtree_z_pace = KDTree(self.z_space)
 
         # Create viewer
         self.view = napari.Viewer(ndisplay=3, title="Flexutils 3D Annotation")
@@ -205,9 +220,30 @@ class Annotate3D(object):
         self.view.window.qt_viewer.dockLayerControls.setVisible(interactive)
 
         # PCA for clustering along dimension
-        self.pca = PCA(n_components=3)
-        self.pca.fit(self.z_space)
-        self.pca_data = self.pca.transform(self.z_space)
+        if reduce == "pca":
+            self.transformer = PCA(n_components=self.data.shape[1])
+            self.transformer.fit(self.z_space)
+            self.transformer_data = self.transformer.transform(self.z_space)
+        elif reduce == "umap":
+            if os.path.isdir(self.class_inputs["umap_weights"]):
+                self.transformer = load_ParametricUMAP(self.class_inputs["umap_weights"])
+            else:
+                self.transformer = ParametricUMAP(n_components=self.data.shape[1],
+                                                  autoencoder_loss=False, parametric_reconstruction=True,
+                                                  parametric_reconstruction_loss_fcn=tf.keras.losses.MSE,
+                                                  global_correlation_loss_weight=1.0)
+                self.transformer.fit(self.z_space)
+            self.transformer = PCA_UMAP(self.transformer)
+            self.transformer.fit(self.z_space)
+            self.transformer_data = self.transformer.transform(self.z_space)
+            self.data = np.copy(self.transformer_data)
+
+        # Scale data to box of side 300
+        self.data = (boxsize - 1) * (self.data - np.amin(self.data)) / (np.amax(self.data) - np.amin(self.data))
+
+        # Create KDTree
+        self.kdtree_data = KDTree(self.data[:, :3])
+        self.kdtree_z_pace = KDTree(self.z_space)
 
         # Set data in viewers
         points_layer = self.dock_widget.viewer.add_points(np.copy(self.data[:, :3]), size=1, shading='spherical',
@@ -599,7 +635,7 @@ class Annotate3D(object):
 
         # Determine the range of PCA DIM and divide into X equal intervals
         n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
-        pca_axis = self.pca_data[..., axis]
+        pca_axis = self.transformer_data[..., axis]
         min_pca1, max_pca1 = pca_axis.min(), pca_axis.max()
         intervals = np.linspace(min_pca1, max_pca1, n_clusters + 1)
 
@@ -615,14 +651,14 @@ class Annotate3D(object):
             if i == n_clusters - 1:
                 # Ensure the last group includes the max value
                 in_interval = (pca_axis >= intervals[i]) & (pca_axis <= intervals[i + 1])
-            points_in_group = self.pca_data[in_interval, axis]
+            points_in_group = self.transformer_data[in_interval, axis]
 
             if len(points_in_group) > 0:
                 # Assign labels
                 labels[in_interval] = i
 
                 # Compute mean for points in the interval along PCA1
-                mean_pca = np.zeros(3)
+                mean_pca = np.zeros(self.data.shape[-1])
                 mean_pca[axis] = points_in_group.mean()
 
                 # Store the mean and the points
@@ -645,11 +681,11 @@ class Annotate3D(object):
         # _, inds = self.kdtree_data.query(group_means, k=1)
         # inds = np.array(inds).flatten()
         # selected_data = np.copy(landscape[inds])
-        z_tr_data = self.pca.inverse_transform(group_means)
+        z_tr_data = self.transformer.inverse_transform(group_means)
         self.kmeans_data.append(np.copy(z_tr_data))
 
-        group_means = 127 * (group_means - np.amin(self.pca_data)) / (np.amax(self.pca_data) - np.amin(self.pca_data))
-        self.dock_widget.viewer.add_points(group_means, size=5, name="KMeans along PCA {:d}".format(axis + 1),
+        group_means = 127 * (group_means - np.amin(self.transformer_data)) / (np.amax(self.transformer_data) - np.amin(self.transformer_data))
+        self.dock_widget.viewer.add_points(group_means[..., self.current_axis], size=5, name="KMeans along PCA {:d}".format(axis + 1),
                                            metadata={"needs_closest": False, "save": False})
 
         # Add points for each cluster independently with colors
@@ -677,7 +713,7 @@ class Annotate3D(object):
                     sel_names = ["vol_%03d" % (idx + 1) for idx in range(points.shape[0])]
                     z_space = self.z_space[inds]
                     if "along PCA" in layer.name:
-                        z_space = self.pca.inverse_transform(self.pca.transform(z_space))
+                        z_space = self.transformer.inverse_transform(self.transformer.transform(z_space))
                     if z_space.ndim == 1:
                         z_space = z_space[None, ...]
 

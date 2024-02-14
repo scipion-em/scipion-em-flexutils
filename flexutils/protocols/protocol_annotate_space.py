@@ -350,6 +350,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate(), particles.getXDim())
 
+        if hasattr(particles.getFlexInfo(), "umap_weights"):
+            args += " --reduce umap --umap_weights %s" % particles.getFlexInfo().getAttr("umap_weights")
+        else:
+            args += " --reduce pca"
+
         env = pwutils.Environ(os.environ)
         if self.usesGpu():
             env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])

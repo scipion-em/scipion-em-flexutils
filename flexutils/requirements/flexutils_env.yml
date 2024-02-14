@@ -9,6 +9,7 @@ dependencies:
   - pip=23.1
   - cudatoolkit=11.2  # If opticalflow3d works, we need 11.3.1
   - cudatoolkit-dev=11.7.0
+  - cudnn=8.1.0
   - setuptools=60.2.0
   - pyyaml=6.0
   - numpy=1.23.0
@@ -43,3 +44,4 @@ dependencies:
     - pathos
     - scipion-em-xmipp
     - python_tsp==0.3.1
+    - tensorflow==2.11.0
