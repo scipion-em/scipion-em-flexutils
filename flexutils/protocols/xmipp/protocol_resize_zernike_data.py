@@ -26,18 +26,16 @@
 # **************************************************************************
 
 
-import numpy as np
-
 import pyworkflow.utils as pwutils
-from pyworkflow.object import Float, CsvList
+from pyworkflow.object import Float
 from pyworkflow.protocol import params
-from pwem.objects import Volume
+
+from pwem.objects import Volume, SetOfParticlesFlex
+from pwem.protocols import ProtFlexBase
 
 from xmipp3.protocols.protocol_preprocess import XmippResizeHelper
 from xmipp3.protocols.protocol_preprocess.protocol_preprocess import XmippProcessParticles, XmippProcessVolumes
 
-from flexutils.objects import SetOfParticlesFlex
-from flexutils.protocols.protocol_base import ProtFlexBase
 import flexutils.constants as const
 
 import xmipp3

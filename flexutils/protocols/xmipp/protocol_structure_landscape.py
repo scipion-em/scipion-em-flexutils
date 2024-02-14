@@ -34,11 +34,10 @@ from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
                                        GPU_LIST, USE_GPU
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 import flexutils.constants as const
 
 

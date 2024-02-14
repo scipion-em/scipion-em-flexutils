@@ -35,7 +35,7 @@ from xmipp_metadata.image_handler import ImageHandler
 
 
 # Scipion em imports
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 from pwem.objects import SetOfParticles, Volume, Integer
 from pyworkflow import NEW
 from pyworkflow.protocol import params
@@ -44,7 +44,7 @@ import pyworkflow.utils as pwutils
 # External plugin imports
 import xmipp3
 from xmipp3.convert import readSetOfImages, rowToParticle
-from flexutils.protocols import ProtFlexBase
+
 
 # Protocol output variable name
 OUTPUTATTRIBUTE = 'volumeProjections'
@@ -324,10 +324,10 @@ class XmippProtPrepareZernikeVolumes(ProtAnalysis3D, ProtFlexBase):
         This function translates the provided sample generation input to number of samples for Xmipp phantom.
         """
         if self.typeGeneration.get() == self.TYPE_N_SAMPLES:
-            return self.rangeNSamples.get()
+            return int(np.sqrt(self.rangeNSamples.get()))
         else:
             # Converting step to number of samples
-            return ((self.tiltRangeStart.get() % 360) - (self.tiltRangeEnd.get() % 360)) / self.rangeStep.get()
+            return int(np.sqrt(360.0 / self.rangeStep.get()))
     
     def getMethodValue(self):
         """

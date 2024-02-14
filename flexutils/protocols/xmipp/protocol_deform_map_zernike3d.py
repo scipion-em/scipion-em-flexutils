@@ -38,7 +38,8 @@ from pyworkflow.object import Integer, String
 
 import xmipp3
 
-from flexutils.objects import VolumeFlex
+from pwem.objects import VolumeFlex
+
 from flexutils.utils import readZernikeFile
 import flexutils.constants as const
 import flexutils

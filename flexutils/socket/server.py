@@ -199,12 +199,12 @@ class Server:
                 # Save results
                 ImageHandler().write(def_vol, filename=self.outPath, overwrite=True)
         elif self.mode == "CryoDrgn":
-            from cryodrgn.mrc import write
+            from cryodrgn.mrc import MRCFile
             for zz in z:
                 vol = self.model.decoder.eval_volume(
                     self.lattice.coords, self.lattice.D, self.lattice.extent, self.norm, zz
                 )
-                write(
+                MRCFile.write(
                     self.outPath, np.array(vol).astype(np.float32), Apix=1.0
                 )
         elif self.mode == "HetSIREN":

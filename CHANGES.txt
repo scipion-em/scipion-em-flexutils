@@ -1,3 +1,13 @@
+V3.1.1
+   - Simplified annotate space viewer for inspecting landscapes in a fast manner
+   - UMAP now uses ParametricUMAP (needs installation of Tensorflow in flexutils env)
+   - Flexibility Hub data model moved to scipion-em
+V3.1.0
+   - Annotate space becomes the only interactive tool for visualization
+   - Zernike3Deep with model constrains
+   - HetSIREN new functionalities (TV, MSE...)
+   - FlexConsensus fixes
+   - Tensorflow 2.15.x compatibility
 V3.0.2
    - Zernike3Deep method: Semi-classical neural network for estimation of conformational states based on the Zernike3D basis
    - HetSIREN method: Neural network heterogeneous reconstruction for real space

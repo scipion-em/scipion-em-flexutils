@@ -36,9 +36,10 @@ from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -46,8 +47,6 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName, coordsToMap, saveMap
 from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
@@ -310,8 +309,9 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         md = XmippMetaData(md_file)
         if isinstance(inputParticles, SetOfParticlesFlex) and \
             inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            scale_fator = 1. / correctionFactor
             z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
-            z_space = (Xdim / self.newXdim) * z_space
+            z_space = scale_fator * z_space
             md[:, "zernikeCoefficients"] = np.asarray([",".join(item) for item in z_space.astype(str)])
         if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
             labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])

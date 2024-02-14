@@ -34,11 +34,10 @@ from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
                                        GPU_LIST, USE_GPU
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import ParticleFlex
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 
 
@@ -53,7 +52,7 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
     def _defineParams(self, form):
         form.addSection(label='General parameters')
         form.addHidden(USE_GPU, BooleanParam, default=True,
-                       condition="mode==2",
+                       condition="mode==0 or mode==2",
                        label="Use GPU for execution",
                        help="This protocol has both CPU and GPU implementation.\
                                      Select the one you want to use.")
@@ -76,19 +75,10 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                            "the original N-D space \n"
                            "UMAP, PCA, and cryoExplode are only computed the first time the are used. Afterwards, they "
                            "will be reused to increase performance.")
-        form.addParam('nb_umap', IntParam, label="UMAP neighbors",
-                      default=15, condition="mode==0",
-                      help="Number of neighbors to associate to each point in the space when computing "
-                           "the UMAP space. The higher the number of neighbors, the more predominant "
-                           "global in the original space features will be")
         form.addParam('epochs_umap', IntParam, label="Number of UMAP epochs",
-                      default=1000, condition="mode==0",
+                      default=10, condition="mode==0",
                       help="Increasing the number of epochs will lead to more accurate UMAP spaces at the cost "
                            "of larger execution times")
-        form.addParam('densmap_umap', BooleanParam, label="Compute DENSMAP?",
-                      default=False, condition="mode==0",
-                      help="DENSMAP will try to bring densities in the UMAP space closer to each other. Execution time "
-                           "will increase when computing a DENSMAP")
         form.addParam('clusters', IntParam, label="Initial number of clusters", default=10,
                       condition="mode==2",
                       expertLevel=LEVEL_ADVANCED,
@@ -151,6 +141,9 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
 
             idx += 1
 
+        if self.mode.get() == 0:
+            partSet.getFlexInfo().setAttr("umap_weights", self._getExtraPath("trained_umap"))
+
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.particles, partSet)
 
@@ -174,12 +167,13 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
         file_coords = self._getExtraPath("red_coords.txt")
         mode = self.mode.get()
         if mode == 0:
-            args = "--input %s --umap --output %s --n_neighbors %d --n_epochs %d " \
-                   "--n_components %d --thr %d" \
-                   % (file_z_space, file_coords, self.nb_umap.get(), self.epochs_umap.get(),
-                      self.dimensions.get(), self.numberOfThreads.get())
-            if self.densmap_umap.get():
-                args += " --densmap"
+            args = "--input %s --umap --output %s --n_epochs %d --n_components %d " \
+                   % (file_z_space, file_coords, self.epochs_umap.get(), self.dimensions.get())
+
+            if self.useGpu.get():
+                gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
+                args += " --gpu %s" % gpu_list
+
             program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)

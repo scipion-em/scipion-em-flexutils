@@ -32,10 +32,9 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import makePath
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
 
 
 class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
