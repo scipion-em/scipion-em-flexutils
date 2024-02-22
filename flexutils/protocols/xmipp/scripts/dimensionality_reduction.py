@@ -50,7 +50,7 @@ def reduceDimensions(coords_ld, outFile, mode, **kwargs):
         umap = ParametricUMAP(n_components=n_components,
                               autoencoder_loss=False, parametric_reconstruction=True,
                               parametric_reconstruction_loss_fcn=tf.keras.losses.MSE,
-                              global_correlation_loss_weight=1.0, n_epochs=n_epochs).fit(coords_ld)
+                              global_correlation_loss_weight=1.0, n_training_epochs=1, n_epochs=n_epochs).fit(coords_ld)
         coords = umap.transform(coords_ld)
         umap.save(os.path.join(os.path.dirname(outFile), "trained_umap"))
     np.savetxt(outFile, coords)
