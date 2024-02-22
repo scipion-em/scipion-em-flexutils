@@ -358,6 +358,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         env = pwutils.Environ(os.environ)
         if self.usesGpu():
             env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
+        else:
+            env["CUDA_VISIBLE_DEVICES"] = ''
 
         env["NAPARI_ASYNC"] = "1"
 
