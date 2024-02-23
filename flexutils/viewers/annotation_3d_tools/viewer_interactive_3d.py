@@ -39,6 +39,8 @@ import tensorflow as tf
 from xmipp_metadata.image_handler import ImageHandler
 from matplotlib.pyplot import get_cmap
 from matplotlib.path import Path
+import matplotlib.cm as cm
+import matplotlib.colors as colors
 import pickle
 import warnings
 
@@ -389,19 +391,58 @@ class Annotate3D(object):
         pathFile = os.path.join(self.path, "selections_layers")
 
         if os.path.isdir(pathFile):
+            n_points = sum("Cluster" in filename for filename in glob(os.path.join(pathFile, "*")))
+
+            # Generate N evenly spaced values between 0 and 1
+            values = np.linspace(0, 1, n_points)
+
+            # Get the Viridis colormap
+            viridis = cm.get_cmap('viridis', n_points)
+
+            # Convert each color to HTML color code
+            idc = 0
+            cluster_colors = [colors.rgb2hex(viridis(value)) for value in values]
+
             for file in glob(os.path.join(pathFile, "*")):
                 print(file)
-                if "_cluster" in file:
+                if "Cluster" in file:
                     metadata = {"needs_closest": False, "save": True}
+                    text, features = None, None
+                    size = 1
+                    face_color = cluster_colors[idc]
+                    extra_args = {"text": text, "size": size, "face_color": face_color, "features": features,
+                                  "shading": 'spherical', "edge_width": 0, "antialiasing": 0, "visible": False}
+                    idc += 1
                 elif "KMeans" in file:
                     metadata = {"needs_closest": False, "save": False}
+
+                    # Features
+                    features = {
+                        'id': np.arange(n_points) + 1,
+                    }
+
+                    # Text labels
+                    translation = np.zeros((1, 3))
+                    translation[-1] += -3
+                    text = {
+                        'string': 'Cluster {id:d}',
+                        'size': 10,
+                        'color': 'white',
+                        'translation': translation,
+                    }
+
+                    size = 2
+                    face_color = "#5500ff"
+                    extra_args = {"text": text, "size": size, "face_color": face_color, "properties": features,
+                                  "visible": True}
                 else:
                     metadata = None
+                    extra_args = {"visible": False}
 
                 if ".tif" in file:
                     self.dock_widget.viewer.open(file, layer_type="labels", visible=False, metadata=metadata)
                 elif ".csv" in file:
-                    self.dock_widget.viewer.open(file, layer_type="points", size=1, visible=False, metadata=metadata)
+                    self.dock_widget.viewer.open(file, layer_type="points", metadata=metadata, **extra_args)
 
         # Add callbacks
         for layer in self.dock_widget.viewer.layers:
@@ -588,6 +629,7 @@ class Annotate3D(object):
 
     def _compute_kmeans_fired(self):
         landscape = self.dock_widget.viewer.layers["Landscape"].data
+        n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
         self.kmeans_data = []
         self.clusters_data = []
 
@@ -598,7 +640,6 @@ class Annotate3D(object):
                 self.dock_widget.viewer.layers.remove(layer_name)
 
         # Compute KMeans and save automatic selection
-        n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
         clusters = MiniBatchKMeans(n_clusters=n_clusters).fit(self.z_space)
         centers = clusters.cluster_centers_
         self.interp_val = clusters.labels_
@@ -606,8 +647,25 @@ class Annotate3D(object):
         inds = np.array(inds).flatten()
         selected_data = np.copy(landscape[inds])
         self.kmeans_data.append(np.copy(self.data[inds]))
-        self.dock_widget.viewer.add_points(selected_data, size=5, name="KMeans", metadata={"needs_closest": False,
-                                                                                           "save": False})
+
+        # Features
+        features = {
+            'id': np.arange(selected_data.shape[0]) + 1,
+        }
+
+        # Text labels
+        translation = np.zeros((1, selected_data.shape[1]))
+        translation[-1] += -3
+        text = {
+            'string': 'Cluster {id:d}',
+            'size': 10,
+            'color': 'white',
+            'translation': translation,
+        }
+
+        self.dock_widget.viewer.add_points(selected_data, size=2, name="KMeans", metadata={"needs_closest": False,
+                                                                                           "save": False},
+                                           features=features, text=text, face_color="#5500ff")
 
         # Add points for each cluster independently with colors
         self.dock_widget.viewer.layers["Landscape"].visible = False
@@ -617,13 +675,14 @@ class Annotate3D(object):
             self.kmeans_data.append(np.copy(self.data[self.interp_val == label]))
             cluster_points = np.copy(landscape[self.interp_val == label])
             color = np.asarray(cm(color_id))
-            self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=True,
+            self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=False,
                                                shading='spherical', edge_width=0, antialiasing=0,
                                                face_color=color, metadata={"needs_closest": False, "save": True})
 
     def _compute_dim_cluster_fired(self):
         landscape = self.dock_widget.viewer.layers["Landscape"].data
         axis = int(self.dock_widget.menu_widget.dimension_sel.currentText().replace("Dim ", "")) - 1
+        n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
         self.kmeans_data = []
         self.clusters_data = []
 
@@ -634,7 +693,6 @@ class Annotate3D(object):
                 self.dock_widget.viewer.layers.remove(layer_name)
 
         # Determine the range of PCA DIM and divide into X equal intervals
-        n_clusters = int(self.dock_widget.menu_widget.cluster_num.text())
         pca_axis = self.transformer_data[..., axis]
         min_pca1, max_pca1 = pca_axis.min(), pca_axis.max()
         intervals = np.linspace(min_pca1, max_pca1, n_clusters + 1)
@@ -684,9 +742,25 @@ class Annotate3D(object):
         z_tr_data = self.transformer.inverse_transform(group_means)
         self.kmeans_data.append(np.copy(z_tr_data))
 
+        # Features
+        features = {
+            'id': np.arange(group_means.shape[0]) + 1,
+        }
+
+        # Text labels
+        translation = np.zeros((1, group_means.shape[1]))
+        translation[-1] += -3
+        text = {
+            'string': 'Cluster {id:d}',
+            'size': 5,
+            'color': 'white',
+            'translation': translation,
+        }
+
         group_means = 127 * (group_means - np.amin(self.transformer_data)) / (np.amax(self.transformer_data) - np.amin(self.transformer_data))
-        self.dock_widget.viewer.add_points(group_means[..., self.current_axis], size=5, name="KMeans along PCA {:d}".format(axis + 1),
-                                           metadata={"needs_closest": False, "save": False})
+        self.dock_widget.viewer.add_points(group_means[..., self.current_axis], size=2, name="KMeans along PCA {:d}".format(axis + 1),
+                                           metadata={"needs_closest": False, "save": False}, features=features, text=text,
+                                           face_color="#5500ff")
 
         # Add points for each cluster independently with colors
         self.dock_widget.viewer.layers["Landscape"].visible = False
@@ -696,7 +770,7 @@ class Annotate3D(object):
             self.kmeans_data.append(np.copy(self.data[self.interp_val == label]))
             cluster_points = np.copy(landscape[self.interp_val == label])
             color = np.asarray(cm(color_id))
-            self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=True,
+            self.dock_widget.viewer.add_points(cluster_points, size=1, name=f"Cluster_{label}", visible=False,
                                                shading='spherical', edge_width=0, antialiasing=0,
                                                face_color=color, metadata={"needs_closest": False, "save": True})
 

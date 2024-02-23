@@ -684,6 +684,26 @@ def applyDeformationField(map, mask, output, path, z_clnm, L1, L2, Rmax):
               os.path.join(path, output), os.path.join(path, "z_clnm.txt"))
     xmipp3.Plugin.runXmippProgram('xmipp_volume_apply_coefficient_zernike3d', params)
 
+def adaptZernike3DVector(a_o, L1, L2, prevL1, prevL2):
+    b_n = basisDegreeVectors(L1, L2)
+    b_o = basisDegreeVectors(prevL1, prevL2)
+    size_n, size_o = b_n.shape[0], b_o.shape[0]
+    a_n = np.zeros([a_o.shape[0], 3 * size_n])
+
+    if size_n > size_o:
+        indices = np.array([np.where((b_n == b_row).all(axis=1))[0][0] for b_row in b_o])
+        a_n[:, indices] = a_o[:, :size_o]  # Copy X coefficients
+        a_n[:, indices + size_n] = a_o[:, size_o:2 * size_o]  # Copy Y coefficients
+        a_n[:, indices + 2 * size_n] = a_o[:, 2 * size_o:]  # Copy Z coefficients
+    elif size_n < size_o:
+        indices = np.array([np.where((b_o == b_row).all(axis=1))[0][0] for b_row in b_n])
+        a_n[:, :size_n] = a_o[:, indices]  # Copy X coefficients
+        a_n[:, size_n:2 * size_n] = a_o[:, indices + size_o]  # Copy Y coefficients
+        a_n[:, 2 * size_n:] = a_o[:, indices + size_o]  # Copy Z coefficients
+    else:
+        a_n = a_o
+
+    return a_n
 
 ############## General functions ##############
 def inscribedRadius(atoms):

@@ -48,6 +48,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName, coordsToMap, saveMap
+from flexutils.protocols.xmipp.utils.utils import adaptZernike3DVector
 from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
 
 
@@ -259,6 +260,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
         md_file = self._getFileName('imgsFn')
+        L1, L2 = self.l1.get(), self.l2.get()
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
@@ -312,6 +314,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             scale_fator = 1. / correctionFactor
             z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
             z_space = scale_fator * z_space
+
+            # Resize Zernike3D vector if needed
+            prevL1, prevL2 = inputParticles.getFlexInfo().getAttr("L1"), inputParticles.getFlexInfo().getAttr("L2")
+            z_space = adaptZernike3DVector(z_space, L1, L2, prevL1, prevL2)
+
             md[:, "zernikeCoefficients"] = np.asarray([",".join(item) for item in z_space.astype(str)])
         if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
             labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
