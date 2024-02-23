@@ -39,7 +39,7 @@ import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.1.3"
+__version__ = "3.1.4"
 _logo = "icon.png"
 _references = []
 
@@ -118,7 +118,7 @@ class Plugin(pwplugin.Plugin):
             installationCmd = cls.getCondaActivationCmd()
             installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
             installationCmd += "conda activate flexutils && "
-            if flexutils.Plugin().inDevelMode():
+            if "site-packages" not in flexutils.__path__[0]:
                 installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
             else:
                 installationCmd += "pip install scipion-em-flexutils --no-dependencies && "
