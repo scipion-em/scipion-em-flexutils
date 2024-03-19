@@ -88,7 +88,7 @@ class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):
         # Compute Z-Scores
         args = "--i %s --o %s --neighbours %d" % \
                (landscape_path, self._getExtraPath(), self.neighbours.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "compute_landscape_zscores.py")
+        program = "compute_landscape_zscores.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 

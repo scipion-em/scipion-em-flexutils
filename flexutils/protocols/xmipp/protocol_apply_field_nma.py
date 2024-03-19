@@ -144,7 +144,7 @@ class XmippApplyFieldNMA(ProtAnalysis3D, ProtFlexBase):
             # RS analysis
             args = "--field %s --indices %s --out_path %s --boxsize %d" % \
                    (field_path, indices_path, self._getExtraPath(), boxsize)
-            program = os.path.join(const.XMIPP_SCRIPTS, "strain_rotation_analysis.py")
+            program = "strain_rotation_analysis.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
 

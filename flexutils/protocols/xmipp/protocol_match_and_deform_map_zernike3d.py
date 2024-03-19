@@ -89,7 +89,7 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
                % (input, reference, output, l1, l2, self.match_method[self.matchMode.get()])
         if self.gsSteps.get():
             args += " --gs %d" % self.gsSteps.get()
-        program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_map.py")
+        program = "find_z_clnm_map.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 

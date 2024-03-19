@@ -315,7 +315,7 @@ class ProtFlexClusterSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate(), particles.getXDim())
 
-        program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_3d_pc.py")
+        program = "viewer_3d_pc.py"
         program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
         self.runJob(program, args)
 

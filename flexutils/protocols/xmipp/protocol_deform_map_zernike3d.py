@@ -157,7 +157,7 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
         # Invert deformation field
         args = "--i %s --r %s --z_clnm %s --o %s" % \
                (fnRefMask, fnOutMask, fnZclnm, fnZclnm)
-        program = os.path.join(const.XMIPP_SCRIPTS, "invert_zernike_field.py")
+        program = "invert_zernike_field.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 

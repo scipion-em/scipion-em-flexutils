@@ -26,6 +26,7 @@
 
 
 import os
+import re
 import numpy as np
 from glob import glob
 from sklearn.neighbors import KDTree
@@ -140,9 +141,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             for z_idx in range(z_space_vw.shape[0]):
                 if "_cluster" in file:
                     currIds = range(z_space.shape[0])
+                    classId = [int(x) + 1 for x in re.findall('\d+', file)][-1]
                 else:
                     _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
                     currIds = currIds[0]
+                    classId = None
 
                 newClass = Class()
                 newClass.copyInfo(particles)
@@ -168,9 +171,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                                     particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
                                     downsample=self.boxSize.get(), apix=particles.getSamplingRate())
                     ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
-                                                self._getExtraPath('class_%d.mrc') % clInx,
+                                                self._getExtraPath('class_%d.mrc') % classId if classId else clInx,
                                                 finalDimension=particles.getXDim(), overwrite=True)
-                    representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                    representative.setLocation(self._getExtraPath('class_%d.mrc') % classId if classId else clInx)
 
                 elif particles.getFlexInfo().getProgName() == const.HETSIREN:
                     from flexutils.utils import generateVolumesHetSIREN
@@ -178,9 +181,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                                             self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
                                             architecture=particles.getFlexInfo().architecture.get())
                     ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_01.mrc'),
-                                                self._getExtraPath('class_%d.mrc') % clInx,
+                                                self._getExtraPath('class_%d.mrc') % classId if classId else clInx,
                                                 finalDimension=particles.getXDim(), overwrite=True)
-                    representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                    representative.setLocation(self._getExtraPath('class_%d.mrc') % classId if classId else clInx)
 
                 elif particles.getFlexInfo().getProgName() == const.NMA:
                     reference = particles.getFlexInfo().refStruct.get()
@@ -326,17 +329,17 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 args += "--z_space_vol %s" % file_z_vol
 
         elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-            needsPackages = [const.CRYODRGN, ]
+            import cryodrgn
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
+                   "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn --env_name %s" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo()._cryodrgnWeights.get(),
                       particles.getFlexInfo()._cryodrgnConfig.get(), self.boxSize.get(),
-                      particles.getSamplingRate())
+                      particles.getSamplingRate(), cryodrgn.Plugin.getActivationCmd())
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --step %d --architecture %s --sr %f --mode HetSIREN" \
+                   "--weights %s --step %d --architecture %s --sr %f --mode HetSIREN --env_name flexutils-tensorflow" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
@@ -345,7 +348,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --sr %f --boxsize %d --mode NMA" \
+                   "--weights %s --sr %f --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
                    % (file_coords, file_z_space, file_interp_val, path,
                       particles.getFlexInfo().modelPath.get(),
                       particles.getSamplingRate(), particles.getXDim())
@@ -363,8 +366,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         env["NAPARI_ASYNC"] = "1"
 
-        program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
-        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
+        program = "viewer_interactive_3d.py"
+        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages, chimera=True)
         self.runJob(program, args, env=env)
 
         # *********

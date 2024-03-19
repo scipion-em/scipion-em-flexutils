@@ -97,7 +97,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         # Define polygons based on selected borders
         polygons_file = self._getExtraPath("polygons.dat")
         args = "--input %s --angs %f --output %s" % (outFile, self.newAngSampling, polygons_file)
-        program = os.path.join(const.XMIPP_SCRIPTS, "polygon_from_vertexes.py")
+        program = "polygon_from_vertexes.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -122,7 +122,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         np.savetxt(points_file, np.asarray(angles_vec))
 
         args = "--input %s --polygons %s --output %s" % (points_file, polygons_file, decision_file)
-        program = os.path.join(const.XMIPP_SCRIPTS, "check_inside_roi.py")
+        program = "check_inside_roi.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
