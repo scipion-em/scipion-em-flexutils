@@ -142,7 +142,8 @@ class Plugin(pwplugin.Plugin):
             updateCmd += "bash install.sh && "
             updateCmd += "cd .. && "
             updateCmd += "echo '###### Binaries updated succesfully! ######' && "
-            updateCmd += "touch flexutils_tensorflow_updated"
+            updateCmd += f"cd flexutils-{__version__} && "
+            updateCmd += "touch flexutils_updated"
             return updateCmd
 
         binary_path = os.path.join(emConfig.EM_ROOT, f'flexutils-{__version__}')
@@ -158,7 +159,7 @@ class Plugin(pwplugin.Plugin):
 
         if os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_updated")):
             os.remove(os.path.join(binary_path, "flexutils_tensorflow_updated"))
-        commands.append((getUpdateCommands(), ["flexutils_tensorflow_updated"]))
+        commands.append((getUpdateCommands(), ["flexutils_updated"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,
