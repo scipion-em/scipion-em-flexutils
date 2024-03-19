@@ -238,7 +238,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         # Update deformation field
         args = "--md_file %s --mask_reg %s --mask_bin %s --boxsize %d --l1 %d --l2 %d --thr %d" \
                % (md_file, maskReg, maskBin, boxsize, L1, L2, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "field_regions_to_binary_zernike3d.py")
+        program = "field_regions_to_binary_zernike3d.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 

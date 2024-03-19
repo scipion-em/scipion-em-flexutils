@@ -162,7 +162,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
@@ -215,6 +215,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       condition="costFunction==1",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
+        form.addParam("regNorm", params.FloatParam, default=0.0001, label="Zernike3D coefficient norm regularization",
+                      condition="referenceType==1",
+                      help="Regularization factor determining how big Zernke3D coefficients are allowed to be."
+                           "The larger the value, the smaller the coefficients that will be found (leading to a "
+                           "larger restriction of the motions). We do not recommend touching this value unless motions "
+                           "observed are greatly dampened.")
         form.addParam("regBond", params.FloatParam, default=0.01, label="Bond loss regularization",
                       condition="referenceType==1",
                       help="Regularization factor determining how stiff bond distances will be when deforming the "
@@ -349,15 +355,16 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         step = self.step.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
+        regNorm = self.regNorm.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = self.applyCTF.get()
         xla = self.xla.get()
         tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
-               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f" \
+               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f --regNorm %f" \
                % (md_file, out_path, L1, L2, batch_size, split_train, pad, sr,
-                  applyCTF, lr)
+                  applyCTF, lr, regNorm)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()

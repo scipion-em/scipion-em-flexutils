@@ -81,8 +81,7 @@ class ProtFlexOrderVolumes(ProtAnalysis3D, ProtFlexBase):
             np.savetxt(dataPath, reordered_coords)
 
             # Run salesman's solver
-            program = os.path.join(os.path.dirname(flexutils.__file__), "viewers", "path_finder_tools",
-                                   "viewer_salesman_solver.py")
+            program = "viewer_salesman_solver.py"
             args = "--coords %s --outpath %s --num_vol 0 " \
                    % (dataPath, outPath)
             program = flexutils.Plugin.getProgram(program)

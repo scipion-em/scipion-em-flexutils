@@ -177,7 +177,7 @@ class XmippProtAngularAlignmentZernike3D(ProtAnalysis3D, ProtFlexBase):
             # Compute deformations
             def_file = self._getExtraPath("def_file.txt")
             args = "--i %s --z_clnm %s --o %s" % (getXmippFileName(fnVolMask), fnPriors, def_file)
-            program = os.path.join(const.XMIPP_SCRIPTS, "compute_z_clnm_deformation.py")
+            program = "compute_z_clnm_deformation.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             deformations = np.loadtxt(def_file)

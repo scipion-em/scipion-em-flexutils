@@ -118,7 +118,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
                % (imgsFn, getXmippFileName(refMask), getXmippFileName(newRefMask),
                   file_zclnm_r, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "reassign_reference.py")
+        program = "reassign_reference.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 

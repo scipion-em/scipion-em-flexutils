@@ -174,13 +174,13 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                 gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
                 args += " --gpu %s" % gpu_list
 
-            program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+            program = "dimensionality_reduction.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 1:
             args = "--input %s --pca --n_components %d --output %s" \
                    % (file_z_space, self.dimensions.get(), file_coords)
-            program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+            program = "dimensionality_reduction.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 2:

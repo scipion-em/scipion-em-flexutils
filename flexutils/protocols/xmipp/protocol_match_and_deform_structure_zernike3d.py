@@ -113,7 +113,7 @@ class XmippMatchDeformSructZernike3D(ProtAnalysis3D):
                 args += " --d %d" % rmax
             elif not self.moveBoxOrigin.get() and rmax:
                 args += " --d 0"
-            program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_structure.py")
+            program = "find_z_clnm_structure.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
             pwutils.moveFile(self._getExtraPath("z_clnm.txt"),

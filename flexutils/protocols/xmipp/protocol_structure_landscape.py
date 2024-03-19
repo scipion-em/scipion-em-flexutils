@@ -190,7 +190,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                % (structure.getFileName(), file_z_space, self._getExtraPath(),
                   particles.getSamplingRate(), particles.getFirstItem().getXDim(),
                   l1, l2, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+        program = "structure_space.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -225,7 +225,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                       self.SAVE[self.save.get()])
             if self.densmap_umap.get():
                 args += " --densmap"
-            program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+            program = "structure_space.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 1:
@@ -235,7 +235,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                       particles.getSamplingRate(), particles.getFirstItem().getXDim(),
                       l1, l2, self.numberOfThreads.get(), self.DIMENSIONS[self.dimensions.get()],
                       self.SAVE[self.save.get()])
-            program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+            program = "structure_space.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 2:

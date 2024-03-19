@@ -89,7 +89,7 @@ class XmippReducedSpaceViewer(Viewer):
             # Run slicer
             args = "--data %s --z_space %s --interp_val %s --onlyView" \
                    % (file_red_space, file_z_space, file_interp)
-            program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
+            program = "viewer_interactive_3d.py"
             program = flexutils.Plugin.getProgram(program)
 
             command = buildRunCommand(program, args, 1)
