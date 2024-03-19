@@ -151,7 +151,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="Number of images that will be used simultaneously for every training step. "
                             "We do not recommend to change this value unless you experience memory errors. "
                             "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-4, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
@@ -195,12 +195,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "If a volume is going to be refined, **Correlation** or **FPC** will provide more accurate "
                            "results")
         form.addParam('maskRadius', params.FloatParam, default=0.85, label="Mask radius (%)",
-                      condition="costFunction==1",
+                      condition="costFunction==2",
                       help="Determine the radius (in percentage) of the circular mask to be applied to the Fourier "
                            "Transform of the images. A value of 1 implies that the circular mask is inscribed to the "
                            "bounding box the Fourier Transform.")
         form.addParam("smoothMask", params.BooleanParam, default=True, label="Smooth mask?",
-                      condition="costFunction==1",
+                      condition="costFunction==2",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
         form.addParam("l1Reg", params.FloatParam, default=0.1, label="L1 loss regularization",

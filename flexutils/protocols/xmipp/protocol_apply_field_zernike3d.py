@@ -117,7 +117,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
 
             args = "--ref_file %s --vol_file %s --z_file %s --out_file %s --boxsize %d --sr %f" \
                    % (ref_file, vol_file, z_clnm_file, outFile, boxsize, samplingRate)
-            program = os.path.join(const.XMIPP_SCRIPTS, "apply_deformation_field_zernike3d.py")
+            program = "apply_deformation_field_zernike3d.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
@@ -173,7 +173,7 @@ class XmippApplyFieldZernike3D(ProtAnalysis3D, ProtFlexBase):
             # RS analysis
             args = "--field %s --indices %s --out_path %s --boxsize %d" % \
                    (field_path, indices_path, self._getExtraPath(), ref_map.shape[0])
-            program = os.path.join(const.XMIPP_SCRIPTS, "strain_rotation_analysis.py")
+            program = "strain_rotation_analysis.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
 

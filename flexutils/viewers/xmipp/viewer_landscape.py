@@ -130,7 +130,7 @@ class XmippLandscapeViewer(ProtocolViewer):
                            % (file_z_space, file_coords, mode[1], mode[2], mode[3])
                     if mode[4]:
                         args += " --densmap"
-                    program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                    program = "dimensionality_reduction.py"
                     program = flexutils.Plugin.getProgram(program)
                     command = buildRunCommand(program, args, 1)
                     p = subprocess.Popen(command, shell=True)
@@ -138,7 +138,7 @@ class XmippLandscapeViewer(ProtocolViewer):
             elif mode[0] == 1:
                 if not os.path.isfile(file_coords):
                     args = "--input %s --pca --output %s --n_components 3" % (file_z_space, file_coords)
-                    program = os.path.join(const.XMIPP_SCRIPTS, "dimensionality_reduction.py")
+                    program = "dimensionality_reduction.py"
                     program = flexutils.Plugin.getProgram(program)
                     command = buildRunCommand(program, args, 1)
                     p = subprocess.Popen(command, shell=True)
@@ -155,7 +155,7 @@ class XmippLandscapeViewer(ProtocolViewer):
             # Run slicer
             args = "--data %s --z_space %s --interp_val %s --onlyView" \
                    % (file_coords, file_z_space, file_interp)
-            program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
+            program = "viewer_interactive_3d.py"
             program = flexutils.Plugin.getProgram(program)
 
             command = buildRunCommand(program, args, 1)

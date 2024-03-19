@@ -87,7 +87,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
         args = "--z_space % s --pdb %s --boxSize %f --sr %f --distThr %f " \
                "--L1 %d --L2 %d --odir %s" \
                % (z_space_file, structure, boxSize, sr, dist_thr, L1, L2, self._getExtraPath())
-        program = os.path.join(const.XMIPP_SCRIPTS, "structure_rmsd_clustering.py")
+        program = "structure_rmsd_clustering.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
