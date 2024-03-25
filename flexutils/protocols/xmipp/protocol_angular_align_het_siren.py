@@ -414,7 +414,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         else:
             outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         applyCTF = self.applyCTF.get()
-        args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
+        args = "--md_file %s --weigths_file %s --pad %d --sr %f " \
                "--apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
 
