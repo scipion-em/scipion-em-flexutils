@@ -89,6 +89,10 @@ class XmippReducedSpaceViewer(Viewer):
             # Run slicer
             args = "--data %s --z_space %s --interp_val %s --onlyView" \
                    % (file_red_space, file_z_space, file_interp)
+            if hasattr(particles.getFlexInfo(), "umap_weights"):
+                args += " --reduce umap --umap_weights %s" % particles.getFlexInfo().getAttr("umap_weights")
+            else:
+                args += " --reduce pca"
             program = "viewer_interactive_3d.py"
             program = flexutils.Plugin.getProgram(program)
 
