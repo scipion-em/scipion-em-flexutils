@@ -39,7 +39,7 @@ import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.1.5"
+__version__ = "3.1.6"
 _logo = "icon.png"
 _references = []
 
