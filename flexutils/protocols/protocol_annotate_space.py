@@ -177,9 +177,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
                 elif particles.getFlexInfo().getProgName() == const.HETSIREN:
                     from flexutils.utils import generateVolumesHetSIREN
+                    gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
                     generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[z_idx],
                                             self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
-                                            architecture=particles.getFlexInfo().architecture.get())
+                                            architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
                     ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_01.mrc'),
                                                 self._getExtraPath('class_%d.mrc') % classId if classId else clInx,
                                                 finalDimension=particles.getXDim(), overwrite=True)
