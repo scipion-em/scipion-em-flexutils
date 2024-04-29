@@ -99,18 +99,30 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Reconstruction mask",
                       help="Mask used to restrict the reconstruction space to increase performance.")
-        form.addParam('niter', params.IntParam, default=13,
+        form.addParam('niter', params.IntParam, default=2,
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
                            "to run at least 8 iteration for better results")
-        form.addParam('reg', params.FloatParam, default=1e-5, expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('reg', params.FloatParam, default=1e-4,
                       label='ART lambda',
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
                            "Note that larger values may lead to divergence.")
-        form.addParam('dThr', params.FloatParam, default=1e-6,
-                      label="Denoising threshold",
-                      help="Larger values will decrease the noise levels more efficiently, although protein signal "
-                           "might suffer unwanted modifications if the value is too large.")
+        form.addParam('lst', params.FloatParam, default=0.01,
+                     label="Positive L1 regularization",
+                     help="L1 based penalization on the positive values of the reconstructed volumes. Larger values will "
+                          "have a stronger denoising effect on the reconstructed map.")
+        form.addParam('ll1', params.FloatParam, default=0.01,
+                      label="Negative L1 regularization",
+                      help="L1 based penalization on the negative values of the reconstructed volumes. Larger values "
+                           "will decrease more strongly the presence of negative values on th reconstructed map.")
+        form.addParam('ltv', params.FloatParam, default=0.0001,
+                     label="Total variation regularization",
+                     help="Total variation based regularization on the edges of the reconstructed volumes. Larger "
+                          "values will lead to a more enhance representation of the edges and reduction of noise.")
+        form.addParam('ltk', params.FloatParam, default=0.0001,
+                     label="Tikhonov regularization",
+                     help=" Tikhonov based regularization on the edges of the reconstructed volume. Larger values will "
+                          "lead softer density transitions in the reconstruction")
         form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
                       label="Save partial reconstructions for every ZART iteration?")
         form.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
@@ -356,7 +368,8 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params = ' -i %s' % inputMd
         params += ' -o %s' % outFile
         params += ' --odir %s' % self._getExtraPath()
-        params += ' --step %d' % step
+        # params += ' --step %d' % step
+        params += ' --step 1'
         if "_level_" in outFile:
             reg = self.reg.get()
             level = float(re.findall(r'\d+', outFile)[1]) - 2
@@ -369,7 +382,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if hasattr(self, 'sigmas'):
             params += ' --sigma "' + self.sigmas + '"'
         else:
-            params += ' --sigma "1.5"'
+            params += ' --sigma "1"'
         params += ' --niter %d' % niter
 
         if isinstance(self.inputParticles.get(), SetOfParticlesFlex) and self.useZernike.get():
@@ -386,7 +399,8 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         # GPU parameters
         if useGPU:
             onlyPositive = self.onlyPositive.get()
-            params += ' --dThr %f' % self.dThr.get()
+            params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
+                       % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
             if onlyPositive:
                 params += " --onlyPositive"
 
