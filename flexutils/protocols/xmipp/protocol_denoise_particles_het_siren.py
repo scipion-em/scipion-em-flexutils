@@ -166,10 +166,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if hetSirenProtocol.architecture.get() == 0:
-            args += " --architecture deepconv"
-        elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture convnn"
-        elif hetSirenProtocol.architecture.get() == 2:
+        elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if hetSirenProtocol.refinePose.get():
@@ -277,10 +275,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().refMap = String(inputVolume)
 
         if hetSirenProtocol.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("deepconv")
-        elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("convnn")
-        elif hetSirenProtocol.architecture.get() == 2:
+        elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if hetSirenProtocol.ctfType.get() == 0:

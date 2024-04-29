@@ -237,7 +237,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                            "If this is not the case, you may update the plugin to update Tensorflow to the last "
                            "compatible version of your system. If clashes are not to be included in the cost, leave "
                            "this field empty.")
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=0, mpi=4)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
@@ -281,7 +281,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
         if curr_vol_dim != self.newXdim:
             self.runJob("xmipp_image_resize",
-                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                        "-i %s --fourier %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         inputMask = self.inputVolumeMask.get().getFileName()
         if inputMask:
@@ -625,3 +625,20 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             errors.append('Zernike degree must be higher than '
                           'SPH degree.')
         return errors
+
+    def _warnings(self):
+        warnings = []
+
+        num_particles = self.inputParticles.get().getSize()
+        split_train = self.split_train.get()
+        num_particles_train = int(split_train * num_particles)
+
+        if num_particles_train > 1000000:
+            warnings.append("The dataset you are using to train is quite large, which may lead to long training times. "
+                            "If this is intended, you may ignore this warning. Otherwise, it is recommended to modify "
+                            "the form parameter \"Traning dataset fraction\" to a lower value so that the number of "
+                            "particles to train is smaller than 500k. In this way, the network will learn faster and "
+                            "posteriorly the trained network will use the complete dataset in the prediction step to "
+                            "reduce execution times.")
+
+        return warnings

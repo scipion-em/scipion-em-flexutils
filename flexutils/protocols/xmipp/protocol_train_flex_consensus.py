@@ -81,6 +81,11 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
         group = form.addGroup("Extra network parameters")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                       help="This value (between 0 and 1) determines the fraction of images that will "
@@ -131,6 +136,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
+        tensorboard = self.tensorboard.get()
         lat_dim = self.latDim.get()
         args = "--data_path %s --out_path %s --lat_dim %d --batch_size %d " \
                "--shuffle --split_train %f --lr %f" \
@@ -140,6 +146,9 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
             args += " --max_samples_seen %d" % self.maxSamples.get()
         else:
             args += " --epochs %d" % self.epochs.get()
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])

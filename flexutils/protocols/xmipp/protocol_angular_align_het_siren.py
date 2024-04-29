@@ -130,9 +130,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       pointerClass='TensorflowProtAngularAlignmentHetSiren',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
-        group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
@@ -231,7 +231,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       help="Determines in how many regions the trained latent space will be splitted by "
                            "KMeans, allowing to decode a state based on the representative of each cluster. "
                            "This provides and initial summary/exploration of the trained landscape")
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=0, mpi=4)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
@@ -270,7 +270,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
             if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --fourier %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if self.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
@@ -354,10 +354,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                 args += " --smooth_mask"
 
         if self.architecture.get() == 0:
-            args += " --architecture deepconv"
-        elif self.architecture.get() == 1:
             args += " --architecture convnn"
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if self.ctfType.get() == 0:
@@ -424,10 +422,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if self.architecture.get() == 0:
-            args += " --architecture deepconv"
-        elif self.architecture.get() == 1:
             args += " --architecture convnn"
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if self.refinePose.get():
@@ -518,10 +514,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("deepconv")
-        elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("convnn")
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if self.ctfType.get() == 0:
@@ -615,3 +609,20 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                           " size (currently set to %d)" % boxSize)
 
         return errors
+
+    def _warnings(self):
+        warnings = []
+
+        num_particles = self.inputParticles.get().getSize()
+        split_train = self.split_train.get()
+        num_particles_train = int(split_train * num_particles)
+
+        if num_particles_train > 500000:
+            warnings.append("The dataset you are using to train is quite large, which may lead to long training times. "
+                            "If this is intended, you may ignore this warning. Otherwise, it is recommended to modify "
+                            "the form parameter \"Traning dataset fraction\" to a lower value so that the number of "
+                            "particles to train is smaller than 500k. In this way, the network will learn faster and "
+                            "posteriorly the trained network will use the complete dataset in the prediction step to "
+                            "reduce execution times.")
+
+        return warnings
