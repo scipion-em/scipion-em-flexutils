@@ -107,11 +107,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       label='ART lambda',
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
                            "Note that larger values may lead to divergence.")
-        form.addParam('lst', params.FloatParam, default=0.01,
+        form.addParam('lst', params.FloatParam, default=0.0001,
                      label="Positive L1 regularization",
                      help="L1 based penalization on the positive values of the reconstructed volumes. Larger values will "
                           "have a stronger denoising effect on the reconstructed map.")
-        form.addParam('ll1', params.FloatParam, default=0.01,
+        form.addParam('ll1', params.FloatParam, default=1.0,
                       label="Negative L1 regularization",
                       help="L1 based penalization on the negative values of the reconstructed volumes. Larger values "
                            "will decrease more strongly the presence of negative values on th reconstructed map.")
