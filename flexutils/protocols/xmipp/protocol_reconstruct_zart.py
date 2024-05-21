@@ -64,11 +64,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        form.addHidden(params.USE_GPU, params.BooleanParam, default=False,
-                       label="Use GPU for execution",
-                       help="This protocol has both CPU and GPU implementation.\
-                       Select the one you want to use.")
-
         form.addHidden(params.GPU_LIST, params.StringParam, default='0',
                        expertLevel=params.LEVEL_ADVANCED,
                        label="Choose GPU IDs",
@@ -217,28 +212,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if refFile:
             params += " --ref %s" % getXmippFileName(refFile)
 
-        if self.usesGpu():
-            params += " --debug_iter"
-            env = xmipp3.Plugin.getEnviron()
-            env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
-            self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=env)
-        else:
-            if self.numberOfThreads.get() == 1:
-                self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-            else:
-                params += " --thr %d" % self.numberOfThreads.get()
-                self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-
-        # if self.useGpu.get():
-        #     if self.numberOfMpi.get()>1:
-        #         self.runJob('xmipp_cuda_reconstruct_fourier', params, numberOfMpi=len((self.gpuList.get()).split(','))+1)
-        #     else:
-        #         self.runJob('xmipp_cuda_reconstruct_fourier', params)
-        # else:
-        #     if self.legacy.get():
-        #         self.runJob('xmipp_reconstruct_fourier', params)
-        #     else:
-        #         self.runJob('xmipp_reconstruct_fourier_accel', params)
+        params += " --debug_iter"
+        env = xmipp3.Plugin.getEnviron()
+        env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
+        self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=env)
 
     def resolutionMaskStep(self, level):
         half_1 = self._getExtraPath("final_reconstruction_1_level_%d.mrc" % level)
@@ -364,7 +341,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     
     #--------------------------- UTILS functions --------------------------------------------
     def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
-        useGPU = self.useGpu.get()
         params = ' -i %s' % inputMd
         params += ' -o %s' % outFile
         params += ' --odir %s' % self._getExtraPath()
@@ -397,12 +373,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             params += ' --maskf %s --maskb %s' % (mask, mask)
 
         # GPU parameters
-        if useGPU:
-            onlyPositive = self.onlyPositive.get()
-            params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
-                       % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
-            if onlyPositive:
-                params += " --onlyPositive"
+        onlyPositive = self.onlyPositive.get()
+        params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
+                   % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
+        if onlyPositive:
+            params += " --onlyPositive"
 
         return params
 
