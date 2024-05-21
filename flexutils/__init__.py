@@ -120,7 +120,7 @@ class Plugin(pwplugin.Plugin):
             branch = "devel" if cls.inDevelMode() else "master"
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             installationCmd += f"{conda_init} conda activate flexutils && " \
-                               f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
+                               f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b improved_installation https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
                                f"cd Flexutils-Toolkit && " \
                                f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
             return installationCmd
