@@ -89,7 +89,7 @@ class XmippProtPrepareZernikeVolumes(ProtAnalysis3D, ProtFlexBase):
 
         # Generating form
         form.addSection(label='Input subtomograms')
-        form.addParam('inputVolumes', params.PointerParam, pointerClass="SetOfVolumes",
+        form.addParam('inputVolumes', params.PointerParam, pointerClass="SetOfVolumes,SetOfVolumesFlex",
                       label='Set of volumes', help="Set of volumes whose projections will be generated.")
         form.addParam('cleanTmps', params.BooleanParam, default='True', label='Clean temporary files: ', expertLevel=params.LEVEL_ADVANCED,
                         help='Clean temporary files after finishing the execution.\nThis is useful to reduce unnecessary disk usage.')
