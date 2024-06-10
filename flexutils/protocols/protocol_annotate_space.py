@@ -394,7 +394,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
             args += ("--projectId %s --workSpaceId %s --trainJobId %s --projectPath %s --mode 3DFlex "
                      "--env_name scipion3") \
-                   % (particles.getFlexInfo().getAttr("projetId"),
+                   % (particles.getFlexInfo().getAttr("projectId"),
                       particles.getFlexInfo().getAttr("workSpaceId"),
                       particles.getFlexInfo().getAttr("trainJobId"),
                       particles.getFlexInfo().getAttr("projectPath"))
