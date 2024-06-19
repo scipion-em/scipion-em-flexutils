@@ -82,7 +82,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
         group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
-                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                       help="Tensorboard visualization provides a complete real-time report to supervise the training "
                             "of the neural network. However, for very large networks RAM requirements to save the "
                             "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
                             "network callbacks, please, set this option to NO and restart the training.")
