@@ -81,7 +81,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         form.addParam('ctfCorrected', params.BooleanParam, default=False,
                       label="Are particles CTF corrected?",
                       help="If particles are not CTF corrected, set to 'No' to perform "
-                           "a Weiner filter based corerction")
+                           "a Weiner filter based correction")
         form.addParam('initialMap', params.PointerParam, pointerClass='Volume',
                       label="Initial map",
                       allowsNull=True,

@@ -48,7 +48,7 @@ from flexutils.utils import getXmippFileName
 
 
 class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
-    """ Assignation of heterogeneity priors based on the Zernike3D basis. """
+    """ Focused heterogeneity analysis based on the Zernike3D basis. """
     _label = 'focused heterogeneity landscape - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
 
