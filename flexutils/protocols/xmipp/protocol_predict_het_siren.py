@@ -174,6 +174,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         numVol = self.numVol.get()
         trainSize = hetSirenProtocol.trainSize.get() if hetSirenProtocol.trainSize.get() else self.newXdim
         outSize = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() else self.newXdim
+        disPose = hetSirenProtocol.disPose.get()
+        disCTF = hetSirenProtocol.disCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
@@ -197,6 +199,12 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         if self.onlyPos.get():
             args += " --only_pos"
 
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
+
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
@@ -211,6 +219,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = hetSirenProtocol.boxSize.get()
         outSize = hetSirenProtocol.outSize.get()
         trainSize = hetSirenProtocol.trainSize.get()
+        disPose = hetSirenProtocol.disPose.get()
+        disCTF = hetSirenProtocol.disCTF.get()
         model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -283,6 +293,8 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().coordStep = Integer(hetSirenProtocol.step.get())
         partSet.getFlexInfo().outSize = Integer(outSize)
         partSet.getFlexInfo().trainSize = Integer(trainSize)
+        partSet.getFlexInfo().disPose = Boolean(disPose)
+        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
         if hetSirenProtocol.inputVolume.get():
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
