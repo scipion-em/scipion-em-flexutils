@@ -113,8 +113,8 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
-            installationCmd += "git clone -b improved_installation https://github.com/I2PC/Flexutils-Scripts.git && "
-            installationCmd += "cd Flexutils-Scripts && "
+            installationCmd += ' if [ ! -d "Flexutils-Scripts" ]; then git clone -b devel https://github.com/I2PC/Flexutils-Scripts.git; fi && '
+            installationCmd += "cd Flexutils-Scripts && git pull && "
             installationCmd += "bash install.sh && touch flexutils_installed && cd .."
             return installationCmd
 
