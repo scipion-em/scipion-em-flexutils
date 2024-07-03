@@ -163,6 +163,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
 
+        elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+            from flexutils.utils import generateVolumesFlexSIREN
+            representatives_paths = []
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
+            generateVolumesFlexSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
+                                     self._getExtraPath(), step=1,
+                                     architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
                                             save_volume_path.format(idx),
@@ -240,6 +247,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                     representative.setLocation(representatives_paths[clInx - 1])
 
                 elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                    representative.setLocation(representatives_paths[clInx - 1])
+
+                elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
                     representative.setLocation(representatives_paths[clInx - 1])
 
                 elif particles.getFlexInfo().getProgName() == const.NMA:
@@ -411,6 +421,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 args += " --ctf_reg 1.0"
             else:
                 args += " --ctf_reg 0.0"
+
+        elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow" \
+                   % (particles.getFlexInfo().modelPath.get(),
+                      particles.getFlexInfo().architecture.get())
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
