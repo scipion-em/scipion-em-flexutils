@@ -27,6 +27,8 @@
 
 import os
 import re
+import shutil
+
 import numpy as np
 from glob import glob
 from sklearn.neighbors import KDTree
@@ -113,7 +115,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Create SetOfFlexClasses
         suffix = getOutputSuffix(self, SetOfClasses)
-        flexClasses = createFn(particles, suffix, progName=progName)
+        flexClasses = createFn(self.particles, suffix, progName=progName)
+
+        # Folder to save decoded volumes
+        suffix_int = int(suffix)
+        save_volume_path = self._getExtraPath(os.path.join(f"Output_Volumes_{suffix_int}", "class_{:d}.mrc"))
+        if not os.path.isdir(self._getExtraPath(f"Output_Volumes_{suffix_int}")):
+            os.mkdir(self._getExtraPath(f"Output_Volumes_{suffix_int}"))
 
         # ****** Generate representative volumes *******
         z_rep = []
@@ -136,9 +144,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                             downsample=self.boxSize.get(), apix=particles.getSamplingRate())
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath('vol_{:03d}.mrc'.format(idx)),
-                                            self._getExtraPath('class_{:d}.mrc'.format(idx)),
+                                            save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
-                representatives_paths.append(self._getExtraPath('class_{:d}.mrc'.format(idx)))
+                representatives_paths.append(save_volume_path.format(idx))
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             from flexutils.utils import generateVolumesHetSIREN
@@ -147,11 +155,20 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
                                     self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
                                     architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
+                                    architecture=particles.getFlexInfo().architecture.get(),
+                                    disPose=particles.getFlexInfo().disPose.get(),
+                                    disCTF=particles.getFlexInfo().disCTF.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
-                                            self._getExtraPath('class_{:d}.mrc'.format(idx)),
+                                            save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
-                representatives_paths.append(self._getExtraPath('class_{:d}.mrc'.format(idx)))
+                representatives_paths.append(save_volume_path.format(idx))
+
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
+                                            save_volume_path.format(idx),
+                                            finalDimension=particles.getXDim(), overwrite=True)
+                representatives_paths.append(save_volume_path.format(idx))
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             reference = particles.getFlexInfo().refStruct.get()
@@ -173,9 +190,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 volume_path = os.path.join(particles.getFlexInfo().getAttr("projectPath"), flexGeneratorJob,
                                            flexGeneratorJob + "_series_000",
                                            flexGeneratorJob + "_series_000_frame_{:03d}.mrc".format(idx))
-                ImageHandler().scaleSplines(volume_path, self._getExtraPath('class_{:d}.mrc'.format(idx)),
+                ImageHandler().scaleSplines(volume_path, save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
-                representatives_paths.append(self._getExtraPath('class_{:d}.mrc'.format(idx)))
+                representatives_paths.append(save_volume_path.format(idx))
 
         # Read selected coefficients
         clInx = 1
@@ -196,18 +213,17 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 # Read space
                 z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
 
-                # Create KDTree
-                kdtree = KDTree(z_space)
+            # Create KDTree
+            kdtree = KDTree(np.loadtxt(self._getExtraPath("z_space.txt")))
 
-            # Popoulate SetOfClasses3D with KMean particles
+            # Populate SetOfClasses3D with KMean particles
             for z_idx in range(z_space_vw.shape[0]):
                 if "_cluster" in file:
-                    currIds = range(z_space.shape[0])
-                    classId = [int(x) + 1 for x in re.findall('\d+', file)][-1]
+                    _, currIds = kdtree.query(z_space, k=1)
+                    currIds = np.squeeze(np.asarray(currIds)).astype(int)
                 else:
                     _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
                     currIds = currIds[0]
-                    classId = None
 
                 newClass = Class()
                 newClass.copyInfo(particles)
@@ -264,7 +280,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 clInx += 1
 
         # Save new output
-        name = self.OUTPUT_PREFIX + suffix
+        name = self.OUTPUT_PREFIX + "_" + suffix
         args = {}
         args[name] = flexClasses
         self._defineOutputs(**args)
@@ -417,6 +433,17 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         if len(glob(self._getExtraPath("saved_selections*"))) > 0 and \
            askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
+
+    # --------------------------- OUTPUT functions -----------------------------
+    def deleteOutput(self, output):
+        attrName = self.findAttributeName(output)
+        output_id = attrName.split("_")[-1]
+        volumes_path = self._getExtraPath(f"Output_Volumes_{output_id}")
+        shutil.rmtree(volumes_path)
+        super().deleteOutput(output)
+
+    def allowsDelete(self, obj):
+        return True
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):

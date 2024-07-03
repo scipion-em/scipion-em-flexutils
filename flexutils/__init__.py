@@ -35,6 +35,8 @@ import pyworkflow.utils as pwutils
 
 from pwem import Config as emConfig
 
+from scipion.utils import getScipionHome
+
 import flexutils
 from flexutils.constants import CONDA_YML
 
@@ -73,7 +75,8 @@ class Plugin(pwplugin.Plugin):
                     if package_name.lower() in item.lower():
                         env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
-        cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+        cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getEnvActivation(),
+                                             os.path.join(getScipionHome(), "scipion3"))
 
         if cuda:
             cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '
@@ -120,8 +123,8 @@ class Plugin(pwplugin.Plugin):
             branch = "devel" if cls.inDevelMode() else "master"
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             installationCmd += f"{conda_init} conda activate flexutils && " \
-                               f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b improved_installation https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
-                               f"cd Flexutils-Toolkit && " \
+                               f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
+                               f"cd Flexutils-Toolkit && git pull && " \
                                f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
             return installationCmd
 

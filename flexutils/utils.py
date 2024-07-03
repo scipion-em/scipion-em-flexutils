@@ -53,7 +53,7 @@ def getOutputSuffix(protocol, cls):
             counter = 1  # when there is not number assume 1
         maxCounter = max(counter, maxCounter)
 
-    return str(maxCounter + 1) if maxCounter > 0 else ''  # empty if not output
+    return str(maxCounter + 1) if maxCounter > 0 else '1'  # empty if not output
 
 
 def readZernikeFile(filename):
