@@ -154,7 +154,6 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
             generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
                                     self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
-                                    architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
                                     architecture=particles.getFlexInfo().architecture.get(),
                                     disPose=particles.getFlexInfo().disPose.get(),
                                     disCTF=particles.getFlexInfo().disCTF.get(), gpu=gpu_ids)
@@ -402,6 +401,16 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
                       particles.getFlexInfo().architecture.get())
+
+            if particles.getFlexInfo().disPose.get():
+                args += " --pose_reg 1.0"
+            else:
+                args += " --pose_reg 0.0"
+
+            if particles.getFlexInfo().disCTF.get():
+                args += " --ctf_reg 1.0"
+            else:
+                args += " --ctf_reg 0.0"
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
