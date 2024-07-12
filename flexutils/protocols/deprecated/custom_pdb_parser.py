@@ -23,6 +23,7 @@ class PDBUtils:
     #     # debug_backbone_hedra = []  # For debugging purposes
     #     idx_correspondence = dict()
     #     backbone_coords = []
+    #     ca_indices = []
     #     # debug_backbone_coords = []  # For debugging purposes
     #     chain_idx = 1
     #     for chain in protein:
@@ -47,6 +48,8 @@ class PDBUtils:
     #                         if not new_key in idx_correspondence.keys():
     #                             idx_correspondence[new_key] = len(idx_correspondence)
     #                             backbone_coords.append(atomArray[hedron_idx][:-1])
+    #                             if k.akl[atmNameNdx] == "CA":
+    #                                 ca_indices.append(len(backbone_coords) - 1)
     #                         new_hedron.append(idx_correspondence[new_key])
     #                     backbone_hedra.append(new_hedron)
     #                     # debug_backbone_hedra.append([atomArrayIndex.get(k) for k in hedron])
@@ -74,7 +77,7 @@ class PDBUtils:
     #     #               np.array_equal(aux_1[:, 1], aux_2[:, 1]) and \
     #     #               np.array_equal(aux_1[:, 2], aux_2[:, 2])
     #
-    #     return backbone_coords, backbone_hedra
+    #     return backbone_coords, ca_indices, backbone_hedra
 
     @classmethod
     def find_dihedrals(cls, bond_indices):
@@ -105,6 +108,7 @@ class PDBUtils:
                     if dihedral not in dihedrals:
                         dihedrals.append(dihedral)
         return np.array(dihedrals)
+
     def parsePDB(self, file):
         # Parse model file based on subset
         structure = pd.parsePDB(file, subset=self.selectionString, compressed=False)

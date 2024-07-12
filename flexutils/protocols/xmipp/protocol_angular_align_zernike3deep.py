@@ -49,7 +49,7 @@ import flexutils
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName, coordsToMap, saveMap
 from flexutils.protocols.xmipp.utils.utils import adaptZernike3DVector
-from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
+from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
 class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -216,7 +216,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
         form.addParam("regNorm", params.FloatParam, default=0.0001, label="Zernike3D coefficient norm regularization",
-                      condition="referenceType==1",
                       help="Regularization factor determining how big Zernke3D coefficients are allowed to be."
                            "The larger the value, the smaller the coefficients that will be found (leading to a "
                            "larger restriction of the motions). We do not recommend touching this value unless motions "
@@ -246,7 +245,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
-            'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnBond': self._getExtraPath("bonds.txt"),
+            'fnDihedral': self._getExtraPath("dihedrals.txt"),
             'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
@@ -282,6 +282,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if curr_vol_dim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --fourier %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+        ih.setSamplingRate(fnVol, inputParticles.getSamplingRate())
 
         inputMask = self.inputVolumeMask.get().getFileName()
         if inputMask:
@@ -295,10 +296,14 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.referenceType.get() == 1:  # Structure reference
             inputVolume = self.inputVolume.get().getFileName()
             structure_file = self._getFileName('fnStruct')
-            connect_file = self._getFileName('fnConnect')
+            bonds_file = self._getFileName('fnBond')
+            dihedrals_file = self._getFileName('fnDihedral')
             ca_file = self._getFileName('fnCA')
-            parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
-            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+            parser = AtomicModelParser(self.inputStruct.get().getFileName(), self._subset[self.atomSubset.get()])
+            pdb_coordinates = parser.get_atom_coordinates()
+            covalent = parser.get_covalent_bonds()
+            dihedrals = parser.get_dihedral_angles()
+            ca_indices = parser.get_ca_indices()
             pdb_coordinates *= i_sr
             ih = ImageHandler(getXmippFileName(inputVolume))
             vol = ih.getData()
@@ -307,7 +312,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
             pdb_coordinates = np.c_[pdb_coordinates, values]
             np.savetxt(structure_file, pdb_coordinates)
-            np.savetxt(connect_file, connectivity)
+            np.savetxt(bonds_file, covalent)
+            np.savetxt(dihedrals_file, dihedrals)
             np.savetxt(ca_file, ca_indices)
 
         # Write particles
@@ -532,26 +538,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputVolume = self.inputVolume.get().getFileName()
         partSet.getFlexInfo().refMask = String(inputMask)
         partSet.getFlexInfo().refMap = String(inputVolume)
-
-        if self.referenceType.get() == 1:
-            structure = self.inputStruct.get().getFileName()
-            partSet.getFlexInfo().refStruct = String(structure)
-
-            # i_sr = 1. / inputParticles.getSamplingRate()
-            # parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
-            # pdb_coordinates, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
-            # values = np.ones(pdb_coordinates.shape[0])
-            # pdb_coordinates = np.c_[i_sr * pdb_coordinates, values]
-            #
-            # volume, mask = coordsToMap(pdb_coordinates[:, :-1],
-            #                            pdb_coordinates[:, -1], Xdim, 0.001)
-            # volume_file = self._getExtraPath("ref_map_from_model.mrc")
-            # mask_file = self._getExtraPath("ref_mask_from_model.mrc")
-            # saveMap(volume_file, volume)
-            # saveMap(mask_file, mask)
-            #
-            # partSet.getFlexInfo().refMask = String(mask_file)
-            # partSet.getFlexInfo().refMap = String(volume_file)
 
         if self.refinePose.get():
             partSet.getFlexInfo().refPose = Boolean(True)

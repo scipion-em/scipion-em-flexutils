@@ -48,7 +48,7 @@ import flexutils
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 from flexutils.protocols.xmipp.utils.utils import adaptZernike3DVector
-from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
+from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
 class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -228,7 +228,8 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
-            'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnBond': self._getExtraPath("bonds.txt"),
+            'fnDihedral': self._getExtraPath("dihedrals.txt"),
             'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
@@ -278,10 +279,14 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.referenceType.get() == 1:  # Structure reference
             inputVolume = self.inputVolume.get().getFileName()
             structure_file = self._getFileName('fnStruct')
-            connect_file = self._getFileName('fnConnect')
+            bonds_file = self._getFileName('fnBond')
+            dihedrals_file = self._getFileName('fnDihedral')
             ca_file = self._getFileName('fnCA')
-            parser = PDBUtils(selectionString=self._subset[self.atomSubset.get()])
-            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(self.inputStruct.get().getFileName())
+            parser = AtomicModelParser(self.inputStruct.get().getFileName(), self._subset[self.atomSubset.get()])
+            pdb_coordinates = parser.get_atom_coordinates()
+            covalent = parser.get_covalent_bonds()
+            dihedrals = parser.get_dihedral_angles()
+            ca_indices = parser.get_ca_indices()
             pdb_coordinates *= i_sr
             ih = ImageHandler(getXmippFileName(inputVolume))
             vol = ih.getData()
@@ -290,7 +295,8 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
             pdb_coordinates = np.c_[pdb_coordinates, values]
             np.savetxt(structure_file, pdb_coordinates)
-            np.savetxt(connect_file, connectivity)
+            np.savetxt(bonds_file, covalent)
+            np.savetxt(dihedrals_file, dihedrals)
             np.savetxt(ca_file, ca_indices)
 
         # Generate particles
