@@ -131,7 +131,7 @@ def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr, xsize):
 
 
 def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None, xsize=None, architecture=None,
-                    disPose=True, disCTF=True, gpu=None):
+                    disPose=None, disCTF=None, gpu=None):
     if not os.path.exists(outdir):
         os.mkdir(outdir)
 

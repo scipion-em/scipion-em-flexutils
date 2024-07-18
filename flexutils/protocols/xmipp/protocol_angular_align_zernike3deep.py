@@ -189,6 +189,19 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "A value of 1 means that all point within the mask provided in the input "
                             "will be used. A value of 2 implies that half of the point will be skipped "
                             "to increase the performance.")
+        group = form.addGroup("Disentanglement")
+        group.addParam('disPose', params.BooleanParam, default=True, label='Pose disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the pose information "
+                            "from the conformational landscape.")
+        group.addParam('poseReg', params.FloatParam, default=0.001, label='Pose disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disPose",
+                       help="Pose disentanglement factor to be considered while computing the cost function")
+        group.addParam('disCTF', params.BooleanParam, default=True, label='CTF disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the CTF information "
+                            "from the conformational landscape.")
+        group.addParam('ctfReg', params.FloatParam, default=0.001, label='CTF disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disCTF",
+                       help="CTF disentanglement factor to be considered while computing the cost function")
         group = form.addGroup("Logger")
         group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
                        help="If you experience any error during the training execution, we recommend setting "
@@ -415,6 +428,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         elif self.ctfType.get() == 1:
             args += " --ctf_type wiener"
 
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
+
         if xla:
             args += " --jit_compile"
 
@@ -459,6 +478,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -533,6 +558,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().pad = Integer(self.pad.get())
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
 
         inputMask = self.inputVolumeMask.get().getFileName()
         inputVolume = self.inputVolume.get().getFileName()

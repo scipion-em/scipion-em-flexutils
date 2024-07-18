@@ -29,7 +29,6 @@ import numpy as np
 import os
 import re
 from xmipp_metadata.metadata import XmippMetaData
-import prody as pd
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, String, Boolean
@@ -47,7 +46,7 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
+from flexutils.protocols.deprecated.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtAngularAlignmentDeepNMA(ProtAnalysis3D, ProtFlexBase):

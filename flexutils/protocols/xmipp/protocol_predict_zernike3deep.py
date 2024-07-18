@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -196,6 +196,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = zernikeProtocol.applyCTF.get()
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
@@ -212,6 +214,12 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif zernikeProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -252,6 +260,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = zernikeProtocol.boxSize.get()
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
         model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -315,6 +325,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().disPose = Boolean(disPose)
+        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
         inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
             else zernikeProtocol.inputVolumeMask.get().getFileName()
