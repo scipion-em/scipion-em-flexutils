@@ -16,7 +16,7 @@ from flexutils import __version__
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-long_description = Path((path.join(here, 'README.md')).read_text()
+long_description = Path(path.join(here, 'README.md')).read_text()
 
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
