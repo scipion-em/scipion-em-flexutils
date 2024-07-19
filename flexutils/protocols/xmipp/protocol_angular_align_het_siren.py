@@ -178,6 +178,19 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "A value of 1 means that all point within the mask provided in the input "
                             "will be used. A value of 2 implies that half of the point will be skipped "
                             "to increase the performance.")
+        group = form.addGroup("Disentanglement")
+        group.addParam('disPose', params.BooleanParam, default=True, label='Pose disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the pose information "
+                            "from the conformational landscape.")
+        group.addParam('poseReg', params.FloatParam, default=0.001, label='Pose disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disPose",
+                       help="Pose disentanglement factor to be considered while computing the cost function")
+        group.addParam('disCTF', params.BooleanParam, default=True, label='CTF disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the CTF information "
+                            "from the conformational landscape.")
+        group.addParam('ctfReg', params.FloatParam, default=0.001, label='CTF disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disCTF",
+                       help="CTF disentanglement factor to be considered while computing the cost function")
         group = form.addGroup("Logger")
         group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
                        help="If you experience any error during the training execution, we recommend setting "
@@ -271,6 +284,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
                             "-i %s --fourier %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            ih.setSamplingRate(fnVol, inputParticles.getSamplingRate())
 
         if self.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
@@ -372,6 +386,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         if self.multires.get():
             args += " --multires %d" % self.multires.get()
 
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
+
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
@@ -428,6 +448,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.refinePose.get():
             args += " --refine_pose"
+
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if self.filterDecoded.get():
             args += " --apply_filter"
@@ -504,6 +530,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
         partSet.getFlexInfo().outSize = Integer(outSize)
         partSet.getFlexInfo().trainSize = Integer(trainSize)
+        partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()

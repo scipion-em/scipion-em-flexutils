@@ -29,6 +29,7 @@ import os
 import glob
 import numpy as np
 from scipy import stats
+from scipy import signal
 import re
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -50,6 +51,39 @@ import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
 
+def filterVol(volume, mode="bspline"):
+    size = volume.shape[1]
+
+    # Create kernel
+    if mode == "bspline":
+        # Create a bspline kernel that will be used to blur the original acquisition
+        b_spline_1d = np.asarray([0.0, 0.5, 1.0, 0.5, 0.0])
+        pad_before = (size - len(b_spline_1d)) // 2
+        pad_after = size - pad_before - len(b_spline_1d)
+        kernel = np.einsum('i,j,k->ijk', b_spline_1d, b_spline_1d, b_spline_1d)
+        kernel = np.pad(kernel, (pad_before, pad_after), 'constant', constant_values=(0.0,))
+        ft_kernel = np.abs(np.fft.fftshift(np.fft.fftn(kernel)))
+    elif mode == "gaussian":
+        # Create a gaussian kernel that will be used to blur the original acquisition
+        std = 2.0
+        gauss_1d = signal.windows.gaussian(volume.shape[1], std)
+        kernel = np.einsum('i,j,k->ijk', gauss_1d, gauss_1d, gauss_1d)
+    ft_kernel = np.abs(np.fft.fftshift(np.fft.fftn(kernel)))
+
+    def applyKernelFourier(x):
+        ft_x = np.fft.fftshift(np.fft.fftn(x))
+        ft_x_real = ft_x.real * ft_kernel
+        ft_x_imag = ft_x.imag * ft_kernel
+        ft_x = ft_x_real + ft_x_imag * 1j
+        return np.fft.ifftn(np.fft.fftshift(ft_x)).real
+
+    volume = applyKernelFourier(volume)
+    thr = 1e-6
+    volume = volume - (volume > thr) * thr + (volume < -thr) * thr - (volume == thr) * volume
+
+    return volume
+
+
 class XmippProtReconstructZART(ProtReconstruct3D):
     """    
     Reconstruct a volume using ZART algorithm from a given SetOfParticles.
@@ -63,11 +97,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     #--------------------------- DEFINE param functions --------------------------------------------   
     def _defineParams(self, form):
         form.addSection(label='Input')
-
-        form.addHidden(params.USE_GPU, params.BooleanParam, default=False,
-                       label="Use GPU for execution",
-                       help="This protocol has both CPU and GPU implementation.\
-                       Select the one you want to use.")
 
         form.addHidden(params.GPU_LIST, params.StringParam, default='0',
                        expertLevel=params.LEVEL_ADVANCED,
@@ -217,28 +246,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if refFile:
             params += " --ref %s" % getXmippFileName(refFile)
 
-        if self.usesGpu():
-            params += " --debug_iter"
-            env = xmipp3.Plugin.getEnviron()
-            env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
-            self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=env)
-        else:
-            if self.numberOfThreads.get() == 1:
-                self.runJob('xmipp_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-            else:
-                params += " --thr %d" % self.numberOfThreads.get()
-                self.runJob('xmipp_parallel_forward_art_zernike3d', params, numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-
-        # if self.useGpu.get():
-        #     if self.numberOfMpi.get()>1:
-        #         self.runJob('xmipp_cuda_reconstruct_fourier', params, numberOfMpi=len((self.gpuList.get()).split(','))+1)
-        #     else:
-        #         self.runJob('xmipp_cuda_reconstruct_fourier', params)
-        # else:
-        #     if self.legacy.get():
-        #         self.runJob('xmipp_reconstruct_fourier', params)
-        #     else:
-        #         self.runJob('xmipp_reconstruct_fourier_accel', params)
+        params += " --debug_iter"
+        env = xmipp3.Plugin.getEnviron()
+        env["CUDA_VISIBLE_DEVICES"] = ','.join([str(elem) for elem in self.getGpuList()])
+        self.runJob('xmipp_cuda_forward_art_zernike3d', params, env=env)
 
     def resolutionMaskStep(self, level):
         half_1 = self._getExtraPath("final_reconstruction_1_level_%d.mrc" % level)
@@ -343,17 +354,34 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                         "-i %s --oroot %s" % (particlesMd, halvesMd), env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
+        # Filter volume -> Real reconstruction
+        volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
+        volume_data_filtered = filterVol(volume_data, mode="bspline")
+        ImageHandler().write(volume_data_filtered, self._getExtraPath("final_reconstruction_filtered.mrc"))
+
         imgSet = self.inputParticles.get()
-        volume = Volume()
+        volume, volume_filtered = Volume(), Volume()
         volume.setFileName(self._getExtraPath("final_reconstruction.mrc"))
+        volume_filtered.setFileName(self._getExtraPath("final_reconstruction_filtered.mrc"))
         volume.setSamplingRate(imgSet.getSamplingRate())
+        volume_filtered.setSamplingRate(imgSet.getSamplingRate())
 
         if self.mode.get() != 0:
             halves = self.volumeRestoration()
             volume.setHalfMaps(halves)
-        
+
+            halves_filtered = [self._getExtraPath(f"final_reconstruction_filtered_half_1.mrc"),
+                               self._getExtraPath(f"final_reconstruction_filtered_half_2.mrc")]
+            for half, half_file in zip(halves, halves_filtered):
+                volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
+                volume_data_filtered = filterVol(volume_data, mode="bspline")
+                ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
+            volume.setHalfMaps(halves)
+
         self._defineOutputs(outputVolume=volume)
+        self._defineOutputs(outputVolumeFiltered=volume_filtered)
         self._defineSourceRelation(self.inputParticles, volume)
+        self._defineSourceRelation(self.inputParticles, volume_filtered)
     
     #--------------------------- INFO functions -------------------------------------------- 
     def _summary(self):
@@ -364,7 +392,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     
     #--------------------------- UTILS functions --------------------------------------------
     def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
-        useGPU = self.useGpu.get()
         params = ' -i %s' % inputMd
         params += ' -o %s' % outFile
         params += ' --odir %s' % self._getExtraPath()
@@ -397,12 +424,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             params += ' --maskf %s --maskb %s' % (mask, mask)
 
         # GPU parameters
-        if useGPU:
-            onlyPositive = self.onlyPositive.get()
-            params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
-                       % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
-            if onlyPositive:
-                params += " --onlyPositive"
+        onlyPositive = self.onlyPositive.get()
+        params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
+                   % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
+        if onlyPositive:
+            params += " --onlyPositive"
 
         return params
 

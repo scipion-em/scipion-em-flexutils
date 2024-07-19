@@ -29,10 +29,9 @@ import os
 import numpy as np
 import re
 from xmipp_metadata.metadata import XmippMetaData
-import prody as pd
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList, Boolean
+from pyworkflow.object import Integer, String
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -47,7 +46,7 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
+from flexutils.protocols.deprecated.custom_pdb_parser import PDBUtils
 
 
 class TensorflowProtPredictDeepNMA(ProtAnalysis3D, ProtFlexBase):

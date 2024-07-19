@@ -76,6 +76,9 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="Previously executed 'angular align - HetSIREN'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
+        group.addParam('addCTF', params.BooleanParam, label="Predict with CTF corruption?",
+                       default=False,
+                       help="Determines wether the predicted projections will be CTF corrupted or not.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -152,10 +155,13 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         Xdim = self.inputParticles.get().getXDim()
         correctionFactor = Xdim / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = hetSirenProtocol.ctfType.get()
+        applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
         trainSize = hetSirenProtocol.trainSize.get() if hetSirenProtocol.trainSize.get() else self.newXdim
         outSize = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() else self.newXdim
+        disPose = hetSirenProtocol.disPose.get()
+        disCTF = hetSirenProtocol.disCTF.get()
+        addCTF = self.addCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
                "--sr %f --apply_ctf %d --het_dim %d --trainSize %d --outSize %d" \
                % (md_file, weigths_file, pad, sr, applyCTF, hetDim, trainSize, outSize)
@@ -172,6 +178,15 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
+
+        if addCTF:
+            args += " --addCTF"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -219,8 +234,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
 
-            index, _ = denoised_images_path[idx].split("@")
-            outParticle.setLocation((int(index), self._getExtraPath("decoded_particles.mrcs")))
+            # index, _ = denoised_images_path[idx].split("@")
+            outParticle.setLocation((idx, self._getExtraPath("decoded_particles.mrcs")))
 
             outParticle.setZFlex(latent_space[idx])
 
