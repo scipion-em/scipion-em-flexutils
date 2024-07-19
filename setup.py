@@ -10,13 +10,13 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+from pathlib import Path
 from flexutils import __version__
 
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+long_description = Path((path.join(here, 'README.md')).read_text()
 
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
@@ -29,6 +29,7 @@ setup(
     version=__version__,  # Required
     description='Tools for 3D visualization and manipulation of flexibility data',  # Required
     long_description=long_description,  # Optional
+    long_description_content_type='text/markdown',
     url='https://github.com/scipion-em/scipion-em-flexutils',  # Optional
     author='David Herreros',  # Optional
     author_email='dherreros@cnb.csic.es',  # Optional
