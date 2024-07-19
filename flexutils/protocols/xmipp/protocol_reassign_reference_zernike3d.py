@@ -48,7 +48,7 @@ from flexutils.utils import getXmippFileName
 
 
 class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
-    """ Assignation of heterogeneity priors based on the Zernike3D basis. """
+    """ Reassignation of reference for landscape based on the Zernike3D basis. """
     _label = 'reassign reference - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
 

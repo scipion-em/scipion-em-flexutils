@@ -86,10 +86,10 @@ class XmippProtCropResizeZernikeParticles(XmippProcessParticles, ProtFlexBase):
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def filterStep(self, isFirstStep, args):
-        XmippResizeHelper.filterStep(self, self._ioArgs(isFirstStep) + args)
+        self.runJob("xmipp_transform_filter", self._ioArgs(isFirstStep) + args, env=xmipp3.Plugin.getEnviron())
 
     def resizeStep(self, isFirstStep, args):
-        XmippResizeHelper.resizeStep(self, self._ioArgs(isFirstStep) + args)
+        self.runJob("xmipp_image_resize", self._ioArgs(isFirstStep) + args, env=xmipp3.Plugin.getEnviron())
 
     def windowStep(self, isFirstStep, args):
         XmippResizeHelper.windowStep(self, self._ioArgs(isFirstStep) + args)

@@ -35,11 +35,13 @@ import pyworkflow.utils as pwutils
 
 from pwem import Config as emConfig
 
+from scipion.utils import getScipionHome
+
 import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.1.6"
+__version__ = "3.2.0"
 _logo = "icon.png"
 _references = []
 
@@ -73,7 +75,8 @@ class Plugin(pwplugin.Plugin):
                     if package_name.lower() in item.lower():
                         env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
-        cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+        cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getEnvActivation(),
+                                             os.path.join(getScipionHome(), "scipion3"))
 
         if cuda:
             cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '
@@ -110,8 +113,8 @@ class Plugin(pwplugin.Plugin):
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
-            installationCmd += "git clone -b devel https://github.com/I2PC/Flexutils-Scripts.git && "
-            installationCmd += "cd Flexutils-Scripts && "
+            installationCmd += ' if [ ! -d "Flexutils-Scripts" ]; then git clone -b devel https://github.com/I2PC/Flexutils-Scripts.git; fi && '
+            installationCmd += "cd Flexutils-Scripts && git pull && "
             installationCmd += "bash install.sh && touch flexutils_installed && cd .."
             return installationCmd
 
@@ -121,7 +124,7 @@ class Plugin(pwplugin.Plugin):
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             installationCmd += f"{conda_init} conda activate flexutils && " \
                                f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
-                               f"cd Flexutils-Toolkit && " \
+                               f"cd Flexutils-Toolkit && git pull && " \
                                f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
             return installationCmd
 

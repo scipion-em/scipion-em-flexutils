@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList, Boolean
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -48,7 +48,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
-from flexutils.protocols.xmipp.utils.custom_pdb_parser import PDBUtils
+from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
 class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -91,7 +91,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
-            'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnBond': self._getExtraPath("bonds.txt"),
+            'fnDihedral': self._getExtraPath("dihedrals.txt"),
             'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
@@ -138,13 +139,16 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             env=xmipp3.Plugin.getEnviron())
 
         if zernikeProtocol.referenceType.get() == 1:  # Structure reference
-            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
-            inputStruct = zernikeProtocol.inputStruct.get().getFileName()
+            inputVolume = self.inputVolume.get().getFileName()
             structure_file = self._getFileName('fnStruct')
-            connect_file = self._getFileName('fnConnect')
+            bonds_file = self._getFileName('fnBond')
+            dihedrals_file = self._getFileName('fnDihedral')
             ca_file = self._getFileName('fnCA')
-            parser = PDBUtils(selectionString=zernikeProtocol._subset[zernikeProtocol.atomSubset.get()])
-            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(inputStruct)
+            parser = AtomicModelParser(self.inputStruct.get().getFileName(), self._subset[self.atomSubset.get()])
+            pdb_coordinates = parser.get_atom_coordinates()
+            covalent = parser.get_covalent_bonds()
+            dihedrals = parser.get_dihedral_angles()
+            ca_indices = parser.get_ca_indices()
             pdb_coordinates *= i_sr
             ih = ImageHandler(getXmippFileName(inputVolume))
             vol = ih.getData()
@@ -153,7 +157,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
             pdb_coordinates = np.c_[pdb_coordinates, values]
             np.savetxt(structure_file, pdb_coordinates)
-            np.savetxt(connect_file, connectivity)
+            np.savetxt(bonds_file, covalent)
+            np.savetxt(dihedrals_file, dihedrals)
             np.savetxt(ca_file, ca_indices)
 
         writeSetOfParticles(inputParticles, imgsFn)
@@ -191,6 +196,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = zernikeProtocol.applyCTF.get()
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
@@ -207,6 +214,12 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif zernikeProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -247,6 +260,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = zernikeProtocol.boxSize.get()
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
         model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -310,6 +325,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().disPose = Boolean(disPose)
+        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
         inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
             else zernikeProtocol.inputVolumeMask.get().getFileName()

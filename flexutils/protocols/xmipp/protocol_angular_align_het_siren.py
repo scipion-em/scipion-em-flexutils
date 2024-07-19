@@ -130,9 +130,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       pointerClass='TensorflowProtAngularAlignmentHetSiren',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
-        group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
@@ -160,7 +160,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "training increasing the training performance. However, XLA will only work with compatible "
                             "GPUs. If any error is experienced, set to No.")
         group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
-                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
+                       help="Tensorboard visualization provides a complete real-time report to supervise the training "
                             "of the neural network. However, for very large networks RAM requirements to save the "
                             "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
                             "network callbacks, please, set this option to NO and restart the training.")
@@ -178,6 +178,19 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "A value of 1 means that all point within the mask provided in the input "
                             "will be used. A value of 2 implies that half of the point will be skipped "
                             "to increase the performance.")
+        group = form.addGroup("Disentanglement")
+        group.addParam('disPose', params.BooleanParam, default=True, label='Pose disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the pose information "
+                            "from the conformational landscape.")
+        group.addParam('poseReg', params.FloatParam, default=0.001, label='Pose disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disPose",
+                       help="Pose disentanglement factor to be considered while computing the cost function")
+        group.addParam('disCTF', params.BooleanParam, default=True, label='CTF disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the CTF information "
+                            "from the conformational landscape.")
+        group.addParam('ctfReg', params.FloatParam, default=0.001, label='CTF disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disCTF",
+                       help="CTF disentanglement factor to be considered while computing the cost function")
         group = form.addGroup("Logger")
         group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
                        help="If you experience any error during the training execution, we recommend setting "
@@ -231,7 +244,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                       help="Determines in how many regions the trained latent space will be splitted by "
                            "KMeans, allowing to decode a state based on the representative of each cluster. "
                            "This provides and initial summary/exploration of the trained landscape")
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=0, mpi=4)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
@@ -270,7 +283,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
             if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --fourier %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            ih.setSamplingRate(fnVol, inputParticles.getSamplingRate())
 
         if self.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
@@ -354,10 +368,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                 args += " --smooth_mask"
 
         if self.architecture.get() == 0:
-            args += " --architecture deepconv"
-        elif self.architecture.get() == 1:
             args += " --architecture convnn"
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if self.ctfType.get() == 0:
@@ -373,6 +385,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.multires.get():
             args += " --multires %d" % self.multires.get()
+
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
@@ -424,14 +442,18 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --ctf_type wiener"
 
         if self.architecture.get() == 0:
-            args += " --architecture deepconv"
-        elif self.architecture.get() == 1:
             args += " --architecture convnn"
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if self.refinePose.get():
             args += " --refine_pose"
+
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if self.filterDecoded.get():
             args += " --apply_filter"
@@ -508,6 +530,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
         partSet.getFlexInfo().outSize = Integer(outSize)
         partSet.getFlexInfo().trainSize = Integer(trainSize)
+        partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -518,10 +542,8 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("deepconv")
-        elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("convnn")
-        elif self.architecture.get() == 2:
+        elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
         if self.ctfType.get() == 0:
@@ -615,3 +637,20 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                           " size (currently set to %d)" % boxSize)
 
         return errors
+
+    def _warnings(self):
+        warnings = []
+
+        num_particles = self.inputParticles.get().getSize()
+        split_train = self.split_train.get()
+        num_particles_train = int(split_train * num_particles)
+
+        if num_particles_train > 500000:
+            warnings.append("The dataset you are using to train is quite large, which may lead to long training times. "
+                            "If this is intended, you may ignore this warning. Otherwise, it is recommended to modify "
+                            "the form parameter \"Traning dataset fraction\" to a lower value so that the number of "
+                            "particles to train is smaller than 500k. In this way, the network will learn faster and "
+                            "posteriorly the trained network will use the complete dataset in the prediction step to "
+                            "reduce execution times.")
+
+        return warnings

@@ -33,28 +33,27 @@ from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Integer, Float, String, Boolean
-from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import ParticleFlex, SetOfParticlesFlex
+from pwem.objects import VolumeFlex, AtomStructFlex
 
-from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
+from xmipp3.convert import createItemMatrix, setXmippAttributes, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.utils import getXmippFileName, coordsToMap, saveMap
+from flexutils.utils import getXmippFileName
 from flexutils.protocols.xmipp.utils.utils import adaptZernike3DVector
 from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
-class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
-    """ Protocol for flexible angular alignment with the Zernike3Deep algortihm. """
-    _label = 'flexible align - Zernike3Deep'
+class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
+    """ Protocol for flexible alignment of 3D volumes with the Zernike3Deep algorithm. """
+    _label = 'flexible volume align - Zernike3Deep'
     _lastUpdateVersion = VERSION_2_0
     _subset = ["bb", "all"]
 
@@ -70,8 +69,12 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
         group = form.addGroup("Data")
-        group.addParam('inputParticles', params.PointerParam, label="Input particles",
-                       pointerClass='SetOfParticles,SetOfParticlesFlex')
+        group.addParam('inputVolumes', params.PointerParam, pointerClass="SetOfVolumes,SetOfVolumesFlex",
+                       label='Set of volumes', help="Set of volumes whose projections will be generated.")
+        group.addParam('rangeNSamples', params.IntParam,
+                       label='Number of samples:', default=500,
+                       help='Number of projections to be produced for each volume in the set.\n'
+                            ' It has to be 1 or greater.')
         group.addParam('referenceType', params.EnumParam, choices=['Volume', 'Structure'],
                        default=0, label="Reference type", display=params.EnumParam.DISPLAY_HLIST,
                        help="Determine which type of reference will be used to compute the motions. "
@@ -114,23 +117,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                        label='Harmonical Degree',
                        expertLevel=params.LEVEL_ADVANCED,
                        help='Degree Spherical Harmonics of the deformation=1,2,3,...')
-        group = form.addGroup("CTF Parameters (Advanced)",
-                              expertLevel=params.LEVEL_ADVANCED)
-        group.addParam('applyCTF', params.BooleanParam, default=True, label='Apply CTF?',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help="If true, volume projection will be subjected to CTF corrections")
-        group.addParam('ctfType', params.EnumParam, choices=['Apply', 'Wiener'],
-                       default=0, label="CTF correction type",
-                       display=params.EnumParam.DISPLAY_HLIST,
-                       condition="applyCTF", expertLevel=params.LEVEL_ADVANCED,
-                       help="* *Apply*: CTF is applied to the projection generated from the reference map\n"
-                            "* *Wiener*: input particle is CTF corrected by a Wiener fiter")
-        group.addParam("pad", params.IntParam, default=2,
-                       label="Padding factor",
-                       condition="applyCTF", expertLevel=params.LEVEL_ADVANCED,
-                       help="Determines the padding factor to be applied before computing "
-                            "the Fourier Transform of the images to increase the frequency "
-                            "content")
         form.addSection(label='Network')
         form.addParam('fineTune', params.BooleanParam, default=False, label="Fine tune previous network?",
                       help="If True, a previously trained deepPose network will be fine tuned based on the "
@@ -142,10 +128,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       pointerClass='TensorflowProtAngularAlignmentZernike3Deep',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
-        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+        group.addParam('architecture', params.EnumParam, choices=['DeepConv', 'ConvNN', 'MPLNN'],
                        expertLevel=params.LEVEL_ADVANCED,
-                       default=1, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                       help="* *ConvNN*: convolutional neural network\n"
+                       default=2, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
+                            "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
                        default=1, label="How to compute total epochs?",
@@ -171,16 +158,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "training increasing the training performance. However, XLA will only work with compatible "
                             "GPUs. If any error is experienced, set to No.")
         group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
-                       help="Tensorboard visualization provides a complete real-time report to supervise the training "
+                       help="Tensorboard visualization provides a complete real-time report to supervides the training "
                             "of the neural network. However, for very large networks RAM requirements to save the "
                             "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
                             "network callbacks, please, set this option to NO and restart the training.")
         group = form.addGroup("Extra network parameters")
-        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-                       help="If True, the neural network will be also trained to refine the angular "
-                            "and shift assignation of the particles to make it more consistent with the "
-                            "flexibility estimation. Otherwise, only heterogeneity information will be "
-                            "estimated.")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
                             "be used to train the network.")
@@ -189,19 +171,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "A value of 1 means that all point within the mask provided in the input "
                             "will be used. A value of 2 implies that half of the point will be skipped "
                             "to increase the performance.")
-        group = form.addGroup("Disentanglement")
-        group.addParam('disPose', params.BooleanParam, default=True, label='Pose disentanglement?',
-                       help="If True, the neural network will be also trained to disentangle the pose information "
-                            "from the conformational landscape.")
-        group.addParam('poseReg', params.FloatParam, default=0.001, label='Pose disentanglement factor',
-                       expertLevel=params.LEVEL_ADVANCED, condition="disPose",
-                       help="Pose disentanglement factor to be considered while computing the cost function")
-        group.addParam('disCTF', params.BooleanParam, default=True, label='CTF disentanglement?',
-                       help="If True, the neural network will be also trained to disentangle the CTF information "
-                            "from the conformational landscape.")
-        group.addParam('ctfReg', params.FloatParam, default=0.001, label='CTF disentanglement factor',
-                       expertLevel=params.LEVEL_ADVANCED, condition="disCTF",
-                       help="CTF disentanglement factor to be considered while computing the cost function")
         group = form.addGroup("Logger")
         group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
                        help="If you experience any error during the training execution, we recommend setting "
@@ -241,7 +210,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                       condition="referenceType==1",
                       help="Regularization factor determining how stiff hedra angles distances will be when deforming "
                            "the atomic model")
-        form.addParam("regClashes", params.FloatParam, default=0.001, label="Clashes regularization",
+        form.addParam("regClashes", params.FloatParam, label="Clashes regularization",
                       allowsNull=True,
                       condition="referenceType==1",
                       help="Regularization factor determining how the importance of bonded and non-bonded clashes in "
@@ -254,7 +223,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
         myDict = {
-            'imgsFn': self._getExtraPath('input_particles.xmd'),
+            'mdFn': self._getExtraPath('input_particles_volume.xmd'),
+            'imgsFn': self._getExtraPath('input_particles_volume_{volId:d}.stk'),
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
@@ -275,17 +245,18 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def writeMetaDataStep(self):
+        mdFn = self._getFileName('mdFn')
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
-        md_file = self._getFileName('imgsFn')
         L1, L2 = self.l1.get(), self.l2.get()
+        rangeNSamples = self.rangeNSamples.get()
 
-        inputParticles = self.inputParticles.get()
-        Xdim = inputParticles.getXDim()
+        inputVolumes = self.inputVolumes.get()
+        Xdim = inputVolumes.getXDim()
         self.newXdim = self.boxSize.get()
         correctionFactor = Xdim / self.newXdim
-        i_sr = 1. / (correctionFactor * inputParticles.getSamplingRate())
+        i_sr = 1. / (correctionFactor * inputVolumes.getSamplingRate())
 
         # Map reference
         ih = ImageHandler()
@@ -295,7 +266,6 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if curr_vol_dim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --fourier %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
-        ih.setSamplingRate(fnVol, inputParticles.getSamplingRate())
 
         inputMask = self.inputVolumeMask.get().getFileName()
         if inputMask:
@@ -329,61 +299,61 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             np.savetxt(dihedrals_file, dihedrals)
             np.savetxt(ca_file, ca_indices)
 
-        # Write particles
-        writeSetOfParticles(inputParticles, imgsFn)
+        # Generate particles
+        idx = 0
+        volumeIds = np.arange(inputVolumes.getSize(), dtype=int)
+        md = None
+        scale_fator = 1. / correctionFactor
+        for volume in inputVolumes:
+            volumeId = volumeIds[idx] * np.ones(rangeNSamples)
+            ih = ImageHandler(volume.getFileName())
+            curr_vol_dim = ih.getDimensions()[-1]
+            if isinstance(volume, VolumeFlex) and volume.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                z_space = np.tile(scale_fator * volume.getZFlex()[None, :], (rangeNSamples, 1))
 
-        # Write extra attributes (if needed)
-        md = XmippMetaData(md_file)
-        if isinstance(inputParticles, SetOfParticlesFlex) and \
-            inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-            scale_fator = 1. / correctionFactor
-            z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
-            z_space = scale_fator * z_space
+                # Resize Zernike3D vector if needed
+                prevL1, prevL2 = volume.getFlexInfo().getAttr("L1"), volume.getFlexInfo().getAttr("L2")
+                z_space = adaptZernike3DVector(z_space, L1, L2, prevL1, prevL2)
 
-            # Resize Zernike3D vector if needed
-            prevL1, prevL2 = inputParticles.getFlexInfo().getAttr("L1"), inputParticles.getFlexInfo().getAttr("L2")
-            z_space = adaptZernike3DVector(z_space, L1, L2, prevL1, prevL2)
-
-            md[:, "zernikeCoefficients"] = np.asarray([",".join(item) for item in z_space.astype(str)])
-        if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
-            labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
-            md[:, "subtomo_labels"] = labels
-        md.write(md_file, overwrite=True)
-
-        if self.newXdim != Xdim:
-            params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
-                     (imgsFn,
-                      self._getTmpPath('scaled_particles.stk'),
-                      self._getExtraPath('scaled_particles.xmd'),
-                      self.newXdim)
-            if self.numberOfMpi.get() > 1:
-                params += " --mpi_job_size %d" % int(inputParticles.getSize() / self.numberOfMpi.get())
-            self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
-                        env=xmipp3.Plugin.getEnviron())
-            moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
+                z_space = np.asarray([",".join(item) for item in z_space.astype(str)])
+            else:
+                z_space = None
+            if curr_vol_dim != self.newXdim:
+                volData = ih.scaleSplines(finalDimension=self.newXdim)
+            else:
+                volData = ih.getData()
+            proj, angles = ih.generateProjections(rangeNSamples, volume=volData,
+                                                  n_jobs=self.numberOfThreads.get(), useFourier=True)
+            ImageHandler().write(proj, imgsFn.format(volId=volumeIds[idx]))
+            if md is None:
+                md = XmippMetaData(imgsFn.format(volId=volumeIds[idx]), angles=angles, subtomo_labels=volumeId,
+                                   zernikeCoefficients=z_space)
+            else:
+                md.appendMetaData(XmippMetaData(imgsFn.format(volId=volumeIds[idx]), angles=angles,
+                                                subtomo_labels=volumeId, zernikeCoefficients=z_space))
+            idx += 1
+        md.write(mdFn)
 
     def trainingStep(self):
-        md_file = self._getFileName('imgsFn')
+        md_file = self._getFileName('mdFn')
         out_path = self._getExtraPath('network')
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
         L1 = self.l1.get()
         L2 = self.l2.get()
-        pad = self.pad.get()
         batch_size = self.batch_size.get()
         step = self.step.get()
         split_train = self.split_train.get()
         lr = self.lr.get()
         regNorm = self.regNorm.get()
-        correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
-        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = self.applyCTF.get()
+        correctionFactor = self.inputVolumes.get().getXDim() / self.boxSize.get()
+        sr = correctionFactor * self.inputVolumes.get().getSamplingRate()
         xla = self.xla.get()
         tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --L1 %d --L2 %d --batch_size %d " \
-               "--shuffle --split_train %f --pad %d --sr %f --apply_ctf %d --lr %f --regNorm %f" \
-               % (md_file, out_path, L1, L2, batch_size, split_train, pad, sr,
-                  applyCTF, lr, regNorm)
+               "--shuffle --split_train %f --sr %f --lr %f --regNorm %f --apply_ctf 0 --ctf_type apply" \
+               % (md_file, out_path, L1, L2, batch_size, split_train, sr,
+                  lr, regNorm)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
@@ -410,29 +380,17 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         elif self.costFunction.get() == 3:
             args += " --cost mae"
 
-        if self.refinePose.get():
-            args += " --refine_pose"
-
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
             modelPath = netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
             args += " --weigths_file %s" % modelPath
 
         if self.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif self.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 2:
             args += " --architecture mlpnn"
-
-        if self.ctfType.get() == 0:
-            args += " --ctf_type apply"
-        elif self.ctfType.get() == 1:
-            args += " --ctf_type wiener"
-
-        if self.disPose.get():
-            args += " --pose_reg %f" % self.poseReg.get()
-
-        if self.disCTF.get():
-            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if xla:
             args += " --jit_compile"
@@ -454,36 +412,21 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.runJob(program, args, numberOfMpi=1)
 
     def predictStep(self):
-        md_file = self._getFileName('imgsFn')
+        md_file = self._getFileName('mdFn')
         weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
         L1 = self.l1.get()
         L2 = self.l2.get()
-        pad = self.pad.get()
-        correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
-        sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = self.applyCTF.get()
-        args = "--md_file %s --weigths_file %s --L1 %d --L2 %d --pad %d --sr %f " \
-               "--apply_ctf %d" \
-               % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
-
-        if self.refinePose.get():
-            args += " --refine_pose"
-
-        if self.ctfType.get() == 0:
-            args += " --ctf_type apply"
-        elif self.ctfType.get() == 1:
-            args += " --ctf_type wiener"
+        correctionFactor = self.inputVolumes.get().getXDim() / self.boxSize.get()
+        sr = correctionFactor * self.inputVolumes.get().getSamplingRate()
+        args = "--md_file %s --weigths_file %s --L1 %d --L2 %d --sr %f --apply_ctf 0 --ctf_type apply" \
+               % (md_file, weigths_file, L1, L2, sr)
 
         if self.architecture.get() == 0:
-            args += " --architecture convnn"
+            args += " --architecture deepconv"
         elif self.architecture.get() == 1:
+            args += " --architecture convnn"
+        elif self.architecture.get() == 2:
             args += " --architecture mlpnn"
-
-        if self.disPose.get():
-            args += " --pose_reg %f" % self.poseReg.get()
-
-        if self.disCTF.get():
-            args += " --ctf_reg %f" % self.ctfReg.get()
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -493,108 +436,93 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.runJob(program, args, numberOfMpi=1)
 
     def createOutputStep(self):
-        inputParticles = self.inputParticles.get()
-        Xdim = inputParticles.getXDim()
+        inputVolumes = self.inputVolumes.get()
+        Xdim = inputVolumes.getXDim()
         self.newXdim = self.boxSize.get()
         model_path = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
-        md_file = self._getFileName('imgsFn')
+        md_file = self._getFileName('mdFn')
 
         metadata = XmippMetaData(md_file)
-        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zernikeCoefficients']])
+        _, volumeIds = np.unique(metadata[:, "subtomo_labels"], return_index=True)
+        zernike_space = np.asarray(
+            [np.fromstring(item, sep=',') for item in metadata[volumeIds, 'zernikeCoefficients']])
 
-        if self.refinePose.get():
-            delta_rot = metadata[:, 'delta_angle_rot']
-            delta_tilt = metadata[:, 'delta_angle_tilt']
-            delta_psi = metadata[:, 'delta_angle_psi']
-            delta_shift_x = metadata[:, 'delta_shift_x']
-            delta_shift_y = metadata[:, 'delta_shift_y']
+        outSets = {}
 
-        inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
-
-        partSet.copyInfo(inputSet)
-        partSet.setHasCTF(inputSet.hasCTF())
-        partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
-        partSet.setAlignmentProj()
+        volSet = self._createSetOfVolumesFlex(progName=const.ZERNIKE3D)
+        volSet.copyInfo(inputVolumes)
+        volSet.getFlexInfo().setProgName(const.ZERNIKE3D)
 
         correctionFactor = Xdim / self.newXdim
         zernike_space = correctionFactor * zernike_space
 
-        inverseTransform = partSet.getAlignment() == ALIGN_PROJ
+        inputMask = self.inputVolumeMask.get().getFileName()
+        inputVolume = self.inputVolume.get().getFileName()
 
         idx = 0
-        for particle in inputSet.iterItems():
-            # z = correctionFactor * zernike_space[idx]
-
-            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
-            outParticle.copyInfo(particle)
-            outParticle.getFlexInfo().setProgName(const.ZERNIKE3D)
-
-            outParticle.setZFlex(zernike_space[idx])
-
-            if self.refinePose.get():
-                tr_ori = particle.getTransform().getMatrix()
-                shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
-
-                # Apply delta angles
-                angles[0] += delta_rot[idx]
-                angles[1] += delta_tilt[idx]
-                angles[2] += delta_psi[idx]
-
-                # Apply delta shifts
-                shifts[0] += correctionFactor * delta_shift_x[idx]
-                shifts[1] += correctionFactor * delta_shift_y[idx]
-
-                # Set new transformation matrix
-                tr = matrixFromGeometry(shifts, angles, inverseTransform)
-                outParticle.getTransform().setMatrix(tr)
+        for volume in inputVolumes.iterItems():
+            outVolume = VolumeFlex(progName=const.ZERNIKE3D)
+            outVolume.copyInfo(volume)
+            outVolume.getFlexInfo().setProgName(const.ZERNIKE3D)
+            outVolume.setZFlex(zernike_space[idx])
+            outVolume.getFlexInfo().Rmax = Float(Xdim / 2)
+            outVolume.getFlexInfo().L1 = Integer(self.l1.get())
+            outVolume.getFlexInfo().L2 = Integer(self.l2.get())
+            outVolume.getFlexInfo().refMask = String(inputMask)
+            outVolume.getFlexInfo().refMap = String(inputVolume)
 
             idx += 1
 
-            partSet.append(outParticle)
+            volSet.append(outVolume)
+        outSets["outputVolumes"] = volSet
 
-        partSet.getFlexInfo().L1 = Integer(self.l1.get())
-        partSet.getFlexInfo().L2 = Integer(self.l2.get())
-        partSet.getFlexInfo().pad = Integer(self.pad.get())
-        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
-        partSet.getFlexInfo().modelPath = String(model_path)
-        partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
-        partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
+        if self.referenceType.get() == 1:
+            structure = self.inputStruct.get().getFileName()
 
-        inputMask = self.inputVolumeMask.get().getFileName()
-        inputVolume = self.inputVolume.get().getFileName()
-        partSet.getFlexInfo().refMask = String(inputMask)
-        partSet.getFlexInfo().refMap = String(inputVolume)
+            sr = inputVolumes.getSamplingRate()
+            zernike_space = sr * zernike_space
+            modelSet = self._createSetOfAtomStructFlex(progName=const.ZERNIKE3D)
+            modelSet.getFlexInfo().setProgName(const.ZERNIKE3D)
 
-        if self.refinePose.get():
-            partSet.getFlexInfo().refPose = Boolean(True)
-        else:
-            partSet.getFlexInfo().refPose = Boolean(False)
+            for z in zernike_space:
+                outModel = AtomStructFlex(progName=const.ZERNIKE3D)
+                outModel.setLocation(structure)
+                outModel.getFlexInfo().setProgName(const.ZERNIKE3D)
+                outModel.setZFlex(z)
+                outModel.getFlexInfo().L1 = Integer(self.l1.get())
+                outModel.getFlexInfo().L2 = Integer(self.l2.get())
+                outModel.getFlexInfo().refStruct = String(structure)
+                outModel.getFlexInfo().Rmax = Float(sr * Xdim / 2)
+                modelSet.append(outModel)
+            outSets["outputModels"] = modelSet
 
-        if self.architecture.get() == 0:
-            partSet.getFlexInfo().architecture = String("convnn")
-        elif self.architecture.get() == 1:
-            partSet.getFlexInfo().architecture = String("mlpnn")
+        for key, outSet in outSets.items():
+            outSet.getFlexInfo().L1 = Integer(self.l1.get())
+            outSet.getFlexInfo().L2 = Integer(self.l2.get())
+            outSet.getFlexInfo().Rmax = Float(Xdim / 2)
+            outSet.getFlexInfo().modelPath = String(model_path)
+            outSet.getFlexInfo().ctfType = String("apply")
 
-        if self.ctfType.get() == 0:
-            partSet.getFlexInfo().ctfType = String("apply")
-        elif self.ctfType.get() == 1:
-            partSet.getFlexInfo().ctfType = String("wiener")
+            if key == "outputVolumes":
+                inputMask = self.inputVolumeMask.get().getFileName()
+                inputVolume = self.inputVolume.get().getFileName()
+                outSet.getFlexInfo().refMask = String(inputMask)
+                outSet.getFlexInfo().refMap = String(inputVolume)
+            elif key == "outputModels":
+                structure = self.inputStruct.get().getFileName()
+                outSet.getFlexInfo().refStruct = String(structure)
 
-        self._defineOutputs(outputParticles=partSet)
-        self._defineTransformRelation(self.inputParticles, partSet)
+            if self.architecture.get() == 0:
+                outSet.getFlexInfo().architecture = String("convnn")
+            elif self.architecture.get() == 1:
+                outSet.getFlexInfo().architecture = String("mlpnn")
+
+            args = {}
+            args[key] = outSet
+            self._defineOutputs(**args)
+            self._defineTransformRelation(self.inputVolumes, outSet)
 
     # --------------------------- UTILS functions --------------------------------------------
-    def _updateParticle(self, item, row):
-        setXmippAttributes(item, row, md.MDL_ANGLE_ROT, md.MDL_ANGLE_TILT,
-                           md.MDL_ANGLE_PSI, md.MDL_SHIFT_X, md.MDL_SHIFT_Y,
-                           md.MDL_FLIP, md.MDL_SPH_DEFORMATION,
-                           md.MDL_SPH_COEFFICIENTS)
-        createItemMatrix(item, row, align=ALIGN_PROJ)
-
-    def getInputParticles(self):
-        return self.inputParticles.get()
-
     def readPDB(self, fnIn):
         with open(fnIn) as f:
             lines = f.readlines()
@@ -642,9 +570,10 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     def _warnings(self):
         warnings = []
 
-        num_particles = self.inputParticles.get().getSize()
+        num_volumes = self.inputVolumes.get().getSize()
+        rangeNSamples = self.rangeNSamples.get()
         split_train = self.split_train.get()
-        num_particles_train = int(split_train * num_particles)
+        num_particles_train = int(split_train * num_volumes * rangeNSamples)
 
         if num_particles_train > 1000000:
             warnings.append("The dataset you are using to train is quite large, which may lead to long training times. "
@@ -652,6 +581,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "the form parameter \"Traning dataset fraction\" to a lower value so that the number of "
                             "particles to train is smaller than 500k. In this way, the network will learn faster and "
                             "posteriorly the trained network will use the complete dataset in the prediction step to "
-                            "reduce execution times.")
+                            "reduce execution times. In addition, you may decrease the number of projections to be "
+                            "generated for each volume to reduce training times, although having very few projections "
+                            "might decrease the accuracy of the estimated conformational states.")
 
         return warnings

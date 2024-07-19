@@ -76,9 +76,9 @@ class ProtFlexDimRedSpace(ProtAnalysis3D, ProtFlexBase):
                            "UMAP, PCA, and cryoExplode are only computed the first time the are used. Afterwards, they "
                            "will be reused to increase performance.")
         form.addParam('epochs_umap', IntParam, label="Number of UMAP epochs",
-                      default=10, condition="mode==0",
-                      help="Increasing the number of epochs will lead to more accurate UMAP spaces at the cost "
-                           "of larger execution times")
+                      default=1, condition="mode==0",
+                      help="Number of training epochs for ParametricUMAP. The total number of epochs is computed as: "
+                           "#ThisParameterValue x 10")
         form.addParam('clusters', IntParam, label="Initial number of clusters", default=10,
                       condition="mode==2",
                       expertLevel=LEVEL_ADVANCED,
