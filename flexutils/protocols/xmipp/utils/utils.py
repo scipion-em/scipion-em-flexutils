@@ -871,7 +871,7 @@ def alignMapsChimeraX(map_file_1, map_file_2, global_search=None, output_map=Non
         line = f.readline()
         line = line.split(",")[1:]
         Tr = np.array(line).reshape(3, 4)
-        Tr = Tr.astype(np.float)
+        Tr = Tr.astype(np.float64)
         Tr = np.vstack([Tr, np.array([0, 0, 0, 1])])
 
     if output_map:
