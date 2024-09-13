@@ -34,7 +34,7 @@ import pyworkflow.protocol.params as params
 
 from pwem.viewers import ChimeraView
 
-from flexutils.protocols.xmipp.protocol_apply_field_nma import XmippApplyFieldNMA
+from flexutils.protocols.deprecated.xmipp.protocol_apply_field_nma import XmippApplyFieldNMA
 
 
 class XmippApplyFieldNMAView(ProtocolViewer):
