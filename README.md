@@ -33,7 +33,8 @@ Or in devel mode by executing the commands:
 ```bash
 
    git clone https://github.com/scipion-em/scipion-em-flexutils.git
-   scipion installp -p ~/scipion-em-flexutils --devel
+   cd scipion-em-flexutils
+   scipion installp -p . --devel
 
 ```
 
