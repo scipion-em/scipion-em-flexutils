@@ -37,8 +37,6 @@ from contextlib import closing
 from PyQt5 import QtWidgets, QtWebEngineWidgets, QtGui
 from PyQt5.QtCore import QUrl
 
-from pyworkflow.utils import runJob
-
 import flexutils
 
 

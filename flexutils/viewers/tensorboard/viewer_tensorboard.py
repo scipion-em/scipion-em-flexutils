@@ -28,31 +28,31 @@
 import os
 from pathos.multiprocessing import ProcessingPool as Pool
 import subprocess
-import tkinter as tk
 
-from pyworkflow.viewer import Viewer
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.utils.process import buildRunCommand
-from pyworkflow.gui.dialog import showError, ExceptionDialog
+from pyworkflow.gui.dialog import showError
+
+from pwem.viewers import DataViewer
 
 from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
-from flexutils.protocols.xmipp.protocol_angular_align_deep_pose import TensorflowProtAngularAlignmentDeepPose
-from flexutils.protocols.xmipp.protocol_angular_align_homo_siren import TensorflowProtAngularAlignmentHomoSiren
+from flexutils.protocols.xmipp.protocol_angular_align_reconsiren import TensorflowProtAngularAlignmentReconSiren
 
 import flexutils.constants as const
 import flexutils
 
 
-class TensorboardViewer(Viewer):
+class TensorboardViewer(DataViewer):
     """ Tensorboard visualization of neural networks """
-    _label = 'viewer conformational landscape'
+    _label = 'viewer Tensorboard'
     _targets = [TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtAngularAlignmentHetSiren,
-                TensorflowProtAngularAlignmentDeepPose,
-                TensorflowProtAngularAlignmentHomoSiren]
+                TensorflowProtAngularAlignmentReconSiren]
+    _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
-        Viewer.__init__(self, **kwargs)
+        DataViewer.__init__(self, **kwargs)
         self._data = None
 
     def _visualize(self, obj, **kwargs):
@@ -83,9 +83,6 @@ class TensorboardViewer(Viewer):
 
         # Launch with Pathos
         p = Pool()
-        # p.restart()
         p.apipe(launchViewerNonBlocking, args=(logdir_path, ))
-        # p.join()
-        # p.close()
 
         return []
