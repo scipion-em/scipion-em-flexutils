@@ -32,7 +32,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
@@ -48,7 +48,7 @@ import xmipp3
 import flexutils
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
-from flexutils.protocols.deprecated.custom_pdb_parser import PDBUtils
+from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
 class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
@@ -91,7 +91,8 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
-            'fnConnect': self._getExtraPath("connectivity.txt"),
+            'fnBond': self._getExtraPath("bonds.txt"),
+            'fnDihedral': self._getExtraPath("dihedrals.txt"),
             'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
@@ -111,8 +112,9 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
         md_file = self._getFileName('imgsFn')
+        bonds_file = self._getFileName("fnBond")
+        dihedrals_file = self._getFileName("fnDihedral")
 
         inputParticles = self.inputParticles.get()
         flexsirenProtocol = self.flexsirenProtocol.get()
@@ -143,8 +145,11 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             structure_file = self._getFileName('fnStruct')
             connect_file = self._getFileName('fnConnect')
             ca_file = self._getFileName('fnCA')
-            parser = PDBUtils(selectionString=flexsirenProtocol._subset[flexsirenProtocol.atomSubset.get()])
-            pdb_coordinates, ca_indices, connectivity = parser.parsePDB(inputStruct)
+            parser = AtomicModelParser(inputStruct, flexsirenProtocol._subset[flexsirenProtocol.atomSubset.get()])
+            pdb_coordinates = parser.get_atom_coordinates()
+            covalent = parser.get_covalent_bonds()
+            dihedrals = parser.get_dihedral_angles()
+            ca_indices = parser.get_ca_indices()
             pdb_coordinates *= i_sr
             ih = ImageHandler(getXmippFileName(inputVolume))
             vol = ih.getData()
@@ -153,7 +158,8 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
             pdb_coordinates = np.c_[pdb_coordinates, values]
             np.savetxt(structure_file, pdb_coordinates)
-            np.savetxt(connect_file, connectivity)
+            np.savetxt(bonds_file, covalent)
+            np.savetxt(dihedrals_file, dihedrals)
             np.savetxt(ca_file, ca_indices)
 
         writeSetOfParticles(inputParticles, imgsFn)
@@ -186,6 +192,8 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         correctionFactor = self.inputParticles.get().getXDim() / flexsirenProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         applyCTF = flexsirenProtocol.applyCTF.get()
+        disPose = flexsirenProtocol.disPose.get()
+        disCTF = flexsirenProtocol.disCTF.get()
         args = "--md_file %s --weigths_file %s --lat_dim %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, latDim, pad, sr, applyCTF)
@@ -202,6 +210,12 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif flexsirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -234,6 +248,8 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         flexsirenProtocol = self.flexsirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = flexsirenProtocol.boxSize.get()
+        disPose = flexsirenProtocol.disPose.get()
+        disCTF = flexsirenProtocol.disCTF.get()
         model_path = flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
         md_file = self._getFileName('imgsFn')
 
@@ -295,9 +311,11 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().latDim = Integer(flexsirenProtocol.latDim.get())
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().disPose = Boolean(disPose)
+        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
         inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
-            else zerniflexsirenProtocolkeProtocol.inputVolumeMask.get().getFileName()
+            else flexsirenProtocol.inputVolumeMask.get().getFileName()
         inputVolume = flexsirenProtocol.inputVolume.get().getFileName()
         partSet.getFlexInfo().refMask = String(inputMask)
         partSet.getFlexInfo().refMap = String(inputVolume)
