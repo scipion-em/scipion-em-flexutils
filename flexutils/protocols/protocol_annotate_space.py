@@ -237,46 +237,47 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                     _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
                     currIds = currIds[0]
 
-                newClass = Class()
-                newClass.copyInfo(particles)
-                newClass.setHasCTF(particles.hasCTF())
-                newClass.setAcquisition(particles.getAcquisition())
-                representative = Rep(progName=progName)
-                if hasattr(representative, "setSamplingRate"):
-                    representative.setSamplingRate(sr)
-
-                # ****** Fill representative information *******
-                if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.NMA:
-                    representative.getFlexInfo().atomSubset = subset
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                representative.setZFlex(z_space_vw[z_idx])
-                representative.getFlexInfo().copyInfo(particles.getFlexInfo())
-                # ********************
-
-                newClass.setRepresentative(representative)
-
-                flexClasses.append(newClass)
-
-                enabledClass = flexClasses[newClass.getObjId()]
-                enabledClass.enableAppend()
-
                 if currIds.ndim and currIds.size:
+                    newClass = Class()
+                    newClass.copyInfo(particles)
+                    newClass.setHasCTF(particles.hasCTF())
+                    newClass.setAcquisition(particles.getAcquisition())
+                    representative = Rep(progName=progName)
+                    if hasattr(representative, "setSamplingRate"):
+                        representative.setSamplingRate(sr)
+
+                    # ****** Fill representative information *******
+                    if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.NMA:
+                        representative.getFlexInfo().atomSubset = subset
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    representative.setZFlex(z_space_vw[z_idx])
+                    representative.getFlexInfo().copyInfo(particles.getFlexInfo())
+                    # ********************
+
+                    newClass.setRepresentative(representative)
+
+                    flexClasses.append(newClass)
+
+                    enabledClass = flexClasses[newClass.getObjId()]
+                    enabledClass.enableAppend()
+
+
                     if "_cluster" in file:
                         for itemId in currIds:
                             item = particles[partIds[itemId]]
@@ -292,8 +293,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                             item._xmipp_subtomo_labels = Integer(clInx)
                             enabledClass.append(item)
 
-                flexClasses.update(enabledClass)
-                clInx += 1
+                    flexClasses.update(enabledClass)
+                    clInx += 1
 
         # Save new output
         name = self.OUTPUT_PREFIX + "_" + suffix
