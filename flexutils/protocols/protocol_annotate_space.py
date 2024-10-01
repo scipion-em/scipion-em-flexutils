@@ -211,6 +211,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             z_space_vw = np.asarray(z_space_vw)
             # z_space_vw = np.asarray(z_space_vw[self.num_vol:])
 
+            if z_space_vw.ndim < 2:
+                z_space_vw = z_space_vw[None, ...]
+
             if "_cluster" in file:
                 # Read space
                 z_space = z_space_vw[1:]
@@ -225,8 +228,11 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             # Populate SetOfClasses3D with KMean particles
             for z_idx in range(z_space_vw.shape[0]):
                 if "_cluster" in file:
-                    _, currIds = kdtree.query(z_space, k=1)
-                    currIds = np.squeeze(np.asarray(currIds)).astype(int)
+                    if z_space.shape[0] > 0:
+                        _, currIds = kdtree.query(z_space, k=1)
+                        currIds = np.squeeze(np.asarray(currIds)).astype(int)
+                    else:
+                        currIds = np.array([])
                 else:
                     _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
                     currIds = currIds[0]
@@ -270,20 +276,21 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 enabledClass = flexClasses[newClass.getObjId()]
                 enabledClass.enableAppend()
 
-                if "_cluster" in file:
-                    for itemId in currIds:
-                        item = particles[partIds[itemId]]
-                        item._xmipp_subtomo_labels = Integer(clInx)
-                        enabledClass.append(item)
-                else:
-                    for idx in range(neighbors):
-                        itemId = currIds[idx]
-                        while itemId >= num_part:
-                            currIds = np.delete(currIds, idx)
+                if currIds.ndim and currIds.size:
+                    if "_cluster" in file:
+                        for itemId in currIds:
+                            item = particles[partIds[itemId]]
+                            item._xmipp_subtomo_labels = Integer(clInx)
+                            enabledClass.append(item)
+                    else:
+                        for idx in range(neighbors):
                             itemId = currIds[idx]
-                        item = particles[partIds[itemId]]
-                        item._xmipp_subtomo_labels = Integer(clInx)
-                        enabledClass.append(item)
+                            while itemId >= num_part:
+                                currIds = np.delete(currIds, idx)
+                                itemId = currIds[idx]
+                            item = particles[partIds[itemId]]
+                            item._xmipp_subtomo_labels = Integer(clInx)
+                            enabledClass.append(item)
 
                 flexClasses.update(enabledClass)
                 clInx += 1
