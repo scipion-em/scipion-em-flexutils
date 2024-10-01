@@ -181,6 +181,11 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "and shift assignation of the particles to make it more consistent with the "
                             "flexibility estimation. Otherwise, only heterogeneity information will be "
                             "estimated.")
+        group.addParam('refineZernike3D', params.BooleanParam, default=True, label="Refine previous Zernike3D coefficients?",
+                       condition="inputParticles and isinstance(inputParticles, SetOfParticlesFlex) and "
+                                 "inputParticles.getFlexInfo().getProgName() == 'Zernike3D'",
+                       help="If True, the neural network will refine the previously estimated Zernike3D coefficients stored "
+                            "in this dataset. Otherwise, they will be computed from scracth.")
         group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                        help="This value (between 0 and 1) determines the fraction of images that will "
                             "be used to train the network.")
@@ -335,7 +340,8 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         # Write extra attributes (if needed)
         md = XmippMetaData(md_file)
         if isinstance(inputParticles, SetOfParticlesFlex) and \
-            inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D and \
+            self.refineZernike3D.get():
             scale_fator = 1. / correctionFactor
             z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
             z_space = scale_fator * z_space
