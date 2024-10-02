@@ -125,7 +125,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # ****** Generate representative volumes *******
         z_rep = []
-        for file in glob(self._getExtraPath('saved_selections*')):
+        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
             with open(file) as f:
                 line = f.readline()
                 z_rep.append(np.fromstring(line, dtype=float, sep=' '))
@@ -202,7 +202,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Read selected coefficients
         clInx = 1
-        for file in glob(self._getExtraPath('saved_selections*')):
+        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
             z_space_vw = []
             with open(file) as f:
                 lines = f.readlines()
