@@ -354,11 +354,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                         "-i %s --oroot %s" % (particlesMd, halvesMd), env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
-        # Filter volume -> Real reconstruction
-        volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
-        volume_data_filtered = filterVol(volume_data, mode="bspline")
-        ImageHandler().write(volume_data_filtered, self._getExtraPath("final_reconstruction_filtered.mrc"))
-
         imgSet = self.inputParticles.get()
         volume, volume_filtered = Volume(), Volume()
         volume.setFileName(self._getExtraPath("final_reconstruction.mrc"))
@@ -377,6 +372,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                 volume_data_filtered = filterVol(volume_data, mode="bspline")
                 ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
             volume.setHalfMaps(halves)
+
+        # Filter volume -> Real reconstruction
+        volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
+        volume_data_filtered = filterVol(volume_data, mode="bspline")
+        ImageHandler().write(volume_data_filtered, self._getExtraPath("final_reconstruction_filtered.mrc"))
 
         self._defineOutputs(outputVolume=volume)
         self._defineOutputs(outputVolumeFiltered=volume_filtered)
