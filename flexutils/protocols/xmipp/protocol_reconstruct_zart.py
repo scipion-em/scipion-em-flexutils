@@ -370,7 +370,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             for half, half_file in zip(halves, halves_filtered):
                 volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
                 volume_data_filtered = filterVol(volume_data, mode="bspline")
-                ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
+                ImageHandler().write(volume_data_filtered, half_file)
             volume.setHalfMaps(halves)
 
         # Filter volume -> Real reconstruction
