@@ -125,7 +125,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # ****** Generate representative volumes *******
         z_rep = []
-        for file in glob(self._getExtraPath('saved_selections*')):
+        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
             with open(file) as f:
                 line = f.readline()
                 z_rep.append(np.fromstring(line, dtype=float, sep=' '))
@@ -151,12 +151,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             from flexutils.utils import generateVolumesHetSIREN
             representatives_paths = []
-            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
             generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
                                     self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
                                     architecture=particles.getFlexInfo().architecture.get(),
                                     disPose=particles.getFlexInfo().disPose.get(),
-                                    disCTF=particles.getFlexInfo().disCTF.get(), gpu=gpu_ids)
+                                    disCTF=particles.getFlexInfo().disCTF.get(),
+                                    refPose=particles.getFlexInfo().refPose.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
                                             save_volume_path.format(idx),
@@ -166,10 +167,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
             from flexutils.utils import generateVolumesFlexSIREN
             representatives_paths = []
-            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
             generateVolumesFlexSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
                                      self._getExtraPath(), step=1,
-                                     architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
+                                     architecture=particles.getFlexInfo().architecture.get(),
+                                     disPose=particles.getFlexInfo().disPose.get(),
+                                     disCTF=particles.getFlexInfo().disCTF.get(),
+                                     refPose=particles.getFlexInfo().refPose.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
                                             save_volume_path.format(idx),
@@ -202,7 +206,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Read selected coefficients
         clInx = 1
-        for file in glob(self._getExtraPath('saved_selections*')):
+        newId = 1
+        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
             z_space_vw = []
             with open(file) as f:
                 lines = f.readlines()
@@ -237,51 +242,55 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                     _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
                     currIds = currIds[0]
 
-                newClass = Class()
-                newClass.copyInfo(particles)
-                newClass.setHasCTF(particles.hasCTF())
-                newClass.setAcquisition(particles.getAcquisition())
-                representative = Rep(progName=progName)
-                if hasattr(representative, "setSamplingRate"):
-                    representative.setSamplingRate(sr)
-
-                # ****** Fill representative information *******
-                if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.NMA:
-                    representative.getFlexInfo().atomSubset = subset
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
-                    representative.setLocation(representatives_paths[clInx - 1])
-
-                representative.setZFlex(z_space_vw[z_idx])
-                representative.getFlexInfo().copyInfo(particles.getFlexInfo())
-                # ********************
-
-                newClass.setRepresentative(representative)
-
-                flexClasses.append(newClass)
-
-                enabledClass = flexClasses[newClass.getObjId()]
-                enabledClass.enableAppend()
-
                 if currIds.ndim and currIds.size:
+                    newClass = Class()
+                    newClass.copyInfo(particles)
+                    newClass.setObjId(clInx)
+                    newClass.setHasCTF(particles.hasCTF())
+                    newClass.setAcquisition(particles.getAcquisition())
+                    representative = Rep(progName=progName)
+                    if hasattr(representative, "setSamplingRate"):
+                        representative.setSamplingRate(sr)
+
+                    # ****** Fill representative information *******
+                    if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.NMA:
+                        representative.getFlexInfo().atomSubset = subset
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    representative.setZFlex(z_space_vw[z_idx])
+                    representative.getFlexInfo().copyInfo(particles.getFlexInfo())
+                    # ********************
+
+                    newClass.setRepresentative(representative)
+
+                    flexClasses.append(newClass)
+
+                    enabledClass = flexClasses[newClass.getObjId()]
+                    enabledClass.enableAppend()
+
+
                     if "_cluster" in file:
                         for itemId in currIds:
                             item = particles[partIds[itemId]]
                             item._xmipp_subtomo_labels = Integer(clInx)
+                            item.setObjId(newId)
                             enabledClass.append(item)
+                            newId += 1
                     else:
                         for idx in range(neighbors):
                             itemId = currIds[idx]
@@ -291,9 +300,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                             item = particles[partIds[itemId]]
                             item._xmipp_subtomo_labels = Integer(clInx)
                             enabledClass.append(item)
+                            newId += 1
 
-                flexClasses.update(enabledClass)
-                clInx += 1
+                    flexClasses.update(enabledClass)
+                    clInx += 1
 
         # Save new output
         name = self.OUTPUT_PREFIX + "_" + suffix
@@ -414,7 +424,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       cryodrgn.Plugin.getCryoDrgnEnvActivation().split(" ")[-1])
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-            args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow" \
+            args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow-test" \
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
                       particles.getFlexInfo().architecture.get())
@@ -429,13 +439,33 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             else:
                 args += " --ctf_reg 0.0"
 
+            # if particles.getFlexInfo().refPose.get():
+            args += " --refine_pose 1"
+            # else:
+            #     args += " --refine_pose 0"
+
         elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
-            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow" \
+            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow-test" \
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().architecture.get())
 
+            if particles.getFlexInfo().disPose.get():
+                args += " --pose_reg 1.0"
+            else:
+                args += " --pose_reg 0.0"
+
+            if particles.getFlexInfo().disCTF.get():
+                args += " --ctf_reg 1.0"
+            else:
+                args += " --ctf_reg 0.0"
+
+            if particles.getFlexInfo().refPose.get():
+                args += " --refine_pose 1"
+            else:
+                args += " --refine_pose 0"
+
         elif particles.getFlexInfo().getProgName() == const.NMA:
-            args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
+            args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow-test" \
                    % (particles.getFlexInfo().modelPath.get(), particles.getXDim())
 
         elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:

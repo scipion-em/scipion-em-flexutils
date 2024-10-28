@@ -110,16 +110,16 @@ def saveMap(filename, map):
     ImageHandler().write(map, filename, overwrite=True)
 
 
-def generateVolumesHetSIREN(weigths_file, x_het, outdir, step, architecture, disPose, disCTF, gpu=None):
+def generateVolumesHetSIREN(weigths_file, x_het, outdir, step, architecture, disPose, disCTF, refPose, gpu=None):
     args = _getEvalVolArgs(x_het, weigths_file, "het_file", outdir, step=step, architecture=architecture,
-                           disPose=disPose, disCTF=disCTF, gpu=gpu)
+                           disPose=disPose, disCTF=disCTF, gpu=gpu, refPose=refPose)
     program = flexutils.Plugin.getTensorflowProgram("predict_map_het_siren.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
 
-def generateVolumesFlexSIREN(weigths_file, x_het, outdir, step, architecture, gpu=None):
+def generateVolumesFlexSIREN(weigths_file, x_het, outdir, step, architecture, disPose, disCTF, refPose, gpu=None):
     args = _getEvalVolArgs(x_het, weigths_file, "het_file", outdir, step=step, architecture=architecture,
-                           gpu=gpu)
+                           disPose=disPose, disCTF=disCTF, refPose=refPose, gpu=gpu)
     program = flexutils.Plugin.getTensorflowProgram("convect_map_flexsiren.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
@@ -131,7 +131,7 @@ def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr, xsize):
 
 
 def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None, xsize=None, architecture=None,
-                    disPose=None, disCTF=None, gpu=None):
+                    disPose=None, disCTF=None, gpu=None, refPose=None):
     if not os.path.exists(outdir):
         os.mkdir(outdir)
 
@@ -161,6 +161,9 @@ def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None
 
     if disCTF:
         args.append('--ctf_reg 1.0')
+
+    if refPose:
+        args.append('--refine_pose')
 
     if gpu:
         args.append('--gpu %s' % gpu)
