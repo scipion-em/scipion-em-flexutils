@@ -25,22 +25,17 @@
 # **************************************************************************
 
 
-import sys
-import os
 import subprocess
 import time
 
-import psutil
 import socket
 from contextlib import closing
-
-from PyQt5 import QtWidgets, QtWebEngineWidgets, QtGui
-from PyQt5.QtCore import QUrl
+import webbrowser
 
 import flexutils
 
 
-class ViewTensorboard(QtWidgets.QWidget):
+class ViewTensorboard:
 
     # ---------------------------------------------------------------------------
     # Init
@@ -48,22 +43,7 @@ class ViewTensorboard(QtWidgets.QWidget):
     def __init__(self, logdir_path):
         super(ViewTensorboard, self).__init__()
         # Setup Tensorboard
-        port = self.launchTensorboard(logdir_path)
-
-        # Web engine to render plot
-        self.window = QtWidgets.QWidget()
-        self.web_engine = QtWebEngineWidgets.QWebEngineView()
-        # self.web_engine.setFixedWidth(1000)
-        self.web_engine.load(QUrl(f"http://localhost:{port}/"))
-
-        # PyQt layout
-        window_lay = QtWidgets.QHBoxLayout()
-        lay_1 = QtWidgets.QVBoxLayout()
-        lay_1.addWidget(self.web_engine)
-        window_lay.addLayout(lay_1)
-        self.window.setBaseSize(1600, 650)
-        self.window.setLayout(window_lay)
-        self.setWindowIcon(QtGui.QIcon(os.path.join(os.path.dirname(flexutils.__file__), "icon_square.png")))
+        self.port = self.launchTensorboard(logdir_path)
 
     # ---------------------------------------------------------------------------
     # Create interface
@@ -102,14 +82,9 @@ class ViewTensorboard(QtWidgets.QWidget):
     # Launch values
     # ---------------------------------------------------------------------------
     def launchViewer(self):
-        # Show interface
-        self.window.show()
+        # Web engine to render plot
+        webbrowser.open_new(f"http://localhost:{self.port}/")
 
-def kill(proc_pid):
-    process = psutil.Process(proc_pid)
-    for proc in process.children(recursive=True):
-        proc.kill()
-    process.kill()
 
 # -------- Viewer call -------
 if __name__ == '__main__':
@@ -123,17 +98,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     input_dict = vars(args)
 
-    # Get application
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication(sys.argv)
-
     # Initialize volume slicer
     viewer = ViewTensorboard(**input_dict)
 
-    # Execute app
+    # Execute Tensorboard
     viewer.launchViewer()
-    app.exec_()
-
-    # Close tensorboard process
-    kill(viewer.tensorboard_process.pid)

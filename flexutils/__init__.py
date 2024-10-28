@@ -57,7 +57,11 @@ class Plugin(pwplugin.Plugin):
         return "conda activate flexutils-tensorflow"
 
     @classmethod
-    def getProgram(cls, program, python=False, cuda=False, chimera=False, needsPackages=None):
+    def getScipionActivation(cls):
+        return "conda activate scipion3"
+
+    @classmethod
+    def getProgram(cls, program, python=False, cuda=False, chimera=False, needsPackages=None, activateScipion=False):
         """ Return the program binary that will be used. """
         scipion_packages = []
         env_variables = ""
@@ -75,8 +79,12 @@ class Plugin(pwplugin.Plugin):
                     if package_name.lower() in item.lower():
                         env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
-        cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getEnvActivation(),
-                                             os.path.join(getScipionHome(), "scipion3"))
+        if activateScipion:
+            cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getScipionActivation(),
+                                                 os.path.join(getScipionHome(), "scipion3"))
+        else:
+            cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getEnvActivation(),
+                                                 os.path.join(getScipionHome(), "scipion3"))
 
         if cuda:
             cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '

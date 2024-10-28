@@ -58,13 +58,12 @@ class TensorboardViewer(DataViewer):
     def _visualize(self, obj, **kwargs):
         logdir_path = self.protocol._getExtraPath(os.path.join("network", "logs"))
 
-        def launchViewerNonBlocking(args):
-            (logdir_path, ) = args
+        def launchViewerNonBlocking(logdir_path):
 
             # Run tensorboard
             args = f"--logdir_path {logdir_path}"
             program = os.path.join(const.VIEWERS, "tensorboard", "setup_tensorboard.py")
-            program = flexutils.Plugin.getProgram(program)
+            program = flexutils.Plugin.getProgram(program, python=True, activateScipion=True)
 
             command = buildRunCommand(program, args, 1)
             subprocess.Popen(command, shell=True)
@@ -81,8 +80,6 @@ class TensorboardViewer(DataViewer):
             showError(title="Tensorboard log files not found", msg=msg, parent=self.getTkRoot())
             return []
 
-        # Launch with Pathos
-        p = Pool()
-        p.apipe(launchViewerNonBlocking, args=(logdir_path, ))
+        launchViewerNonBlocking(logdir_path)
 
         return []
