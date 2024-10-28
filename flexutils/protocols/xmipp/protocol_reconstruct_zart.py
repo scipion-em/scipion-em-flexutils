@@ -125,9 +125,11 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "Otherwise, the parameter should be set to 'No'")
         form.addParam('recMask', params.PointerParam, pointerClass='VolumeMask',
                       allowsNull=True,
-                      expertLevel=params.LEVEL_ADVANCED,
                       label="Reconstruction mask",
                       help="Mask used to restrict the reconstruction space to increase performance.")
+        form.addParam('symmetryGroup', params.StringParam, default="c1",
+                      label='Symmetry group',
+                      help='If no symmetry is present, give c1')
         form.addParam('niter', params.IntParam, default=2,
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
@@ -138,20 +140,24 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "Note that larger values may lead to divergence.")
         form.addParam('lst', params.FloatParam, default=0.0001,
                      label="Positive L1 regularization",
+                     expertLevel=params.LEVEL_ADVANCED,
                      help="L1 based penalization on the positive values of the reconstructed volumes. Larger values will "
                           "have a stronger denoising effect on the reconstructed map.")
-        form.addParam('ll1', params.FloatParam, default=1.0,
+        form.addParam('ll1', params.FloatParam, default=0.0001,
                       label="Negative L1 regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
                       help="L1 based penalization on the negative values of the reconstructed volumes. Larger values "
-                           "will decrease more strongly the presence of negative values on th reconstructed map.")
+                           "will decrease more strongly the presence of negative values on the reconstructed map.")
         form.addParam('ltv', params.FloatParam, default=0.0001,
-                     label="Total variation regularization",
-                     help="Total variation based regularization on the edges of the reconstructed volumes. Larger "
-                          "values will lead to a more enhance representation of the edges and reduction of noise.")
+                      label="Total variation regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Total variation based regularization on the edges of the reconstructed volumes. Larger "
+                           "values will lead to a more enhance representation of the edges and reduction of noise.")
         form.addParam('ltk', params.FloatParam, default=0.0001,
-                     label="Tikhonov regularization",
-                     help=" Tikhonov based regularization on the edges of the reconstructed volume. Larger values will "
-                          "lead softer density transitions in the reconstruction")
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Tikhonov regularization",
+                      help=" Tikhonov based regularization on the edges of the reconstructed volume. Larger values will "
+                           "lead softer density transitions in the reconstruction")
         form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
                       label="Save partial reconstructions for every ZART iteration?")
         form.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
@@ -389,7 +395,18 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         return summary message for NORMAL EXECUTION. 
         """
         return []
-    
+
+    def _validate(self):
+        errors = []
+
+        mask = self.recMask.get()
+        if mask:
+            data = ImageHandler(mask).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
+        return errors
+
     #--------------------------- UTILS functions --------------------------------------------
     def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
         params = ' -i %s' % inputMd
@@ -397,6 +414,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params += ' --odir %s' % self._getExtraPath()
         # params += ' --step %d' % step
         params += ' --step 1'
+        params += ' --sym %s' % self.symmetryGroup.get()
         if "_level_" in outFile:
             reg = self.reg.get()
             level = float(re.findall(r'\d+', outFile)[1]) - 2
@@ -429,6 +447,8 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                    % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
         if onlyPositive:
             params += " --onlyPositive"
+
+        params += " --sort_random"
 
         return params
 
