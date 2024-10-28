@@ -29,6 +29,7 @@ import os
 import re
 from glob import glob
 
+import numpy as np
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -40,11 +41,12 @@ from pyworkflow import VERSION_2_0
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ, ALIGN_NONE
-from pwem.objects import Volume
+from pwem.objects import Volume, SetOfAverages
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
+import xmippLib
 
 import flexutils
 from flexutils.utils import getXmippFileName
@@ -83,6 +85,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                             'the estimation the deformation field for each particle. Note that output particles will '
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
+        group = form.addGroup("Symmetry")
+        group.addParam('symmetry', params.StringParam, default="c1", label='Symmetry group',
+                       help="Determine the symmetry group to be considered when training the network")
         group = form.addGroup("CTF Parameters (Advanced)",
                               expertLevel=params.LEVEL_ADVANCED)
         group.addParam('considerCTF', params.BooleanParam, default=True, label='Consider CTF?',
@@ -109,7 +114,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                            "a **'angular align - deepPose'** protocol.")
         form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
                       allowsNull=True,
-                      pointerClass='TensorflowProtAngularAlignmentHomoSiren',
+                      pointerClass='TensorflowProtAngularAlignmentReconSiren',
                       condition="fineTune")
         group = form.addGroup("Network hyperparameters")
         group.addParam('nCandidates', params.IntParam, default=6,
@@ -170,6 +175,15 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                       help="Determines the weight of the MSE variation map minimization in the cost function. "
                            "MSE is moslty used to promote density smoothnes while focusing on ensuring a continuous "
                            "transition of the density values")
+        form.addParam("onlyPos", params.BooleanParam, default=False, label="Exclude negative values?",
+                      condition="not isinstance(inputParticles, SetOfAverages)")
+        form.addParam("udLambda", params.FloatParam, default=0.0, label="Uniform distribution regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Determines how much the network will enforce particles to have an uniform angular "
+                           "distribution")  # default=0.000001
+        form.addParam("unLambda", params.FloatParam, default=0.0001, label="Unit norm regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Determines whether to enforce a 6D representation with unit norm.")
         form.addSection(label='Output')
         form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
                       help="If True, the map decoded after training the network will be convoluted with a Gaussian filter. "
@@ -183,7 +197,8 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
             'imgsFn': self._getExtraPath('input_particles.xmd'),
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
-            'fnOutDir': self._getExtraPath()
+            'fnOutDir': self._getExtraPath(),
+            'fnSymMatrices': self._getExtraPath("sym_matrices.npy")
         }
         self._updateFilenamesDict(myDict)
 
@@ -236,19 +251,21 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_NONE)
 
+        sr = inputParticles.getSamplingRate()
         if self.considerCTF.get():
             # Wiener filter
-            sr = inputParticles.getSamplingRate()
             corrected_stk = self._getTmpPath('corrected_particles.mrcs')
             args = "-i %s -o %s --save_metadata_stack --keep_input_columns --sampling_rate %f --wc -1.0" \
                    % (imgsFn, corrected_stk, sr)
             program = 'xmipp_ctf_correct_wiener2d'
             self.runJob(program, args, numberOfMpi=self.numberOfThreads.get(), env=xmipp3.Plugin.getEnviron())
+        else:
+            corrected_stk = imgsFn
 
         if self.newXdim != Xdim:
             freq = sr / (2. * (Xdim / self.newXdim) * sr)
             params = "-i %s -o %s --save_metadata_stack %s --keep_input_columns --fourier low_pass %f" % \
-                     (self._getTmpPath('corrected_particles.mrcs'),
+                     (corrected_stk,
                       self._getTmpPath('scaled_particles.mrcs'),
                       self._getExtraPath('scaled_particles.xmd'),
                       freq)
@@ -265,7 +282,14 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         # Removing Xmipp Phantom config file
-        self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
+        if self.considerCTF.get():
+            self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
+
+        # Symmetry
+        SL = xmippLib.SymList()
+        listSymmetryMatrices = np.asarray(SL.getSymmetryMatrices(self.symmetry.get()))
+        np.save(self._getFileName("fnSymMatrices"), listSymmetryMatrices)
+
 
     def trainingStep(self):
         md_file = self._getFileName('imgsFn')
@@ -279,17 +303,20 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         l1Reg = self.l1Reg.get()
         tvReg = self.tvReg.get()
         mseReg = self.mseReg.get()
+        udLambda = self.udLambda.get()
+        unLambda = self.unLambda.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        onlyPos = self.onlyPos.get() if not isinstance(self.inputParticles.get(), SetOfAverages) else True
         # applyCTF = self.applyCTF.get()
         xla = self.xla.get()
         tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
                "--shuffle --split_train %f --pad 2 --n_candidates %d " \
-               "--sr %f --l1_reg %f --tv_reg %f --mse_reg %f " \
+               "--sr %f --l1_reg %f --tv_reg %f --mse_reg %f --ud_lambda %f --un_lambda %f " \
                % (md_file, out_path, batch_size, split_train, nCandidates, sr,
-                  l1Reg, tvReg, mseReg)
+                  l1Reg, tvReg, mseReg, udLambda, unLambda)
 
         if self.inputVolume.get():
             args += "--only_pose "
@@ -309,9 +336,12 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         # elif self.ctfType.get() == 1:
         #     args += " --ctf_type wiener"
 
+        if onlyPos:
+            args += " --only_pos"
+
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'reconsiren_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'reconsiren_model*')))
             args += " --weigths_file %s" % modelPath
 
         if xla:
@@ -340,6 +370,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        onlyPos = self.onlyPos.get() if not isinstance(self.inputParticles.get(), SetOfAverages) else True
         # applyCTF = self.applyCTF.get()
         nCandidates = self.nCandidates.get()
         args = "--md_file %s --weigths_file %s --pad 2 --n_candidates %d --sr %f " \
@@ -360,6 +391,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         if self.filterDecoded.get():
             args += " --apply_filter"
+
+        if onlyPos:
+            args += " --only_pos"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -395,8 +429,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-            tr_ori = particle.getTransform().getMatrix()
-            shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
+            shifts, angles = [0, 0], [0, 0, 0]
 
             # Apply delta angles
             angles[0] = rot[idx]
@@ -417,6 +450,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         partSet.modelPath = String(model_path)
         partSet.considerCTF = Boolean(self.considerCTF.get())
+        partSet.onlyPos = Boolean(self.onlyPos.get() if not isinstance(inputParticles, SetOfAverages) else True)
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -445,7 +479,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
-        if self.inputVolume.get() is None:
+        if self.inputVolume.get() is None:  # Check this TODO
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map.mrc'),
                                         self._getExtraPath('decoded_map.mrc'),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
@@ -500,4 +534,11 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
+
+        mask = self.inputVolumeMask.get()
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
         return errors
