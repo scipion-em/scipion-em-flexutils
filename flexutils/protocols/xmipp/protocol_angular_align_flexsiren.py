@@ -28,6 +28,7 @@
 import numpy as np
 import os
 import re
+from glob import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -396,7 +397,7 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
             args += " --weigths_file %s" % modelPath
 
         if self.architecture.get() == 0:
@@ -436,7 +437,7 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
         latDim = self.latDim.get()
         pad = self.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.boxSize.get()
@@ -476,7 +477,7 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -608,6 +609,13 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
+
+        mask = self.inputVolumeMask.get()
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
         return errors
 
     def _warnings(self):

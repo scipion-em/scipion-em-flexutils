@@ -28,6 +28,7 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -164,7 +165,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -221,7 +222,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         trainSize = hetSirenProtocol.trainSize.get()
         disPose = hetSirenProtocol.disPose.get()
         disCTF = hetSirenProtocol.disCTF.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -295,6 +296,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().trainSize = Integer(trainSize)
         partSet.getFlexInfo().disPose = Boolean(disPose)
         partSet.getFlexInfo().disCTF = Boolean(disCTF)
+        partSet.getFlexInfo().refPose = Boolean(hetSirenProtocol.refinePose.get())
 
         if hetSirenProtocol.inputVolume.get():
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()

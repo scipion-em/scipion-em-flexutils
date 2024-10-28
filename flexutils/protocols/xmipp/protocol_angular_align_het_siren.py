@@ -28,6 +28,7 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -394,7 +395,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
             args += " --weigths_file %s" % modelPath
 
         if xla:
@@ -418,7 +419,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         hetDim = self.hetDim.get()
@@ -477,7 +478,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             outSize = inputParticles.getFlexInfo().outSize.get()
         else:
             outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
-        model_path = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -532,6 +533,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().trainSize = Integer(trainSize)
         partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
         partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
+        partSet.getFlexInfo().refPose = Boolean(self.refinePose.get())
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -623,6 +625,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         boxSize = self.boxSize.get()
         trainSize = self.trainSize.get()
+        mask = self.inputVolumeMask.get()
         if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
             outSize = inputParticles.getFlexInfo().outSize
         else:
@@ -635,6 +638,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         if trainSize is not None and trainSize > boxSize:
             errors.append("Train image size must be smaller than or equal to the downsampled box"
                           " size (currently set to %d)" % boxSize)
+
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
 
         return errors
 

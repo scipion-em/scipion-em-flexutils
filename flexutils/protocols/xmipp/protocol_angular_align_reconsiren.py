@@ -27,6 +27,7 @@
 
 import os
 import re
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -334,7 +335,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'reconsiren_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'reconsiren_model*')))[0]
         # pad = self.pad.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -371,7 +372,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'reconsiren_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'reconsiren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)

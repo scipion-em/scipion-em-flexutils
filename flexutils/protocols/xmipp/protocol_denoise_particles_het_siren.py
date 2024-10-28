@@ -28,6 +28,7 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -149,7 +150,7 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         Xdim = self.inputParticles.get().getXDim()
@@ -207,7 +208,7 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = hetSirenProtocol.boxSize.get()
         trainSize = hetSirenProtocol.trainSize.get()
         outSize = hetSirenProtocol.outSize.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)

@@ -28,6 +28,7 @@
 import os
 import numpy as np
 import re
+from glob import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -189,7 +190,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         zernikeProtocol = self.zernikeProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        weigths_file = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         L1 = zernikeProtocol.l1.get()
         L2 = zernikeProtocol.l2.get()
         pad = zernikeProtocol.pad.get()
@@ -262,7 +263,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = zernikeProtocol.boxSize.get()
         disPose = zernikeProtocol.disPose.get()
         disCTF = zernikeProtocol.disCTF.get()
-        model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        model_path = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)

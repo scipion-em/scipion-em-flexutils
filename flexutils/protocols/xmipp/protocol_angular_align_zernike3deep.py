@@ -28,6 +28,7 @@
 import numpy as np
 import os
 import re
+from glob import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -421,7 +422,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
             args += " --weigths_file %s" % modelPath
 
         if self.architecture.get() == 0:
@@ -461,7 +462,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         L1 = self.l1.get()
         L2 = self.l2.get()
         pad = self.pad.get()
@@ -502,7 +503,7 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -643,6 +644,13 @@ class TensorflowProtAngularAlignmentZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if (l1 - l2) < 0:
             errors.append('Zernike degree must be higher than '
                           'SPH degree.')
+
+        mask = self.inputVolumeMask.get()
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
         return errors
 
     def _warnings(self):

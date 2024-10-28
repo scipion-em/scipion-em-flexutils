@@ -27,6 +27,7 @@
 
 import os
 import re
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -159,7 +160,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
     def predictStep(self):
         reconSirenProtocol = self.reconSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = reconSirenProtocol._getExtraPath(os.path.join('network', 'reconsiren_model.h5'))
+        weigths_file = glob(reconSirenProtocol._getExtraPath(os.path.join('network', 'reconsiren_model*')))[0]
         # pad = reconSirenProtocol.pad.get()
         self.newXdim = reconSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -198,7 +199,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         reconSirenProtocol = self.reconSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = reconSirenProtocol.boxSize.get()
-        model_path = reconSirenProtocol._getExtraPath(os.path.join('network', 'reconsiren_model.h5'))
+        model_path = glob(reconSirenProtocol._getExtraPath(os.path.join('network', 'reconsiren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)

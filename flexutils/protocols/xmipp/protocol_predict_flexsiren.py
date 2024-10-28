@@ -28,6 +28,7 @@
 import os
 import numpy as np
 import re
+from glob import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -186,7 +187,7 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         flexsirenProtocol = self.flexsirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
+        weigths_file = glob(flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
         latDim = flexsirenProtocol.latDim.get()
         pad = flexsirenProtocol.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / flexsirenProtocol.boxSize.get()
@@ -248,9 +249,7 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         flexsirenProtocol = self.flexsirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = flexsirenProtocol.boxSize.get()
-        disPose = flexsirenProtocol.disPose.get()
-        disCTF = flexsirenProtocol.disCTF.get()
-        model_path = flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model.h5'))
+        model_path = glob(flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
