@@ -308,18 +308,30 @@ class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             idx += 1
 
         partSet.getFlexInfo().latDim = Integer(flexsirenProtocol.latDim.get())
-        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet.getFlexInfo().pad = Integer(flexsirenProtocol.pad.get())
         partSet.getFlexInfo().modelPath = String(model_path)
-        partSet.getFlexInfo().disPose = Boolean(disPose)
-        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
-        inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
-            else flexsirenProtocol.inputVolumeMask.get().getFileName()
+        inputMask = flexsirenProtocol.inputVolumeMask.get().getFileName()
         inputVolume = flexsirenProtocol.inputVolume.get().getFileName()
         partSet.getFlexInfo().refMask = String(inputMask)
         partSet.getFlexInfo().refMap = String(inputVolume)
+        partSet.getFlexInfo().disPose = Boolean(flexsirenProtocol.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(flexsirenProtocol.disCTF.get())
 
-        partSet.getFlexInfo().refPose = refinePose
+        if flexsirenProtocol.refinePose.get():
+            partSet.getFlexInfo().refPose = Boolean(True)
+        else:
+            partSet.getFlexInfo().refPose = Boolean(False)
+
+        if flexsirenProtocol.architecture.get() == 0:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif flexsirenProtocol.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if flexsirenProtocol.ctfType.get() == 0:
+            partSet.getFlexInfo().ctfType = String("apply")
+        elif flexsirenProtocol.ctfType.get() == 1:
+            partSet.getFlexInfo().ctfType = String("wiener")
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)

@@ -40,7 +40,7 @@ from pyworkflow import VERSION_2_0
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ, ALIGN_NONE
-from pwem.objects import Volume
+from pwem.objects import Volume, SetOfAverages
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -158,6 +158,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
 
     def predictStep(self):
+        inputParticles = self.inputParticles.get()
         reconSirenProtocol = self.reconSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
         weigths_file = glob(reconSirenProtocol._getExtraPath(os.path.join('network', 'reconsiren_model*')))[0]
@@ -166,6 +167,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
         # applyCTF = reconSirenProtocol.applyCTF.get()
+        onlyPos = reconSirenProtocol.onlyPos.get() if not isinstance(inputParticles, SetOfAverages) else True
         nCandidates = reconSirenProtocol.nCandidates.get()
         args = "--md_file %s --weigths_file %s --pad 2 " \
                "--sr %f --apply_ctf 0 --n_candidates %d" \
@@ -173,6 +175,9 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
 
         if reconSirenProtocol.inputVolume.get():
             args += " --only_pose"
+
+        if onlyPos:
+            args += " --only_pos"
 
         # if reconSirenProtocol.ctfType.get() == 0:
         #     args += " --ctf_type apply"
@@ -222,9 +227,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-
-            tr_ori = particle.getTransform().getMatrix()
-            shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
+            shifts, angles = [0, 0], [0, 0, 0]
 
             # Apply delta angles
             angles[0] = rot[idx]
@@ -244,6 +247,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             idx += 1
 
         partSet.modelPath = String(model_path)
+        partSet.onlyPos = Boolean(reconSirenProtocol.onlyPos.get() if not isinstance(inputParticles, SetOfAverages) else True)
 
         if reconSirenProtocol.inputVolume.get():
             inputMask = reconSirenProtocol.inputVolumeMask.get().getFileName()
