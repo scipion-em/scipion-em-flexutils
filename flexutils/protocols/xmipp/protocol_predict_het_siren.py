@@ -191,6 +191,9 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if hetSirenProtocol.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
 
@@ -311,6 +314,11 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
+        if hetSirenProtocol.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
+
         if hetSirenProtocol.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
         elif hetSirenProtocol.ctfType.get() == 1:
@@ -327,6 +335,10 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                           inputParticles.getSamplingRate())
 
             outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
