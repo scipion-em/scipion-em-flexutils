@@ -27,20 +27,21 @@
 
 import os
 import re
+import numpy as np
 from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Boolean
+from pyworkflow.object import String, Boolean, Float
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ, ALIGN_NONE
-from pwem.objects import Volume, SetOfAverages
+from pwem.objects import Volume, SetOfAverages, Transform, Class3D
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -173,11 +174,14 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
                "--sr %f --apply_ctf 0 --n_candidates %d" \
                % (md_file, weigths_file, sr, nCandidates)
 
-        if reconSirenProtocol.inputVolume.get():
+        if reconSirenProtocol.inputVolume.get() and not reconSirenProtocol.refinement.get():
             args += " --only_pose"
 
         if onlyPos:
             args += " --only_pos"
+
+        if reconSirenProtocol.useHet.get():
+            args += " --heterogeneous"
 
         # if reconSirenProtocol.ctfType.get() == 0:
         #     args += " --ctf_type apply"
@@ -213,6 +217,9 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         psi = metadata[:, 'anglePsi']
         shift_x = metadata[:, 'shiftX']
         shift_y = metadata[:, 'shiftY']
+        loss_cons = metadata[:, "reproj_cons_error"]
+        if self.useHet.get():
+            loss_het = metadata[:, "reproj_het_error"]
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
@@ -227,7 +234,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-            shifts, angles = [0, 0], [0, 0, 0]
+            shifts, angles = np.asarray([0, 0, 0]), np.asarray([0, 0, 0])
 
             # Apply delta angles
             angles[0] = rot[idx]
@@ -239,8 +246,15 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             shifts[1] = correctionFactor * shift_y[idx]
 
             # Set new transformation matrix
-            tr = matrixFromGeometry(shifts, angles, inverseTransform)
-            particle.getTransform().setMatrix(tr)
+            tr_matrix = matrixFromGeometry(shifts, angles, inverseTransform)
+            tr = Transform()
+            tr.setMatrix(tr_matrix)
+            particle.setTransform(tr)
+
+            particle.reproj_cons_error = Float(loss_cons[idx])
+            if self.useHet.get():
+                particle.reproj_het_error = Float(loss_het[idx])
+                particle.class_agreement = Float(np.abs(loss_het[idx] - loss_cons[idx]) / loss_cons[idx])
 
             partSet.append(particle)
 
@@ -255,20 +269,79 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             partSet.refMask = String(inputMask)
             partSet.refMap = String(inputVolume)
 
-        outVol = Volume()
-        outVol.setSamplingRate(inputParticles.getSamplingRate())
-        outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
-
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
         if reconSirenProtocol.inputVolume.get() is None:
+            outVol = Volume()
+            outVol.setSamplingRate(inputParticles.getSamplingRate())
+            outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
+
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map.mrc'),
                                         self._getExtraPath('decoded_map.mrc'),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
 
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map.mrc'),
+                                           inputParticles.getSamplingRate())
+
+        if reconSirenProtocol.useHet.get():
+            labels = metadata[:, "cluster_labels"].astype(int)
+            unique_labels = np.unique(labels).astype(int)
+            partIds = list(inputParticles.getIdSet())
+
+            hetClasses = self._createSetOfClasses3D(inputParticles)
+            hetVols = self._createSetOfVolumes()
+            hetVols.setSamplingRate(inputParticles.getSamplingRate())
+            for label in unique_labels:
+                vol = self._getExtraPath(f'decoded_map_{label:02}.mrc')
+                hetVol = Volume()
+                hetVol.setSamplingRate(inputParticles.getSamplingRate())
+                hetVol.setLocation(vol)
+                hetVols.append(hetVol)
+
+                ImageHandler().scaleSplines(vol, vol, finalDimension=inputParticles.getXDim(), overwrite=True)
+
+                # Set correct sampling rate in volume header
+                ImageHandler().setSamplingRate(vol, inputParticles.getSamplingRate())
+
+                cls = Class3D()
+                cls.copyInfo(inputParticles)
+                cls.setObjId(label + 1)
+                cls.setHasCTF(inputParticles.hasCTF())
+                cls.setAcquisition(inputParticles.getAcquisition())
+                cls.setRepresentative(hetVol)
+                cls.reproj_cons_error = Float(0.0)
+                cls.reproj_het_error = Float(0.0)
+                cls.class_agreement = Float(0.0)
+                hetClasses.append(cls)
+                enabledClass = hetClasses[cls.getObjId()]
+                enabledClass.enableAppend()
+                mean_reproj_cons_error = 0.0
+                mean_reproj_het_error = 0.0
+                mean_class_agreement = 0.0
+                for itemId in np.argwhere(labels == label)[..., 0]:
+                    item = inputParticles[partIds[int(itemId)]]
+                    item.reproj_cons_error = Float(loss_cons[itemId])
+                    item.reproj_het_error = Float(loss_het[itemId])
+                    item.class_agreement = Float(1. / np.abs(loss_het[itemId] + loss_cons[itemId]))
+                    mean_reproj_cons_error += loss_cons[itemId]
+                    mean_reproj_het_error += loss_het[itemId]
+                    mean_class_agreement += np.abs(loss_het[itemId] - loss_cons[itemId]) / loss_cons[itemId]
+                    enabledClass.append(item)
+                mean_reproj_cons_error /= len(np.argwhere(labels == label)[..., 0])
+                mean_reproj_het_error /= len(np.argwhere(labels == label)[..., 0])
+                mean_class_agreement = 1. / np.abs(mean_reproj_cons_error + mean_reproj_het_error)
+                enabledClass.reproj_cons_error = Float(mean_reproj_cons_error)
+                enabledClass.reproj_het_error = Float(mean_reproj_het_error)
+                enabledClass.class_agreement = Float(mean_class_agreement)
+                hetClasses.update(enabledClass)
+
             self._defineOutputs(outputVolume=outVol)
+            self._defineOutputs(hetClasses=hetClasses)
             self._defineTransformRelation(self.inputParticles, outVol)
+            self._defineTransformRelation(self.inputParticles, hetClasses)
+
 
     # --------------------------- UTILS functions -----------------------
     def _updateParticle(self, item, row):

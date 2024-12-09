@@ -30,18 +30,19 @@ import re
 from glob import glob
 
 import numpy as np
+from joblib.testing import param
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer, Boolean
+from pyworkflow.object import String, Boolean, Float
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
 from pwem.protocols import ProtAnalysis3D
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ, ALIGN_NONE
-from pwem.objects import Volume, SetOfAverages
+from pwem.objects import Volume, SetOfAverages, Transform, Class3D
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -85,6 +86,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                             'the estimation the deformation field for each particle. Note that output particles will '
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
+        group.addParam("refinement", params.BooleanParam, default=False, label="Refine current alignment?",
+                       condition="inputParticles and inputParticles.hasAlignment()")
+        group.addParam("useHet", params.BooleanParam, default=False, label="Consider heterogeneity?")
         group = form.addGroup("Symmetry")
         group.addParam('symmetry', params.StringParam, default="c1", label='Symmetry group',
                        help="Determine the symmetry group to be considered when training the network")
@@ -177,7 +181,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                            "transition of the density values")
         form.addParam("onlyPos", params.BooleanParam, default=False, label="Exclude negative values?",
                       condition="not isinstance(inputParticles, SetOfAverages)")
-        form.addParam("udLambda", params.FloatParam, default=0.0, label="Uniform distribution regularization",
+        form.addParam("udLambda", params.FloatParam, default=1e-6, label="Uniform distribution regularization",
                       expertLevel=params.LEVEL_ADVANCED,
                       help="Determines how much the network will enforce particles to have an uniform angular "
                            "distribution")  # default=0.000001
@@ -249,14 +253,17 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         else:
             ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
 
-        writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_NONE)
+        if self.refinement.get():
+            writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_PROJ)
+        else:
+            writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_NONE)
 
         sr = inputParticles.getSamplingRate()
         if self.considerCTF.get():
             # Wiener filter
-            corrected_stk = self._getTmpPath('corrected_particles.mrcs')
-            args = "-i %s -o %s --save_metadata_stack --keep_input_columns --sampling_rate %f --wc -1.0" \
-                   % (imgsFn, corrected_stk, sr)
+            corrected_stk = self._getTmpPath('corrected_particles.xmd')
+            args = "-i %s -o %s --save_metadata_stack %s --keep_input_columns --sampling_rate %f --wc -1.0" \
+                   % (imgsFn, self._getTmpPath('corrected_particles.mrcs'), corrected_stk, sr)
             program = 'xmipp_ctf_correct_wiener2d'
             self.runJob(program, args, numberOfMpi=self.numberOfThreads.get(), env=xmipp3.Plugin.getEnviron())
         else:
@@ -279,6 +286,13 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                 params += " --mpi_job_size %d" % int(inputParticles.getSize() / self.numberOfMpi.get())
             self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
                         env=xmipp3.Plugin.getEnviron())
+
+            # Update shifts based on new scale
+            if self.refinement.get():
+                md = XmippMetaData(self._getExtraPath('scaled_particles.xmd'))
+                md[:, ["shiftX", "shiftY"]] *= (self.newXdim / Xdim)
+                md.write(self._getExtraPath('scaled_particles.xmd'), overwrite=True)
+
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
         # Removing Xmipp Phantom config file
@@ -318,7 +332,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                % (md_file, out_path, batch_size, split_train, nCandidates, sr,
                   l1Reg, tvReg, mseReg, udLambda, unLambda)
 
-        if self.inputVolume.get():
+        if self.inputVolume.get() and not self.refinement.get():
             args += "--only_pose "
 
         if self.stopType.get() == 0:
@@ -338,6 +352,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         if onlyPos:
             args += " --only_pos"
+
+        if self.useHet:
+            args += " --heterogeneous"
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
@@ -376,7 +393,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         args = "--md_file %s --weigths_file %s --pad 2 --n_candidates %d --sr %f " \
                % (md_file, weigths_file, nCandidates, sr)
 
-        if self.inputVolume.get():
+        if self.inputVolume.get() and not self.refinement.get():
             args += "--only_pose "
 
         # if self.ctfType.get() == 0:
@@ -394,6 +411,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         if onlyPos:
             args += " --only_pos"
+
+        if self.useHet:
+            args += " --heterogeneous"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -415,6 +435,9 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         psi = metadata[:, 'anglePsi']
         shift_x = metadata[:, 'shiftX']
         shift_y = metadata[:, 'shiftY']
+        loss_cons = metadata[:, "reproj_cons_error"]
+        if self.useHet.get():
+            loss_het = metadata[:, "reproj_het_error"]
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticles()
@@ -429,7 +452,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-            shifts, angles = [0, 0], [0, 0, 0]
+            shifts, angles = np.asarray([0, 0, 0]), np.asarray([0, 0, 0])
 
             # Apply delta angles
             angles[0] = rot[idx]
@@ -441,8 +464,15 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
             shifts[1] = correctionFactor * shift_y[idx]
 
             # Set new transformation matrix
-            tr = matrixFromGeometry(shifts, angles, inverseTransform)
-            particle.getTransform().setMatrix(tr)
+            tr_matrix = matrixFromGeometry(shifts, angles, inverseTransform)
+            tr = Transform()
+            tr.setMatrix(tr_matrix)
+            particle.setTransform(tr)
+
+            particle.reproj_cons_error = Float(loss_cons[idx])
+            if self.useHet.get():
+                particle.reproj_het_error = Float(loss_het[idx])
+                particle.class_agreement = Float(np.abs(loss_het[idx] - loss_cons[idx]) / loss_cons[idx])
 
             partSet.append(particle)
 
@@ -451,6 +481,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         partSet.modelPath = String(model_path)
         partSet.considerCTF = Boolean(self.considerCTF.get())
         partSet.onlyPos = Boolean(self.onlyPos.get() if not isinstance(inputParticles, SetOfAverages) else True)
+        partSet.useHet = Boolean(self.useHet.get())
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -472,20 +503,83 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         # partSet.pad = Integer(self.pad.get())
 
-        outVol = Volume()
-        outVol.setSamplingRate(inputParticles.getSamplingRate())
-        outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
-
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
 
-        if self.inputVolume.get() is None:  # Check this TODO
+        if self.inputVolume.get() is None:
+            outVol = Volume()
+            outVol.setSamplingRate(inputParticles.getSamplingRate())
+            outVol.setLocation(self._getExtraPath('decoded_map.mrc'))
+
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map.mrc'),
                                         self._getExtraPath('decoded_map.mrc'),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
 
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map.mrc'),
+                                           inputParticles.getSamplingRate())
+
             self._defineOutputs(outputVolume=outVol)
             self._defineTransformRelation(self.inputParticles, outVol)
+
+        if self.useHet.get():
+            labels = metadata[:, "cluster_labels"].astype(int)
+            unique_labels = np.unique(labels).astype(int)
+            partIds = list(inputParticles.getIdSet())
+
+            hetClasses = self._createSetOfClasses3D(inputParticles)
+            hetVols = self._createSetOfVolumes()
+            hetVols.setSamplingRate(inputParticles.getSamplingRate())
+            for label in unique_labels:
+                vol = self._getExtraPath(f'decoded_map_{label:02}.mrc')
+                hetVol = Volume()
+                hetVol.setSamplingRate(inputParticles.getSamplingRate())
+                hetVol.setLocation(vol)
+                hetVols.append(hetVol)
+
+                ImageHandler().scaleSplines(vol, vol, finalDimension=inputParticles.getXDim(), overwrite=True)
+
+                # Set correct sampling rate in volume header
+                ImageHandler().setSamplingRate(vol, inputParticles.getSamplingRate())
+
+                cls = Class3D()
+                cls.copyInfo(inputParticles)
+                cls.setObjId(int(label + 1))
+                cls.setHasCTF(inputParticles.hasCTF())
+                cls.setAcquisition(inputParticles.getAcquisition())
+                cls.setRepresentative(hetVol)
+                cls.reproj_cons_error = Float(0.0)
+                cls.reproj_het_error = Float(0.0)
+                cls.class_agreement = Float(0.0)
+                hetClasses.append(cls)
+                enabledClass = hetClasses[cls.getObjId()]
+                enabledClass.enableAppend()
+                mean_reproj_cons_error = 0.0
+                mean_reproj_het_error = 0.0
+                mean_class_agreement = 0.0
+                for itemId in np.argwhere(labels == label)[..., 0]:
+                    item = inputParticles[partIds[int(itemId)]]
+                    item.reproj_cons_error = Float(loss_cons[itemId])
+                    item.reproj_het_error = Float(loss_het[itemId])
+                    item.class_agreement = Float(1. / np.abs(loss_het[itemId] + loss_cons[itemId]))
+                    mean_reproj_cons_error += loss_cons[itemId]
+                    mean_reproj_het_error += loss_het[itemId]
+                    # mean_class_agreement += 1. / np.abs(loss_het[itemId] + loss_cons[itemId])
+                    enabledClass.append(item)
+                mean_reproj_cons_error /= len(np.argwhere(labels == label)[..., 0])
+                mean_reproj_het_error /= len(np.argwhere(labels == label)[..., 0])
+                # mean_class_agreement /= len(np.argwhere(labels == label)[..., 0])
+                mean_class_agreement = 1. / np.abs(mean_reproj_cons_error + mean_reproj_het_error)
+                enabledClass.reproj_cons_error = Float(mean_reproj_cons_error)
+                enabledClass.reproj_het_error = Float(mean_reproj_het_error)
+                enabledClass.class_agreement = Float(mean_class_agreement)
+                hetClasses.update(enabledClass)
+
+            self._defineOutputs(hetVolumes=hetVols)
+            self._defineOutputs(hetClasses=hetClasses)
+            self._defineTransformRelation(self.inputParticles, hetVols)
+            self._defineTransformRelation(self.inputParticles, hetClasses)
+
 
     # --------------------------- UTILS functions -----------------------
     def _updateParticle(self, item, row):
