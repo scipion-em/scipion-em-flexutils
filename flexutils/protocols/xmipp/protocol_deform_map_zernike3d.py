@@ -195,6 +195,11 @@ class ProtFlexVolumeDeformZernike3D(ProtAnalysis3D):
         vol_flex = VolumeFlex(progName=const.ZERNIKE3D)
         vol_flex.setSamplingRate(sr_i)
         vol_flex.setFileName(inputVolume.getFileName())
+
+        # Set correct sampling rate in volume header
+        ImageHandler().setSamplingRate(inputVolume.getFileName(),
+                                       inputVolume.getSamplingRate())
+
         vol_flex.getFlexInfo().L1 = Integer(self.l1.get())
         vol_flex.getFlexInfo().L2 = Integer(self.l2.get())
         vol_flex.getFlexInfo().Rmax = Integer(0.5 * xDim)
