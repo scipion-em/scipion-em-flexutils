@@ -110,9 +110,10 @@ def saveMap(filename, map):
     ImageHandler().write(map, filename, overwrite=True)
 
 
-def generateVolumesHetSIREN(weigths_file, x_het, outdir, step, architecture, disPose, disCTF, refPose, gpu=None):
+def generateVolumesHetSIREN(weigths_file, x_het, outdir, step, architecture, disPose, disCTF, refPose,
+                            use_hyper_network=None, gpu=None):
     args = _getEvalVolArgs(x_het, weigths_file, "het_file", outdir, step=step, architecture=architecture,
-                           disPose=disPose, disCTF=disCTF, gpu=gpu, refPose=refPose)
+                           disPose=disPose, disCTF=disCTF, gpu=gpu, refPose=refPose, use_hyper_network=use_hyper_network)
     program = flexutils.Plugin.getTensorflowProgram("predict_map_het_siren.py", python=False)
     runJob(None, program, ' '.join(args), numberOfMpi=1)
 
@@ -131,7 +132,7 @@ def generateVolumesDeepNMA(weigths_file, c_nma, outdir, sr, xsize):
 
 
 def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None, xsize=None, architecture=None,
-                    disPose=None, disCTF=None, gpu=None, refPose=None):
+                    disPose=None, disCTF=None, gpu=None, refPose=None, use_hyper_network=None):
     if not os.path.exists(outdir):
         os.mkdir(outdir)
 
@@ -155,6 +156,9 @@ def _getEvalVolArgs(x_het, weigths_file, x_het_param, outdir, step=None, sr=None
 
     if architecture:
         args.append('--architecture %s' % architecture)
+
+    if use_hyper_network:
+        args.append('--use_hyper_network')
 
     if disPose:
         args.append('--pose_reg 1.0')
