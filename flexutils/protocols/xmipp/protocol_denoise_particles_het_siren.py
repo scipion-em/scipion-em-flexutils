@@ -34,7 +34,7 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer
+from pyworkflow.object import String, Integer, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 import pyworkflow.utils as pwutils
@@ -177,6 +177,9 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if hetSirenProtocol.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
 
@@ -294,6 +297,11 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().architecture = String("convnn")
         elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if hetSirenProtocol.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
