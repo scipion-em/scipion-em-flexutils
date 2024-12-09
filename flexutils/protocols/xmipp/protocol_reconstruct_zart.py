@@ -372,6 +372,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         volume.setSamplingRate(imgSet.getSamplingRate())
         volume_filtered.setSamplingRate(imgSet.getSamplingRate())
 
+        # Set correct sampling rate in volume header
+        ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction.mrc"), imgSet.getSamplingRate())
+        ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction_filtered.mrc"), imgSet.getSamplingRate())
+
         if self.mode.get() != 0:
             halves = self.volumeRestoration()
             volume.setHalfMaps(halves)
@@ -382,6 +386,8 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                 volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
                 volume_data_filtered = filterVol(volume_data, mode="bspline")
                 ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
+                ImageHandler().setSamplingRate(volume_data, imgSet.getSamplingRate())
+                ImageHandler().setSamplingRate(volume_data_filtered, imgSet.getSamplingRate())
             volume.setHalfMaps(halves)
 
         self._defineOutputs(outputVolume=volume)
