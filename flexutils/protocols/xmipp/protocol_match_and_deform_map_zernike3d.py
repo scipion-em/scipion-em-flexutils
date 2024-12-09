@@ -28,6 +28,8 @@
 import os
 
 import numpy as np
+from xmipp_metadata.image_handler import ImageHandler
+
 from pwem.protocols import ProtAnalysis3D
 from pwem.objects import Volume
 
@@ -107,6 +109,11 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
         outFile = self._getExtraPath("map_deformed.mrc")
         vol = Volume()
         vol.setLocation(outFile)
+
+        # Set correct sampling rate in volume header
+        ImageHandler().setSamplingRate(outFile,
+                                       self.input.get().getSamplingRate())
+
         vol.setSamplingRate(self.input.get().getSamplingRate())
         vol.L1 = L1
         vol.L2 = L2
