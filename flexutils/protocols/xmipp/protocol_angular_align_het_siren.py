@@ -137,6 +137,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
+        group.addParam('useHyperNetwork', params.BooleanParam, default=True, label="Use hyper network?",
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="Determine wether to use hyper network layers or standard layers")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
                        default=1, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
@@ -373,6 +376,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if self.ctfType.get() == 0:
             args += " --ctf_type apply"
         elif self.ctfType.get() == 1:
@@ -446,6 +452,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
 
         if self.refinePose.get():
             args += " --refine_pose"
@@ -548,6 +557,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
 
+        if self.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
+
         if self.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
         elif self.ctfType.get() == 1:
@@ -564,6 +578,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                           inputParticles.getSamplingRate())
 
             outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
