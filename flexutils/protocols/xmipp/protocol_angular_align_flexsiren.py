@@ -482,6 +482,7 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
 
         metadata = XmippMetaData(md_file)
         z_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zCoefficients']])
+        b_coeff = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'bCoefficients']])
 
         if self.refinePose.get():
             delta_rot = metadata[:, 'delta_angle_rot']
@@ -491,12 +492,17 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
             delta_shift_y = metadata[:, 'delta_shift_y']
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticlesFlex(progName=const.FLEXSIREN)
+        partSet = self._createSetOfParticlesFlex(progName=const.FLEXSIREN, suffix="1")
+        partSet_Zernike_like = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D, suffix="2")
 
         partSet.copyInfo(inputSet)
+        partSet_Zernike_like.copyInfo(inputSet)
         partSet.setHasCTF(inputSet.hasCTF())
+        partSet_Zernike_like.setHasCTF(inputSet.hasCTF())
         partSet.getFlexInfo().setProgName(const.FLEXSIREN)
+        partSet_Zernike_like.getFlexInfo().setProgName(const.ZERNIKE3D)
         partSet.setAlignmentProj()
+        partSet_Zernike_like.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
 
@@ -506,10 +512,14 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         for particle in inputSet.iterItems():
 
             outParticle = ParticleFlex(progName=const.FLEXSIREN)
+            outParticle_Zernike_like = ParticleFlex(progName=const.ZERNIKE3D)
             outParticle.copyInfo(particle)
+            outParticle_Zernike_like.copyInfo(particle)
             outParticle.getFlexInfo().setProgName(const.FLEXSIREN)
+            outParticle_Zernike_like.getFlexInfo().setProgName(const.ZERNIKE3D)
 
             outParticle.setZFlex(z_space[idx])
+            outParticle_Zernike_like.setZFlex(0.5 * Xdim * b_coeff[idx])
 
             if self.refinePose.get():
                 tr_ori = particle.getTransform().getMatrix()
@@ -527,10 +537,12 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
                 # Set new transformation matrix
                 tr = matrixFromGeometry(shifts, angles, inverseTransform)
                 outParticle.getTransform().setMatrix(tr)
+                outParticle_Zernike_like.getTransform().setMatrix(tr)
 
             idx += 1
 
             partSet.append(outParticle)
+            partSet_Zernike_like.append(outParticle_Zernike_like)
 
         partSet.getFlexInfo().latDim = Integer(self.latDim.get())
         partSet.getFlexInfo().pad = Integer(self.pad.get())
@@ -558,8 +570,15 @@ class TensorflowProtAngularAlignmentFlexSIREN(ProtAnalysis3D, ProtFlexBase):
         elif self.ctfType.get() == 1:
             partSet.getFlexInfo().ctfType = String("wiener")
 
-        self._defineOutputs(outputParticles=partSet)
+        partSet_Zernike_like.getFlexInfo().L1 = Integer(7)
+        partSet_Zernike_like.getFlexInfo().L2 = Integer(7)
+        partSet_Zernike_like.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet_Zernike_like.getFlexInfo().refMask = String(inputMask)
+        partSet_Zernike_like.getFlexInfo().refMap = String(inputVolume)
+
+        self._defineOutputs(outputParticles=partSet, outputParticlesZernike3D=partSet_Zernike_like)
         self._defineTransformRelation(self.inputParticles, partSet)
+        self._defineTransformRelation(self.inputParticles, partSet_Zernike_like)
 
     # --------------------------- UTILS functions --------------------------------------------
     def _updateParticle(self, item, row):
