@@ -174,8 +174,8 @@ class TestFlexHetSiren(BaseTest):
             atomStructPath,
             translation_vector=[0.0, 0.0, 0.0],
             nTimes=1):
-        # impoer PDB needs new version of Biopython
-        # orrecent version of pwem
+        # import PDB needs new version of Biopython
+        # or recent version of pwem
         # leave the import here so it is not executed
         # during the test detection
         from Bio.PDB import PDBParser, PDBIO
