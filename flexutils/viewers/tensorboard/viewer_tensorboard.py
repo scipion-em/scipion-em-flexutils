@@ -28,43 +28,42 @@
 import os
 from pathos.multiprocessing import ProcessingPool as Pool
 import subprocess
-import tkinter as tk
 
-from pyworkflow.viewer import Viewer
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.utils.process import buildRunCommand
-from pyworkflow.gui.dialog import showError, ExceptionDialog
+from pyworkflow.gui.dialog import showError
+
+from pwem.viewers import DataViewer
 
 from flexutils.protocols.xmipp.protocol_angular_align_zernike3deep import TensorflowProtAngularAlignmentZernike3Deep
 from flexutils.protocols.xmipp.protocol_angular_align_het_siren import TensorflowProtAngularAlignmentHetSiren
-from flexutils.protocols.xmipp.protocol_angular_align_deep_pose import TensorflowProtAngularAlignmentDeepPose
-from flexutils.protocols.xmipp.protocol_angular_align_homo_siren import TensorflowProtAngularAlignmentHomoSiren
+from flexutils.protocols.xmipp.protocol_angular_align_reconsiren import TensorflowProtAngularAlignmentReconSiren
 
 import flexutils.constants as const
 import flexutils
 
 
-class TensorboardViewer(Viewer):
+class TensorboardViewer(DataViewer):
     """ Tensorboard visualization of neural networks """
-    _label = 'viewer conformational landscape'
+    _label = 'viewer Tensorboard'
     _targets = [TensorflowProtAngularAlignmentZernike3Deep,
                 TensorflowProtAngularAlignmentHetSiren,
-                TensorflowProtAngularAlignmentDeepPose,
-                TensorflowProtAngularAlignmentHomoSiren]
+                TensorflowProtAngularAlignmentReconSiren]
+    _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
-        Viewer.__init__(self, **kwargs)
+        DataViewer.__init__(self, **kwargs)
         self._data = None
 
     def _visualize(self, obj, **kwargs):
         logdir_path = self.protocol._getExtraPath(os.path.join("network", "logs"))
 
-        def launchViewerNonBlocking(args):
-            (logdir_path, ) = args
+        def launchViewerNonBlocking(logdir_path):
 
             # Run tensorboard
             args = f"--logdir_path {logdir_path}"
             program = os.path.join(const.VIEWERS, "tensorboard", "setup_tensorboard.py")
-            program = flexutils.Plugin.getProgram(program)
+            program = flexutils.Plugin.getProgram(program, python=True, activateScipion=True)
 
             command = buildRunCommand(program, args, 1)
             subprocess.Popen(command, shell=True)
@@ -81,11 +80,6 @@ class TensorboardViewer(Viewer):
             showError(title="Tensorboard log files not found", msg=msg, parent=self.getTkRoot())
             return []
 
-        # Launch with Pathos
-        p = Pool()
-        # p.restart()
-        p.apipe(launchViewerNonBlocking, args=(logdir_path, ))
-        # p.join()
-        # p.close()
+        launchViewerNonBlocking(logdir_path)
 
         return []

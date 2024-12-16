@@ -40,7 +40,7 @@ from pyworkflow import VERSION_2_0
 from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import ParticleFlex, SetOfParticlesFlex
+from pwem.objects import ParticleFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -52,10 +52,10 @@ from flexutils.utils import getXmippFileName
 from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
-class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
-    """ Predict Zernike3D coefficents for a set of particles based on a trained
-     Zernike3Deep network. """
-    _label = 'predict - Zernike3Deep'
+class TensorflowProtPredictFlexSIREN(ProtAnalysis3D, ProtFlexBase):
+    """ Predict FlexSIREN coefficents for a set of particles based on a trained
+     FlexSIREN network. """
+    _label = 'predict - FlexSIREN'
     _lastUpdateVersion = VERSION_2_0
 
     # --------------------------- DEFINE param functions -----------------------
@@ -72,15 +72,15 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         group = form.addGroup("Data")
         group.addParam('inputParticles', params.PointerParam, label="Input particles to predict",
                        pointerClass='SetOfParticles')
-        group.addParam('zernikeProtocol', params.PointerParam, label="Zernike3Deep trained network",
-                       pointerClass='TensorflowProtAngularAlignmentZernike3Deep',
-                       help="Previously executed 'angular align - Zernike3Deep'. "
+        group.addParam('flexsirenProtocol', params.PointerParam, label="FlexSIREN trained network",
+                       pointerClass='TensorflowProtAngularAlignmentFlexSIREN',
+                       help="Previously executed 'flexible align - FlexSIREN'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
         group = form.addGroup("Mask type")
         group.addParam('convertBinary', params.BooleanParam, default=False,
                        label="Associate field to binary mask?",
-                       help="If a regions mask has been used to trained the Zernike3Deep network, you "
+                       help="If a regions mask has been used to trained the FlexSIREN network, you "
                             "can set this parameter to yes to reassociate the deformation coefficients "
                             "to a binary mask generated from the regions mask.")
         form.addParallelSection(threads=4, mpi=0)
@@ -113,24 +113,25 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
-        structure = self._getFileName('fnStruct')
         md_file = self._getFileName('imgsFn')
+        bonds_file = self._getFileName("fnBond")
+        dihedrals_file = self._getFileName("fnDihedral")
 
         inputParticles = self.inputParticles.get()
-        zernikeProtocol = self.zernikeProtocol.get()
+        flexsirenProtocol = self.flexsirenProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = zernikeProtocol.boxSize.get()
+        self.newXdim = flexsirenProtocol.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
         ih = ImageHandler()
-        inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+        inputVolume = flexsirenProtocol.inputVolume.get().getFileName()
         ih.convert(getXmippFileName(inputVolume), fnVol)
         curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
         if curr_vol_dim != self.newXdim:
             self.runJob("xmipp_image_resize",
                         "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-        inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
+        inputMask = flexsirenProtocol.inputVolumeMask.get().getFileName()
         if inputMask:
             ih.convert(getXmippFileName(inputMask), fnVolMask)
             curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
@@ -139,13 +140,13 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
                             "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
                             env=xmipp3.Plugin.getEnviron())
 
-        if zernikeProtocol.referenceType.get() == 1:  # Structure reference
-            inputVolume = self.inputVolume.get().getFileName()
+        if flexsirenProtocol.referenceType.get() == 1:  # Structure reference
+            inputVolume = flexsirenProtocol.inputVolume.get().getFileName()
+            inputStruct = flexsirenProtocol.inputStruct.get().getFileName()
             structure_file = self._getFileName('fnStruct')
-            bonds_file = self._getFileName('fnBond')
-            dihedrals_file = self._getFileName('fnDihedral')
+            connect_file = self._getFileName('fnConnect')
             ca_file = self._getFileName('fnCA')
-            parser = AtomicModelParser(self.inputStruct.get().getFileName(), self._subset[self.atomSubset.get()])
+            parser = AtomicModelParser(inputStruct, flexsirenProtocol._subset[flexsirenProtocol.atomSubset.get()])
             pdb_coordinates = parser.get_atom_coordinates()
             covalent = parser.get_covalent_bonds()
             dihedrals = parser.get_dihedral_angles()
@@ -166,10 +167,6 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         # Write extra attributes (if needed)
         md = XmippMetaData(md_file)
-        if isinstance(inputParticles, SetOfParticlesFlex) and \
-                inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-            z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
-            md[:, "zernikeCoefficients"] = (Xdim / self.newXdim) * z_space
         if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
             labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
             md[:, "subtomo_labels"] = labels
@@ -188,32 +185,31 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
     def predictStep(self):
-        zernikeProtocol = self.zernikeProtocol.get()
+        flexsirenProtocol = self.flexsirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
-        L1 = zernikeProtocol.l1.get()
-        L2 = zernikeProtocol.l2.get()
-        pad = zernikeProtocol.pad.get()
-        correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
+        weigths_file = glob(flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
+        latDim = flexsirenProtocol.latDim.get()
+        pad = flexsirenProtocol.pad.get()
+        correctionFactor = self.inputParticles.get().getXDim() / flexsirenProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = zernikeProtocol.applyCTF.get()
-        disPose = zernikeProtocol.disPose.get()
-        disCTF = zernikeProtocol.disCTF.get()
-        args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
+        applyCTF = flexsirenProtocol.applyCTF.get()
+        disPose = flexsirenProtocol.disPose.get()
+        disCTF = flexsirenProtocol.disCTF.get()
+        args = "--md_file %s --weigths_file %s --lat_dim %d " \
                "--pad %d --sr %f --apply_ctf %d" \
-               % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
+               % (md_file, weigths_file, latDim, pad, sr, applyCTF)
 
-        if zernikeProtocol.refinePose.get():
+        if flexsirenProtocol.refinePose.get():
             args += " --refine_pose"
 
-        if zernikeProtocol.ctfType.get() == 0:
+        if flexsirenProtocol.ctfType.get() == 0:
             args += " --ctf_type apply"
-        elif zernikeProtocol.ctfType.get() == 1:
+        elif flexsirenProtocol.ctfType.get() == 1:
             args += " --ctf_type wiener"
 
-        if zernikeProtocol.architecture.get() == 0:
+        if flexsirenProtocol.architecture.get() == 0:
             args += " --architecture convnn"
-        elif zernikeProtocol.architecture.get() == 1:
+        elif flexsirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
         if disPose:
@@ -225,17 +221,16 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
-        program = flexutils.Plugin.getTensorflowProgram("predict_zernike3deep.py", python=False)
+        program = flexutils.Plugin.getTensorflowProgram("predict_flexsiren.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
 
     def convertBinaryStep(self):
-        zernikeProtocol = self.zernikeProtocol.get()
-        maskRegOri = zernikeProtocol.inputVolumeMask.get().getFileName()
+        flexsirenProtocol = self.flexsirenProtocol.get()
+        maskRegOri = flexsirenProtocol.inputVolumeMask.get().getFileName()
         maskReg = self._getFileName('fnVolMask')
         maskBin = self._getExtraPath("binary_mask.mrc")
         maskBinOri = self._getExtraPath("binary_mask_ori.mrc")
-        L1 = zernikeProtocol.l1.get()
-        L2 = zernikeProtocol.l2.get()
+        latDim = flexsirenProtocol.latDim.get()
         md_file = self._getFileName('imgsFn')
 
         # Convert mask to binary (original)
@@ -249,25 +244,16 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         boxsize = data.shape[0]
         ImageHandler().write(data, maskBin, overwrite=True)
 
-        # Update deformation field
-        args = "--md_file %s --mask_reg %s --mask_bin %s --boxsize %d --l1 %d --l2 %d --thr %d" \
-               % (md_file, maskReg, maskBin, boxsize, L1, L2, self.numberOfThreads.get())
-        program = "field_regions_to_binary_zernike3d.py"
-        program = flexutils.Plugin.getProgram(program)
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
-
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
-        zernikeProtocol = self.zernikeProtocol.get()
+        flexsirenProtocol = self.flexsirenProtocol.get()
         Xdim = inputParticles.getXDim()
-        self.newXdim = zernikeProtocol.boxSize.get()
-        disPose = zernikeProtocol.disPose.get()
-        disCTF = zernikeProtocol.disCTF.get()
-        model_path = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
+        self.newXdim = flexsirenProtocol.boxSize.get()
+        model_path = glob(flexsirenProtocol._getExtraPath(os.path.join('network', 'flexsiren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
-        zernike_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zernikeCoefficients']])
+        z_space = np.asarray([np.fromstring(item, sep=',') for item in metadata[:, 'zCoefficients']])
 
         if metadata.isMetaDataLabel('delta_angle_rot'):
             delta_rot = metadata[:, 'delta_angle_rot']
@@ -276,18 +262,17 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             delta_shift_x = metadata[:, 'delta_shift_x']
             delta_shift_y = metadata[:, 'delta_shift_y']
 
-        refinePose = zernikeProtocol.refinePose.get()
+        refinePose = flexsirenProtocol.refinePose.get()
 
         inputSet = self.inputParticles.get()
-        partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        partSet = self._createSetOfParticlesFlex(progName=const.FLEXSIREN)
         partSet.setHasCTF(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
-        partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
+        partSet.getFlexInfo().setProgName(const.FLEXSIREN)
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
-        zernike_space = correctionFactor * zernike_space
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ
 
@@ -295,11 +280,11 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         for particle in inputSet.iterItems():
             # z = correctionFactor * zernike_space[idx]
 
-            outParticle = ParticleFlex(progName=const.ZERNIKE3D)
+            outParticle = ParticleFlex(progName=const.FLEXSIREN)
             outParticle.copyInfo(particle)
-            outParticle.getFlexInfo().setProgName(const.ZERNIKE3D)
+            outParticle.getFlexInfo().setProgName(const.FLEXSIREN)
 
-            outParticle.setZFlex(zernike_space[idx])
+            outParticle.setZFlex(z_space[idx])
 
             if refinePose:
                 tr_ori = particle.getTransform().getMatrix()
@@ -322,20 +307,31 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
             idx += 1
 
-        partSet.getFlexInfo().L1 = Integer(zernikeProtocol.l1.get())
-        partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
-        partSet.getFlexInfo().Rmax = Float(Xdim / 2)
+        partSet.getFlexInfo().latDim = Integer(flexsirenProtocol.latDim.get())
+        partSet.getFlexInfo().pad = Integer(flexsirenProtocol.pad.get())
         partSet.getFlexInfo().modelPath = String(model_path)
-        partSet.getFlexInfo().disPose = Boolean(disPose)
-        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
-        inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
-            else zernikeProtocol.inputVolumeMask.get().getFileName()
-        inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+        inputMask = flexsirenProtocol.inputVolumeMask.get().getFileName()
+        inputVolume = flexsirenProtocol.inputVolume.get().getFileName()
         partSet.getFlexInfo().refMask = String(inputMask)
         partSet.getFlexInfo().refMap = String(inputVolume)
+        partSet.getFlexInfo().disPose = Boolean(flexsirenProtocol.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(flexsirenProtocol.disCTF.get())
 
-        partSet.getFlexInfo().refPose = refinePose
+        if flexsirenProtocol.refinePose.get():
+            partSet.getFlexInfo().refPose = Boolean(True)
+        else:
+            partSet.getFlexInfo().refPose = Boolean(False)
+
+        if flexsirenProtocol.architecture.get() == 0:
+            partSet.getFlexInfo().architecture = String("convnn")
+        elif flexsirenProtocol.architecture.get() == 1:
+            partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if flexsirenProtocol.ctfType.get() == 0:
+            partSet.getFlexInfo().ctfType = String("apply")
+        elif flexsirenProtocol.ctfType.get() == 1:
+            partSet.getFlexInfo().ctfType = String("wiener")
 
         self._defineOutputs(outputParticles=partSet)
         self._defineTransformRelation(self.inputParticles, partSet)
@@ -357,11 +353,11 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         return lines
 
     def PDB2List(self, lines):
-        zernikeProtocol = self.zernikeProtocol.get()
+        flexsirenProtocol = self.flexsirenProtocol.get()
         newlines = []
         for line in lines:
             eval = re.search(r'^ATOM\s+\d+\s+/N|CA|C|O/\s+', line) \
-                if zernikeProtocol.onlyBackbone.get() else line.startswith("ATOM ")
+                if flexsirenProtocol.onlyBackbone.get() else line.startswith("ATOM ")
             if eval:
                 try:
                     x = float(line[30:38])

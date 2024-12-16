@@ -58,7 +58,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
     _label = 'annotate space'
     _devStatus = NEW
-    OUTPUT_PREFIX = 'flexible3DClasses'
+    OUTPUT_PREFIX_CLASSES = 'flexible3DClasses'
+    OUTPUT_PREFIX_VOLUMES = 'flexible3DVolumes'
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -104,11 +105,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         # Get right imports
         if progName == const.NMA:
             createFn = self._createSetOfClassesStructFlex
+            createFnSet = self._createSetOfAtomStructFlex
             from pwem.objects import ClassStructFlex as Class
             from pwem.objects import AtomStructFlex as Rep
             from pwem.objects import SetOfClassesStructFlex as SetOfClasses
         else:
             createFn = self._createSetOfClassesFlex
+            createFnSet = self._createSetOfVolumesFlex
             from pwem.objects import ClassFlex as Class
             from pwem.objects import VolumeFlex as Rep
             from pwem.objects import SetOfClassesFlex as SetOfClasses
@@ -116,6 +119,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         # Create SetOfFlexClasses
         suffix = getOutputSuffix(self, SetOfClasses)
         flexClasses = createFn(self.particles, suffix, progName=progName)
+        flexSetVols = createFnSet(progName=progName, suffix=suffix)
+        flexSetVols.setSamplingRate(sr)
 
         # Folder to save decoded volumes
         suffix_int = int(suffix)
@@ -125,7 +130,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # ****** Generate representative volumes *******
         z_rep = []
-        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
+        for file in sorted(glob(self._getExtraPath(os.path.join("Intermediate_results", 'saved_selections*')))):
             with open(file) as f:
                 line = f.readline()
                 z_rep.append(np.fromstring(line, dtype=float, sep=' '))
@@ -140,10 +145,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             from cryodrgn.utils import generateVolumes
             representatives_paths = []
             generateVolumes(z_rep, particles.getFlexInfo()._cryodrgnWeights.get(),
-                            particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
+                            particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath("Intermediate_results"),
                             downsample=self.boxSize.get(), apix=particles.getSamplingRate())
             for idx in range(z_rep.shape[0]):
-                ImageHandler().scaleSplines(self._getExtraPath('vol_{:03d}.mrc'.format(idx)),
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:03d}.mrc'.format(idx))),
                                             save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
@@ -151,14 +156,16 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             from flexutils.utils import generateVolumesHetSIREN
             representatives_paths = []
-            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
             generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
-                                    self._getExtraPath(), step=particles.getFlexInfo().coordStep.get(),
+                                    self._getExtraPath("Intermediate_results"), step=particles.getFlexInfo().coordStep.get(),
                                     architecture=particles.getFlexInfo().architecture.get(),
                                     disPose=particles.getFlexInfo().disPose.get(),
-                                    disCTF=particles.getFlexInfo().disCTF.get(), gpu=gpu_ids)
+                                    disCTF=particles.getFlexInfo().disCTF.get(),
+                                    refPose=particles.getFlexInfo().refPose.get(),
+                                    use_hyper_network=particles.getFlexInfo().use_hyper_network.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
-                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'decoded_map_class_{:02d}.mrc'.format(idx + 1))),
                                             save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
@@ -166,12 +173,15 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
             from flexutils.utils import generateVolumesFlexSIREN
             representatives_paths = []
-            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()])
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
             generateVolumesFlexSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
-                                     self._getExtraPath(), step=1,
-                                     architecture=particles.getFlexInfo().architecture.get(), gpu=gpu_ids)
+                                     self._getExtraPath("Intermediate_results"), step=1,
+                                     architecture=particles.getFlexInfo().architecture.get(),
+                                     disPose=particles.getFlexInfo().disPose.get(),
+                                     disCTF=particles.getFlexInfo().disCTF.get(),
+                                     refPose=particles.getFlexInfo().refPose.get(), gpu=gpu_ids)
             for idx in range(z_rep.shape[0]):
-                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_{:02d}.mrc'.format(idx + 1)),
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'decoded_map_class_{:02d}.mrc'.format(idx + 1))),
                                             save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
@@ -202,7 +212,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Read selected coefficients
         clInx = 1
-        for file in sorted(glob(self._getExtraPath('saved_selections*'))):
+        newId = 1
+        for file in sorted(glob(self._getExtraPath(os.path.join("Intermediate_results", 'saved_selections*')))):
             z_space_vw = []
             with open(file) as f:
                 lines = f.readlines()
@@ -220,10 +231,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 z_space_vw = z_space_vw[0][None, ...]
             else:
                 # Read space
-                z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
+                z_space = np.loadtxt(self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt")))
 
             # Create KDTree
-            kdtree = KDTree(np.loadtxt(self._getExtraPath("z_space.txt")))
+            kdtree = KDTree(np.loadtxt(self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt"))))
 
             # Populate SetOfClasses3D with KMean particles
             for z_idx in range(z_space_vw.shape[0]):
@@ -240,11 +251,15 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 if currIds.ndim and currIds.size:
                     newClass = Class()
                     newClass.copyInfo(particles)
+                    newClass.setObjId(clInx)
                     newClass.setHasCTF(particles.hasCTF())
                     newClass.setAcquisition(particles.getAcquisition())
                     representative = Rep(progName=progName)
                     if hasattr(representative, "setSamplingRate"):
                         representative.setSamplingRate(sr)
+
+                    # Set correct sampling rate in volume header
+                    ImageHandler().setSamplingRate(representatives_paths[clInx - 1], sr)
 
                     # ****** Fill representative information *******
                     if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
@@ -271,6 +286,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                     # ********************
 
                     newClass.setRepresentative(representative)
+                    flexSetVols.append(representative)
 
                     flexClasses.append(newClass)
 
@@ -282,7 +298,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                         for itemId in currIds:
                             item = particles[partIds[itemId]]
                             item._xmipp_subtomo_labels = Integer(clInx)
+                            item.setObjId(newId)
                             enabledClass.append(item)
+                            newId += 1
                     else:
                         for idx in range(neighbors):
                             itemId = currIds[idx]
@@ -292,14 +310,18 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                             item = particles[partIds[itemId]]
                             item._xmipp_subtomo_labels = Integer(clInx)
                             enabledClass.append(item)
+                            newId += 1
 
                     flexClasses.update(enabledClass)
                     clInx += 1
 
         # Save new output
-        name = self.OUTPUT_PREFIX + "_" + suffix
+        name_classes = self.OUTPUT_PREFIX_CLASSES + "_" + suffix
+        name_volumes = self.OUTPUT_PREFIX_VOLUMES + "_" + suffix
         args = {}
-        args[name] = flexClasses
+        args[name_classes] = flexClasses
+        args[name_volumes] = flexSetVols
+
         self._defineOutputs(**args)
         self._defineSourceRelation(particles, flexClasses)
 
@@ -307,6 +329,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     def launchVolumeSlicer(self):
         particles = self.particles.get()
         self.num_vol = 0
+
+        # Check whether intermediate results' folder has been created
+        if not os.path.isdir(self._getExtraPath("Intermediate_results")):
+            pwutils.makePath(self._getExtraPath("Intermediate_results"))
 
         # ********* Get Z space *********
         z_space = []
@@ -321,12 +347,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
-            ih.convert(reference, self._getExtraPath("reference_original.mrc"), overwrite=True)
-            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"), overwrite=True)
+            ih.convert(reference, self._getExtraPath(os.path.join("Intermediate_results", "reference_original.mrc")), overwrite=True)
+            ih.convert(mask, self._getExtraPath(os.path.join("Intermediate_results", "mask_reference_original.mrc")), overwrite=True)
 
             # Resize reference map to increase real time conformation inspection performance
             inputFile = reference
-            outFile = self._getExtraPath('reference.mrc')
+            outFile = self._getExtraPath(os.path.join("Intermediate_results", 'reference.mrc'))
             if not os.path.isfile(outFile):
                 if pwutils.getExt(inputFile) == ".mrc":
                     inputFile += ":mrc"
@@ -337,7 +363,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Resize mask
             inputFile = mask
-            outFile = self._getExtraPath('mask.mrc')
+            outFile = self._getExtraPath(os.path.join("Intermediate_results", 'mask.mrc'))
             if not os.path.isfile(outFile):
                 if pwutils.getExt(inputFile) == ".mrc":
                     inputFile += ":mrc"
@@ -359,7 +385,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                         for volume in item.iterItems():
                             z_space_vol.append(volume.getZFlex())
             z_space_vol = np.asarray(z_space_vol)
-            file_z_vol = self._getExtraPath("z_space_vol.txt")
+            file_z_vol = self._getExtraPath(os.path.join("Intermediate_results", "z_space_vol.txt"))
             np.savetxt(file_z_vol, z_space_vol)
 
             # Resize coefficients
@@ -367,12 +393,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         # ********************
 
         # Generate files to call command line
-        file_z_space = self._getExtraPath("z_space.txt")
-        file_interp_val = self._getExtraPath("interp_val.txt")
+        file_z_space = self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt"))
+        file_interp_val = self._getExtraPath(os.path.join("Intermediate_results", "interp_val.txt"))
         np.savetxt(file_z_space, z_space)
 
         # Compute/Read UMAP or PCA
-        file_coords = self._getExtraPath("red_coords.txt")
+        file_coords = self._getExtraPath(os.path.join("Intermediate_results", "red_coords.txt"))
         red_space = []
         for particle in particles.iterItems():
             red_space.append(particle.getZRed())
@@ -388,7 +414,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Generate files to call command line
         np.savetxt(file_interp_val, interp_val)
-        path = os.path.abspath(self._getExtraPath())
+        path = os.path.abspath(self._getExtraPath("Intermediate_results"))
 
         # ********* Run viewer *********
         needsPackages = None
@@ -430,10 +456,35 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             else:
                 args += " --ctf_reg 0.0"
 
+            if particles.getFlexInfo().refPose.get():
+                args += " --refine_pose 1"
+            else:
+                args += " --refine_pose 0"
+
+            if particles.getFlexInfo().use_hyper_network.get():
+                args += " --use_hyper_network 1.0"
+            else:
+                args += " --use_hyper_network 0.0"
+
         elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
             args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow" \
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().architecture.get())
+
+            if particles.getFlexInfo().disPose.get():
+                args += " --pose_reg 1.0"
+            else:
+                args += " --pose_reg 0.0"
+
+            if particles.getFlexInfo().disCTF.get():
+                args += " --ctf_reg 1.0"
+            else:
+                args += " --ctf_reg 0.0"
+
+            if particles.getFlexInfo().refPose.get():
+                args += " --refine_pose 1"
+            else:
+                args += " --refine_pose 0"
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
             args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
@@ -462,7 +513,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # *********
 
-        if len(glob(self._getExtraPath("saved_selections*"))) > 0 and \
+        if len(glob(self._getExtraPath(os.path.join("Intermediate_results", "saved_selections*")))) > 0 and \
            askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
 

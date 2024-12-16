@@ -103,60 +103,39 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                        label="Choose GPU IDs",
                        help="Add a list of GPU devices that can be used")
 
-        form.addParam('inputParticles', params.PointerParam, pointerClass='SetOfParticles, SetOfParticlesFlex',
+        group = form.addGroup("Data")
+        group.addParam('inputParticles', params.PointerParam, pointerClass='SetOfParticles, SetOfParticlesFlex',
                       pointerCondition='hasAlignmentProj',
                       label="Input particles",  
                       help='Select the input images from the project.')
-        form.addParam('ctfCorrected', params.BooleanParam, default=False,
-                      label="Are particles CTF corrected?",
-                      help="If particles are not CTF corrected, set to 'No' to perform "
-                           "a Weiner filter based correction")
-        form.addParam('initialMap', params.PointerParam, pointerClass='Volume',
+        group.addParam('initialMap', params.PointerParam, pointerClass='Volume',
                       label="Initial map",
                       allowsNull=True,
                       help='If provided, this map will be used as the initialization of the reconstruction '
                            'process. Otherwise, an empty volume will be used')
-        form.addParam('useZernike', params.BooleanParam, default=False,
+        group.addParam('recMask', params.PointerParam, pointerClass='VolumeMask',
+                      allowsNull=True,
+                      label="Reconstruction mask",
+                      help="Mask used to restrict the reconstruction space to increase performance.")
+        group = form.addGroup("CTF")
+        group.addParam('ctfCorrected', params.BooleanParam, default=False,
+                      label="Are particles CTF corrected?",
+                      help="If particles are not CTF corrected, set to 'No' to perform "
+                           "a Weiner filter based correction")
+        group = form.addGroup("Motion correction")
+        group.addParam('useZernike', params.BooleanParam, default=False,
                       condition="inputParticles and isinstance(inputParticles, SetOfParticlesFlex)",
                       label="Correct motion blurred artifacts?",
                       help="Correct the conformation of the particles during the reconstruct process "
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
                            "option requires that the particles have a set of Zernike3D coefficients associated. "
                            "Otherwise, the parameter should be set to 'No'")
-        form.addParam('recMask', params.PointerParam, pointerClass='VolumeMask',
-                      allowsNull=True,
-                      expertLevel=params.LEVEL_ADVANCED,
-                      label="Reconstruction mask",
-                      help="Mask used to restrict the reconstruction space to increase performance.")
-        form.addParam('niter', params.IntParam, default=2,
-                      label="Number of ZART iterations to perform",
-                      help="In general, the bigger the number the sharper the volume. We recommend "
-                           "to run at least 8 iteration for better results")
-        form.addParam('reg', params.FloatParam, default=1e-4,
-                      label='ART lambda',
-                      help="This parameter determines how fast ZART will converge to the reconstruction. "
-                           "Note that larger values may lead to divergence.")
-        form.addParam('lst', params.FloatParam, default=0.0001,
-                     label="Positive L1 regularization",
-                     help="L1 based penalization on the positive values of the reconstructed volumes. Larger values will "
-                          "have a stronger denoising effect on the reconstructed map.")
-        form.addParam('ll1', params.FloatParam, default=1.0,
-                      label="Negative L1 regularization",
-                      help="L1 based penalization on the negative values of the reconstructed volumes. Larger values "
-                           "will decrease more strongly the presence of negative values on th reconstructed map.")
-        form.addParam('ltv', params.FloatParam, default=0.0001,
-                     label="Total variation regularization",
-                     help="Total variation based regularization on the edges of the reconstructed volumes. Larger "
-                          "values will lead to a more enhance representation of the edges and reduction of noise.")
-        form.addParam('ltk', params.FloatParam, default=0.0001,
-                     label="Tikhonov regularization",
-                     help=" Tikhonov based regularization on the edges of the reconstructed volume. Larger values will "
-                          "lead softer density transitions in the reconstruction")
-        form.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
-                      label="Save partial reconstructions for every ZART iteration?")
-        form.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
-                      label="Remove negative values from reconstructed volume?")
-        form.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
+        # group = form.addGroup("Symmetry")
+        # group.addParam('symmetryGroup', params.StringParam, default="c1",
+        #               label='Symmetry group',
+        #               help='If no symmetry is present, give c1')
+        group = form.addGroup("Reconstruction modes")
+        group.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
                       default=0, display=params.EnumParam.DISPLAY_HLIST,
                       label="Reconstruction mode",
                       help="\t * Reconstruct: usual reconstruction of a single volume using all the images "
@@ -165,8 +144,56 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "computations\n"
                            "\t * Multiresolution: local resolution analysis during reconstruction to determine "
                            "which areas of the map can be improved further with the ZART algorithm")
-        form.addParam('levels', params.IntParam, default=3, condition="mode==2",
+        group.addParam('levels', params.IntParam, default=3, condition="mode==2",
                       label="Number of multiresolution levels")
+
+        form.addSection(label='Optimization')
+        group = form.addGroup("Preparation")
+        group.addParam('niter', params.IntParam, default=2,
+                      label="Number of ZART iterations to perform",
+                      help="In general, the bigger the number the sharper the volume. We recommend "
+                           "to run at least 8 iteration for better results")
+        # group.addParam('sorting', params.EnumParam, choices=["Orthogonal", "Random"], default=0,
+        #                display=params.EnumParam.DISPLAY_HLIST,
+        #                label="How to sort particles?",
+        #                help="Orthogonal: Particles will be sorted in an orthogonal way based on their angular "
+        #                     "information. Sorting the particles orthogonally usually leads to a faster convergence, "
+        #                     "but it might become slow for large datasets."
+        #                     "Random: Particles are randomly sorted. This is very fast compared to orthogonal sorting.")
+        group.addParam('reg', params.FloatParam, default=1e-4,
+                      label='ART lambda',
+                      help="This parameter determines how fast ZART will converge to the reconstruction. "
+                           "Note that larger values may lead to divergence.")
+        group = form.addGroup("Regularizations: Denoising")
+        group.addParam('lst', params.FloatParam, default=0.0001,
+                     label="Positive L1 regularization",
+                     expertLevel=params.LEVEL_ADVANCED,
+                     help="L1 based penalization on the positive values of the reconstructed volumes. Larger values will "
+                          "have a stronger denoising effect on the reconstructed map.")
+        group.addParam('ltv', params.FloatParam, default=0.0001,
+                      label="Total variation regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="Total variation based regularization on the edges of the reconstructed volumes. Larger "
+                           "values will lead to a more enhance representation of the edges and reduction of noise.")
+        group.addParam('ltk', params.FloatParam, default=0.0001,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Tikhonov regularization",
+                      help=" Tikhonov based regularization on the edges of the reconstructed volume. Larger values will "
+                           "lead softer density transitions in the reconstruction")
+        group = form.addGroup("Regularizations: Negative value mitigation")
+        group.addParam('ll1', params.FloatParam, default=0.0001,
+                      label="Negative L1 regularization",
+                      expertLevel=params.LEVEL_ADVANCED,
+                      help="L1 based penalization on the negative values of the reconstructed volumes. Larger values "
+                           "will decrease more strongly the presence of negative values on the reconstructed map.")
+
+        form.addSection(label='Output')
+        group = form.addGroup("Intermediate results")
+        group.addParam('save_pr', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                      label="Save partial reconstructions for every ZART iteration?")
+        group = form.addGroup("Output volume appereance")
+        group.addParam('onlyPositive', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                      label="Remove negative values from reconstructed volume?")
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -361,6 +388,15 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         volume.setSamplingRate(imgSet.getSamplingRate())
         volume_filtered.setSamplingRate(imgSet.getSamplingRate())
 
+        # Filter volume -> Real reconstruction
+        volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
+        volume_data_filtered = filterVol(volume_data, mode="bspline")
+        ImageHandler().write(volume_data_filtered, self._getExtraPath("final_reconstruction_filtered.mrc"))
+
+        # Set correct sampling rate in volume header
+        ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction.mrc"), imgSet.getSamplingRate())
+        ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction_filtered.mrc"), imgSet.getSamplingRate())
+
         if self.mode.get() != 0:
             halves = self.volumeRestoration()
             volume.setHalfMaps(halves)
@@ -370,13 +406,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
             for half, half_file in zip(halves, halves_filtered):
                 volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
                 volume_data_filtered = filterVol(volume_data, mode="bspline")
-                ImageHandler().write(volume_data_filtered, half_file)
+                ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
+                ImageHandler().setSamplingRate(volume_data, imgSet.getSamplingRate())
+                ImageHandler().setSamplingRate(volume_data_filtered, imgSet.getSamplingRate())
             volume.setHalfMaps(halves)
-
-        # Filter volume -> Real reconstruction
-        volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
-        volume_data_filtered = filterVol(volume_data, mode="bspline")
-        ImageHandler().write(volume_data_filtered, self._getExtraPath("final_reconstruction_filtered.mrc"))
 
         self._defineOutputs(outputVolume=volume)
         self._defineOutputs(outputVolumeFiltered=volume_filtered)
@@ -389,7 +422,18 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         return summary message for NORMAL EXECUTION. 
         """
         return []
-    
+
+    def _validate(self):
+        errors = []
+
+        mask = self.recMask.get()
+        if mask:
+            data = ImageHandler(mask).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
+        return errors
+
     #--------------------------- UTILS functions --------------------------------------------
     def defineZARTArgs(self, inputMd, outFile, niter, step, mask):
         params = ' -i %s' % inputMd
@@ -397,6 +441,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params += ' --odir %s' % self._getExtraPath()
         # params += ' --step %d' % step
         params += ' --step 1'
+        # params += ' --sym %s' % self.symmetryGroup.get()
         if "_level_" in outFile:
             reg = self.reg.get()
             level = float(re.findall(r'\d+', outFile)[1]) - 2
@@ -423,12 +468,15 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if mask:
             params += ' --maskf %s --maskb %s' % (mask, mask)
 
-        # GPU parameters
-        onlyPositive = self.onlyPositive.get()
+        # Regularizations
         params += (' --ll1 %f --lst %f --ltv %f --ltk %f'
                    % (self.ll1.get(), self.lst.get(), self.ltv.get(), self.ltk.get()))
-        if onlyPositive:
+
+        if self.onlyPositive.get():
             params += " --onlyPositive"
+
+        # if self.sorting.get() == 1:
+        #     params += " --sort_random"
 
         return params
 

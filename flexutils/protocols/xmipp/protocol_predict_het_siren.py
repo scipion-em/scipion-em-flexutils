@@ -28,6 +28,7 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -164,7 +165,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
@@ -189,6 +190,9 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            args += " --use_hyper_network"
 
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
@@ -221,7 +225,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         trainSize = hetSirenProtocol.trainSize.get()
         disPose = hetSirenProtocol.disPose.get()
         disCTF = hetSirenProtocol.disCTF.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -295,6 +299,7 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().trainSize = Integer(trainSize)
         partSet.getFlexInfo().disPose = Boolean(disPose)
         partSet.getFlexInfo().disCTF = Boolean(disCTF)
+        partSet.getFlexInfo().refPose = Boolean(hetSirenProtocol.refinePose.get())
 
         if hetSirenProtocol.inputVolume.get():
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
@@ -308,6 +313,11 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().architecture = String("convnn")
         elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if hetSirenProtocol.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
@@ -325,6 +335,10 @@ class TensorflowProtPredictHetSiren(ProtAnalysis3D, ProtFlexBase):
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                           inputParticles.getSamplingRate())
 
             outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
