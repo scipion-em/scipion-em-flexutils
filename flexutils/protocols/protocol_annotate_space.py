@@ -441,7 +441,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       cryodrgn.Plugin.getCryoDrgnEnvActivation().split(" ")[-1])
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-            args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow-test" \
+            args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow" \
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
                       particles.getFlexInfo().architecture.get())
@@ -467,7 +467,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 args += " --use_hyper_network 0.0"
 
         elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
-            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow-test" \
+            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow" \
                    % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().architecture.get())
 
@@ -487,7 +487,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 args += " --refine_pose 0"
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
-            args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow-test" \
+            args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
                    % (particles.getFlexInfo().modelPath.get(), particles.getXDim())
 
         elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
