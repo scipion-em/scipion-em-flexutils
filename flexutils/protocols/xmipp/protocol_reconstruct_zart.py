@@ -426,9 +426,9 @@ class XmippProtReconstructZART(ProtReconstruct3D):
     def _validate(self):
         errors = []
 
-        mask = self.recMask.get().getFileName()
+        mask = self.recMask.get()
         if mask:
-            data = ImageHandler(mask).getData()
+            data = ImageHandler(mask.getFileName()).getData()
             if not np.all(np.logical_or(data == 0, data == 1)):
                 errors.append("Mask provided is not binary. Please, provide a binary mask")
 
