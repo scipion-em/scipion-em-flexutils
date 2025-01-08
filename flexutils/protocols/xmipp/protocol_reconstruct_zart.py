@@ -388,6 +388,19 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         volume.setSamplingRate(imgSet.getSamplingRate())
         volume_filtered.setSamplingRate(imgSet.getSamplingRate())
 
+        if self.mode.get() != 0:
+            halves = self.volumeRestoration()
+            volume.setHalfMaps(halves)
+
+            halves_filtered = [f"final_reconstruction_filtered_half_1.mrc", f"final_reconstruction_filtered_half_2.mrc"]
+            for half, half_file in zip(halves, halves_filtered):
+                volume_data = ImageHandler(half).getData()
+                volume_data_filtered = filterVol(volume_data, mode="bspline")
+                ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
+                ImageHandler().setSamplingRate(half, imgSet.getSamplingRate())
+                ImageHandler().setSamplingRate(self._getExtraPath(half_file), imgSet.getSamplingRate())
+            volume.setHalfMaps(halves)
+
         # Filter volume -> Real reconstruction
         volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
         volume_data_filtered = filterVol(volume_data, mode="bspline")
@@ -396,20 +409,6 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         # Set correct sampling rate in volume header
         ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction.mrc"), imgSet.getSamplingRate())
         ImageHandler().setSamplingRate(self._getExtraPath("final_reconstruction_filtered.mrc"), imgSet.getSamplingRate())
-
-        if self.mode.get() != 0:
-            halves = self.volumeRestoration()
-            volume.setHalfMaps(halves)
-
-            halves_filtered = [self._getExtraPath(f"final_reconstruction_filtered_half_1.mrc"),
-                               self._getExtraPath(f"final_reconstruction_filtered_half_2.mrc")]
-            for half, half_file in zip(halves, halves_filtered):
-                volume_data = ImageHandler(self._getExtraPath("final_reconstruction.mrc")).getData()
-                volume_data_filtered = filterVol(volume_data, mode="bspline")
-                ImageHandler().write(volume_data_filtered, self._getExtraPath(half_file))
-                ImageHandler().setSamplingRate(volume_data, imgSet.getSamplingRate())
-                ImageHandler().setSamplingRate(volume_data_filtered, imgSet.getSamplingRate())
-            volume.setHalfMaps(halves)
 
         self._defineOutputs(outputVolume=volume)
         self._defineOutputs(outputVolumeFiltered=volume_filtered)
