@@ -27,6 +27,7 @@
 
 import numpy as np
 import os
+from glob import glob
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Boolean
@@ -97,7 +98,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         data_path = self._getExtraPath("data")
         out_path = self._getExtraPath()
         lat_dim = flexConsensusProtocol.latDim.get()
-        weigths_file = flexConsensusProtocol._getExtraPath(os.path.join('network', 'flex_consensus_model.h5'))
+        weigths_file = glob(flexConsensusProtocol._getExtraPath(os.path.join('network', 'flex_consensus_model*')))[0]
         args = "--data_path %s --out_path %s --weigths_file %s --lat_dim %d" \
                % (data_path, out_path, weigths_file, lat_dim)
 

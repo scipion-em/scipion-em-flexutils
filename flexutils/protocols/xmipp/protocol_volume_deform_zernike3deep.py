@@ -28,6 +28,7 @@
 import numpy as np
 import os
 import re
+import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
@@ -382,7 +383,7 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))
             args += " --weigths_file %s" % modelPath
 
         if self.architecture.get() == 0:
@@ -413,7 +414,7 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('mdFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'zernike3deep_model*')))
         L1 = self.l1.get()
         L2 = self.l2.get()
         correctionFactor = self.inputVolumes.get().getXDim() / self.boxSize.get()
@@ -439,7 +440,7 @@ class TensorflowProtVolumeDeformZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         inputVolumes = self.inputVolumes.get()
         Xdim = inputVolumes.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'zernike3deep_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'zernike3deep_model*')))
         md_file = self._getFileName('mdFn')
 
         metadata = XmippMetaData(md_file)

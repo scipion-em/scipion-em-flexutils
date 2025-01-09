@@ -393,13 +393,13 @@ class TensorflowProtAngularAlignmentDeepPose(ProtAnalysis3D):
             shifts, angles = geometryFromMatrix(tr_ori, inverseTransform)
 
             # Apply delta angles
-            angles[0] += delta_rot[idx]
-            angles[1] += delta_tilt[idx]
-            angles[2] += delta_psi[idx]
+            angles[0] = delta_rot[idx]
+            angles[1] = delta_tilt[idx]
+            angles[2] = delta_psi[idx]
 
             # Apply delta shifts
-            shifts[0] += correctionFactor * delta_shift_x[idx]
-            shifts[1] += correctionFactor * delta_shift_y[idx]
+            shifts[0] = correctionFactor * delta_shift_x[idx]
+            shifts[1] = correctionFactor * delta_shift_y[idx]
 
             # if self.refinePose.get():
             #     # Apply delta angles

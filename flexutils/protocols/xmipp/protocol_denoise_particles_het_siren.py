@@ -28,12 +28,13 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer
+from pyworkflow.object import String, Integer, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 import pyworkflow.utils as pwutils
@@ -149,7 +150,7 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         Xdim = self.inputParticles.get().getXDim()
@@ -175,6 +176,9 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            args += " --use_hyper_network"
 
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
@@ -207,7 +211,7 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = hetSirenProtocol.boxSize.get()
         trainSize = hetSirenProtocol.trainSize.get()
         outSize = hetSirenProtocol.outSize.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -293,6 +297,11 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().architecture = String("convnn")
         elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if hetSirenProtocol.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")

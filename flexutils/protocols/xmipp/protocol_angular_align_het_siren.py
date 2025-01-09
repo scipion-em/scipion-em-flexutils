@@ -28,6 +28,7 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
@@ -136,6 +137,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
                             "* *ConvNN*: convolutional neural network\n"
                             "* *MLPNN*: multiperceptron neural network")
+        group.addParam('useHyperNetwork', params.BooleanParam, default=True, label="Use hyper network?",
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="Determine wether to use hyper network layers or standard layers")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
                        default=1, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
@@ -372,6 +376,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if self.ctfType.get() == 0:
             args += " --ctf_type apply"
         elif self.ctfType.get() == 1:
@@ -394,7 +401,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
             args += " --weigths_file %s" % modelPath
 
         if xla:
@@ -418,7 +425,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         hetDim = self.hetDim.get()
@@ -445,6 +452,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
 
         if self.refinePose.get():
             args += " --refine_pose"
@@ -477,7 +487,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             outSize = inputParticles.getFlexInfo().outSize.get()
         else:
             outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
-        model_path = self._getExtraPath(os.path.join('network', 'het_siren_model.h5'))
+        model_path = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -532,6 +542,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().trainSize = Integer(trainSize)
         partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
         partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
+        partSet.getFlexInfo().refPose = Boolean(self.refinePose.get())
 
         if self.inputVolume.get():
             inputVolume = self.inputVolume.get().getFileName()
@@ -545,6 +556,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().architecture = String("convnn")
         elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if self.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if self.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
@@ -562,6 +578,10 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
+
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                           inputParticles.getSamplingRate())
 
             outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
@@ -623,6 +643,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         boxSize = self.boxSize.get()
         trainSize = self.trainSize.get()
+        mask = self.inputVolumeMask.get()
         if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
             outSize = inputParticles.getFlexInfo().outSize
         else:
@@ -635,6 +656,11 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         if trainSize is not None and trainSize > boxSize:
             errors.append("Train image size must be smaller than or equal to the downsampled box"
                           " size (currently set to %d)" % boxSize)
+
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
 
         return errors
 
