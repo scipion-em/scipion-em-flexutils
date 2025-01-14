@@ -63,7 +63,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         form.addSection(label='Network')
         group = form.addGroup("Network hyperparameters")
         group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
-                       default=0, label="How to compute total epochs?",
+                       default=1, label="How to compute total epochs?",
                        display=params.EnumParam.DISPLAY_HLIST,
                        help="* *Samples*: Epochs will be obtained from the total number of samples "
                             "the network will see\n"
@@ -73,11 +73,11 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
                        label="Samples",
                        help='Maximum number of samples seen during network training')
-        group.addParam('batch_size', params.IntParam, default=64, label='Number of samples in batch',
+        group.addParam('batch_size', params.IntParam, default=1024, label='Number of samples in batch',
                       help="Number of samples that will be used simultaneously for every training step. "
                            "We do not recommend to change this value unless you experience memory errors. "
                            "In this case, value should be decreased.")
-        group.addParam('lr', params.FloatParam, default=1e-3, label='Learning rate',
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
                        help="The learning rate determines how fast the network will train based on the "
                             "seen samples. The larger the value, the faster the network although divergence "
                             "might occur. We recommend decreasing the learning rate value if this happens.")
