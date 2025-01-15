@@ -129,6 +129,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
 
     def trainingStep(self):
         data_path = self._getExtraPath("data")
+        out_path = self._getExtraPath()
         network_path = self._getExtraPath("network")
         if not os.path.isdir(network_path):
             os.mkdir(network_path)
@@ -139,7 +140,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         lat_dim = self.latDim.get()
         args = "--data_path %s --out_path %s --lat_dim %d --batch_size %d " \
                "--shuffle --split_train %f --lr %f" \
-               % (data_path, network_path, lat_dim, batch_size, split_train, lr)
+               % (data_path, out_path, lat_dim, batch_size, split_train, lr)
 
         if self.stopType.get() == 0:
             args += " --max_samples_seen %d" % self.maxSamples.get()
