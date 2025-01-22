@@ -206,7 +206,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                 volume_path = os.path.join(particles.getFlexInfo().getAttr("projectPath"), flexGeneratorJob,
                                            flexGeneratorJob + "_series_000",
                                            flexGeneratorJob + "_series_000_frame_{:03d}.mrc".format(idx))
-                ImageHandler().scaleSplines(volume_path, save_volume_path.format(idx),
+                shutil.copyfile(volume_path, save_volume_path.format(idx))
+                ImageHandler().scaleSplines(save_volume_path.format(idx), save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
 
