@@ -137,7 +137,8 @@ class Plugin(pwplugin.Plugin):
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
             conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
-            branch = "devel" if cls.inDevelMode() else "master"
+            # branch = "devel" if cls.inDevelMode() else "master"
+            branch = "bash_install_improvements"
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             installationCmd += f"{conda_init} conda activate flexutils && "
             installationCmd += f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && '
