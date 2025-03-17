@@ -131,9 +131,14 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         # ****** Generate representative volumes *******
         z_rep = []
         for file in sorted(glob(self._getExtraPath(os.path.join("Intermediate_results", 'saved_selections*')))):
-            with open(file) as f:
-                line = f.readline()
-                z_rep.append(np.fromstring(line, dtype=float, sep=' '))
+            if "_cluster" in file:
+                with open(file) as f:
+                    line = f.readline()
+                    z_rep.append(np.fromstring(line, dtype=float, sep=' '))
+            else:
+                with open(file) as f:
+                    for line in f.readlines():
+                        z_rep.append(np.fromstring(line, dtype=float, sep=' '))
         z_rep = np.stack(z_rep)
         z_rep = z_rep if z_rep.ndim == 2 else z_rep[None, ...]
 
