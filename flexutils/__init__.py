@@ -28,6 +28,8 @@
 
 import os
 
+import re
+
 import importlib
 
 import pyworkflow.plugin as pwplugin
@@ -41,7 +43,7 @@ import flexutils
 from flexutils.constants import CONDA_YML
 
 
-__version__ = "3.3.0"
+__version__ = "3.3.1"
 _logo = "icon.png"
 _references = []
 
@@ -120,24 +122,36 @@ class Plugin(pwplugin.Plugin):
 
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
+            conda_init = cls.getCondaActivationCmd()
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             installationCmd += ' if [ ! -d "Flexutils-Scripts" ]; then git clone -b devel https://github.com/I2PC/Flexutils-Scripts.git; fi && '
             installationCmd += "cd Flexutils-Scripts && git pull && "
-            installationCmd += "bash install.sh && touch flexutils_installed && cd .."
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                installationCmd += f"bash install.sh --condaBin {conda_bin} && touch flexutils_installed && cd .."
+            else:
+                installationCmd += "bash install.sh && touch flexutils_installed && cd .."
             return installationCmd
 
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
             branch = "devel" if cls.inDevelMode() else "master"
             installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
-            installationCmd += f"{conda_init} conda activate flexutils && " \
-                               f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && ' \
-                               f"cd Flexutils-Toolkit && git pull && " \
-                               f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
+            installationCmd += f"{conda_init} conda activate flexutils && "
+            installationCmd += f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && '
+            installationCmd += f"cd Flexutils-Toolkit && git pull && "
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                installationCmd += f"bash install.sh --condaBin {conda_bin} && touch flexutils_tensorflow_installed && cd .."
+            else:
+                installationCmd += f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
             return installationCmd
 
         def getUpdateCommands():
             conda_init = cls.getCondaActivationCmd()
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
             updateCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
             updateCmd += f"{conda_init} conda activate flexutils && "
             updateCmd += "echo '###### Updating scripts.... ######' && "
@@ -150,7 +164,11 @@ class Plugin(pwplugin.Plugin):
             updateCmd += "echo '###### Updating NN binaries.... ######' && "
             updateCmd += "cd Flexutils-Toolkit && "
             updateCmd += "git pull && "
-            updateCmd += "bash install.sh && "
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                updateCmd += f"bash install.sh --condaBin {conda_bin} && "
+            else:
+                updateCmd += "bash install.sh && "
             updateCmd += "cd .. && "
             updateCmd += "echo '###### Binaries updated succesfully! ######' && "
             updateCmd += f"cd flexutils-{__version__} && "

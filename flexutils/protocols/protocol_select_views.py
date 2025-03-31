@@ -27,6 +27,7 @@
 
 import numpy as np
 from xmipp_metadata.image_handler import ImageHandler
+from PIL import Image
 
 from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
@@ -211,11 +212,14 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             combined_corr_image *= corr_image
 
         # Saved combined corr image
-        ih.write(combined_corr_image, self._getExtraPath("combined_corrImage.mrc"))
-
+        data = ih.read(combined_corr_image).getData()
+        data = (data - np.min(data)) / (np.max(data) - np.min(data))
+        data = (data * 255).astype(np.uint8)
+        pil_image = Image.fromarray(data)
+        pil_image.save(self._getExtraPath("combined_corrImage.png"))
 
     def launchIJGUIStep(self):
-        corrImageFile = self._getExtraPath("combined_corrImage.mrc")
+        corrImageFile = self._getExtraPath("combined_corrImage.png")
 
         path = self._getExtraPath()
         launchIJForSelection(path, corrImageFile)

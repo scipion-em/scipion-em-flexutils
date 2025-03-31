@@ -61,10 +61,10 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         form.addParam('mask', params.PointerParam, label="Reference mask", pointerClass='VolumeMask',
                       help="Mask associated to the new reference map")
         form.addParam('L1', params.IntParam, label="Zernike degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=3,
+                      allowsNull=True,
                       help="Zernike polynomial degree for the new focused Zernike3D coefficients")
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=2,
+                      allowsNull=True,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
         form.addParallelSection(threads=4, mpi=0)
 
@@ -84,8 +84,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         newRefMap = self.inputVolume.get()
         newRefMask = self.mask.get().getFileName()
-        L1 = self.L1.get()
-        L2 = self.L2.get()
+        L1 = self.L1.get() if self.L1.get() else prevL1
+        L2 = self.L2.get() if self.L2.get() else prevL2
 
         z_clnm_vec = {}
         # deformation_vec = {}
@@ -109,7 +109,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         writeSetOfImages(particles, imgsFn, zernikeRow)
 
         # Write Zernike3D priors to file
-        file_zclnm_r = self._getExtraPath('z_clnm_r,txt')
+        file_zclnm_r = self._getExtraPath('z_clnm_r.txt')
         with open(file_zclnm_r, 'w') as f:
             f.write(' '.join(map(str, [L1, L2, newRefMap.getFlexInfo().Rmax.get()])) + "\n")
             z_clnm = newRefMap.getZFlex()
