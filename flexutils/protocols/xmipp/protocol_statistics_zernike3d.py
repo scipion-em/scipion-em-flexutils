@@ -26,6 +26,8 @@
 
 
 import os
+import numpy as np
+from xmipp_metadata.metadata import XmippMetaData
 
 import xmipp3
 from pyworkflow import NEW
@@ -37,8 +39,7 @@ from pwem.objects import SetOfParticlesFlex
 import flexutils
 import flexutils.constants as const
 
-import pwem.emlib.metadata as md
-from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow
+from xmipp3.convert import writeSetOfParticles
 
 from flexutils.utils import getXmippFileName
 
@@ -73,28 +74,16 @@ class XmippProtStatisticsZernike3D(ProtAnalysis3D):
 
         L1 = particles.getFlexInfo().L1.get()
         L2 = particles.getFlexInfo().L2.get()
-        z_clnm_vec = {}
-        # def_vec = {}
 
-        for particle in particles.iterItems():
-            z_clnm = particle.getZFlex()
-            z_clnm_vec[particle.getObjId()] = z_clnm.reshape(-1)
-            # def_vec[particle.getObjId()] = particle._xmipp_sphDeformation.get()
-
-        def zernikeRow(part, partRow, **kwargs):
-            imageToRow(part, partRow, md.MDL_IMAGE, **kwargs)
-            coord = part.getCoordinate()
-            idx = part.getObjId()
-            if coord is not None:
-                coordinateToRow(coord, partRow, copyId=False)
-            if part.hasMicId():
-                partRow.setValue(md.MDL_MICROGRAPH_ID, int(part.getMicId()))
-                partRow.setValue(md.MDL_MICROGRAPH, str(part.getMicId()))
-            partRow.setValue(md.MDL_SPH_COEFFICIENTS, z_clnm_vec[idx].tolist())
-            # partRow.setValue(md.MDL_SPH_DEFORMATION, def_vec[idx])
+        z_space = np.asarray([particle.getZFlex() for particle in particles.iterItems()])
 
         if not os.path.isfile(self._getExtraPath("particles.xmd")):
-            writeSetOfImages(particles, self._getExtraPath("particles.xmd"), zernikeRow)
+            writeSetOfParticles(particles, self._getExtraPath("particles.xmd"))
+
+            # Write extra attributes (if needed)
+            md = XmippMetaData(self._getExtraPath("particles.xmd"))
+            md[:, "zernikeCoefficients"] = np.asarray([",".join(item) for item in z_space.astype(str)])
+            md.write(self._getExtraPath("particles.xmd"), overwrite=True)
 
         # Run viewer
         args = "--i %s --r %s --L1 %d --L2 %d --sr %f --thr %d" \

@@ -59,10 +59,10 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
         form.addParam('refmask', params.PointerParam, label="Heterogeneity mask", pointerClass='VolumeMask',
                       help="Mask determining which regions of the molecule will be allowed to move")
         form.addParam('L1', params.IntParam, label="Zernike degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=7,
+                      allowsNull=True,
                       help="Zernike polynomial degree for the new focused Zernike3D coefficients")
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=7,
+                      allowsNull=True,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
         form.addParallelSection(threads=4, mpi=0)
 
@@ -81,8 +81,8 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
         Rmax = particles.getFlexInfo().Rmax.get()
 
         roiMask = self.refmask.get().getFileName()
-        L1 = self.L1.get()
-        L2 = self.L2.get()
+        L1 = self.L1.get() if self.L1.get() else prevL1
+        L2 = self.L2.get() if self.L2.get() else prevL2
 
         z_clnm_vec = {}
         # deformation_vec = {}

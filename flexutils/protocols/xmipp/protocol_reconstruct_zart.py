@@ -130,10 +130,10 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                            "to reduce motion blurred artifacts and increase resolution. Note that this "
                            "option requires that the particles have a set of Zernike3D coefficients associated. "
                            "Otherwise, the parameter should be set to 'No'")
-        # group = form.addGroup("Symmetry")
-        # group.addParam('symmetryGroup', params.StringParam, default="c1",
-        #               label='Symmetry group',
-        #               help='If no symmetry is present, give c1')
+        group = form.addGroup("Symmetry")
+        group.addParam('symmetryGroup', params.StringParam, default="c1",
+                      label='Symmetry group',
+                      help='If no symmetry is present, give c1')
         group = form.addGroup("Reconstruction modes")
         group.addParam('mode', params.EnumParam, choices=['Reconstruct', 'Gold standard', 'Multiresolution'],
                       default=0, display=params.EnumParam.DISPLAY_HLIST,
@@ -153,13 +153,13 @@ class XmippProtReconstructZART(ProtReconstruct3D):
                       label="Number of ZART iterations to perform",
                       help="In general, the bigger the number the sharper the volume. We recommend "
                            "to run at least 8 iteration for better results")
-        # group.addParam('sorting', params.EnumParam, choices=["Orthogonal", "Random"], default=0,
-        #                display=params.EnumParam.DISPLAY_HLIST,
-        #                label="How to sort particles?",
-        #                help="Orthogonal: Particles will be sorted in an orthogonal way based on their angular "
-        #                     "information. Sorting the particles orthogonally usually leads to a faster convergence, "
-        #                     "but it might become slow for large datasets."
-        #                     "Random: Particles are randomly sorted. This is very fast compared to orthogonal sorting.")
+        group.addParam('sorting', params.EnumParam, choices=["Orthogonal", "Random"], default=0,
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label="How to sort particles?",
+                       help="Orthogonal: Particles will be sorted in an orthogonal way based on their angular "
+                            "information. Sorting the particles orthogonally usually leads to a faster convergence, "
+                            "but it might become slow for large datasets."
+                            "Random: Particles are randomly sorted. This is very fast compared to orthogonal sorting.")
         group.addParam('reg', params.FloatParam, default=1e-4,
                       label='ART lambda',
                       help="This parameter determines how fast ZART will converge to the reconstruction. "
@@ -440,7 +440,7 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         params += ' --odir %s' % self._getExtraPath()
         # params += ' --step %d' % step
         params += ' --step 1'
-        # params += ' --sym %s' % self.symmetryGroup.get()
+        params += ' --sym %s' % self.symmetryGroup.get()
         if "_level_" in outFile:
             reg = self.reg.get()
             level = float(re.findall(r'\d+', outFile)[1]) - 2
@@ -474,8 +474,8 @@ class XmippProtReconstructZART(ProtReconstruct3D):
         if self.onlyPositive.get():
             params += " --onlyPositive"
 
-        # if self.sorting.get() == 1:
-        #     params += " --sort_random"
+        if self.sorting.get() == 1:
+            params += " --sort_random"
 
         return params
 
