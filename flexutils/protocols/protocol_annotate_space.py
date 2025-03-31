@@ -58,6 +58,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
     _label = 'annotate space'
     _devStatus = NEW
+    OUTPUT_PREFIX = 'flexible3DClasses'
     OUTPUT_PREFIX_CLASSES = 'flexible3DClasses'
     OUTPUT_PREFIX_VOLUMES = 'flexible3DVolumes'
 
