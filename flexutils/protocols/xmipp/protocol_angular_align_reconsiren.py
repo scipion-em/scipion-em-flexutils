@@ -88,6 +88,8 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                             'original size images')
         group.addParam("refinement", params.BooleanParam, default=False, label="Refine current alignment?",
                        condition="inputParticles and inputParticles.hasAlignment()")
+        group.addParam("refineMap", params.BooleanParam, default=False, label="Refine provided volume?",
+                       condition="inputVolume and refinement")
         group.addParam("useHet", params.BooleanParam, default=False, label="Consider heterogeneity?")
         group = form.addGroup("Symmetry")
         group.addParam('symmetry', params.StringParam, default="c1", label='Symmetry group',
@@ -294,10 +296,12 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                 md.write(self._getExtraPath('scaled_particles.xmd'), overwrite=True)
 
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
+        elif self.considerCTF.get():
+            moveFile(self._getTmpPath('corrected_particles.xmd'), imgsFn)
 
         # Removing Xmipp Phantom config file
-        if self.considerCTF.get():
-            self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
+        # if self.considerCTF.get():
+        #     self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
 
         # Symmetry
         SL = xmippLib.SymList()
@@ -332,7 +336,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
                % (md_file, out_path, batch_size, split_train, nCandidates, sr,
                   l1Reg, tvReg, mseReg, udLambda, unLambda)
 
-        if self.inputVolume.get() and not self.refinement.get():
+        if self.inputVolume.get() and not self.refineMap.get():
             args += "--only_pose "
 
         if self.stopType.get() == 0:
@@ -393,7 +397,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
         args = "--md_file %s --weigths_file %s --pad 2 --n_candidates %d --sr %f " \
                % (md_file, weigths_file, nCandidates, sr)
 
-        if self.inputVolume.get() and not self.refinement.get():
+        if self.inputVolume.get() and not self.refineMap.get():
             args += "--only_pose "
 
         # if self.ctfType.get() == 0:
@@ -452,7 +456,7 @@ class TensorflowProtAngularAlignmentReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-            shifts, angles = np.asarray([0, 0, 0]), np.asarray([0, 0, 0])
+            shifts, angles = np.asarray([0., 0., 0.]), np.asarray([0., 0., 0.])
 
             # Apply delta angles
             angles[0] = rot[idx]

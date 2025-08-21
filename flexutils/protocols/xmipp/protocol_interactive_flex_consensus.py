@@ -72,6 +72,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
     def _insertAllSteps(self):
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.predictStep)
+        self._insertFunctionStep(self.saveConsensusSpace)
 
     # --------------------------- STEPS functions ---------------------------------------------------
     def convertInputStep(self):
@@ -97,7 +98,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         flexConsensusProtocol = self.flexConsensusProtocol.get()
         data_path = self._getExtraPath("data")
         out_path = self._getExtraPath()
-        lat_dim = flexConsensusProtocol.latDim.get()
+        lat_dim = flexConsensusProtocol.latDim.get() if flexConsensusProtocol.setManual.get() else self.autoDetectDimensionality()
         weigths_file = glob(flexConsensusProtocol._getExtraPath(os.path.join('network', 'flex_consensus_model*')))[0]
         args = "--data_path %s --out_path %s --weigths_file %s --lat_dim %d" \
                % (data_path, out_path, weigths_file, lat_dim)
@@ -109,9 +110,38 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         program = flexutils.Plugin.getTensorflowProgram("predict_flex_consensus.py", python=False)
         self.runJob(program, args, numberOfMpi=1)
 
+    def saveConsensusSpace(self):
+        inputSet = self.inputSet.get()
+        consensus_latents = np.load(self._getExtraPath("consensus_latents.npy"))
+
+        suffix = getOutputSuffix(self, SetOfParticlesFlex)
+        partSet = self._createSetOfParticlesFlex(suffix, progName=inputSet.getFlexInfo().getProgName())
+
+        partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
+        partSet.setAlignmentProj()
+
+        idx = 0
+        for particle in inputSet.iterItems():
+            outParticle = ParticleFlex(progName=inputSet.getFlexInfo().getProgName())
+            outParticle.copyInfo(particle)
+            outParticle.setZRed(consensus_latents[idx])
+
+            partSet.append(outParticle)
+
+            idx += 1
+
+        # Save new output
+        name = self.OUTPUT_PREFIX + suffix
+        args = {}
+        args[name] = partSet
+        self._defineOutputs(**args)
+        self._defineSourceRelation(self.inputSet, partSet)
+
     def _createOutput(self):
         inputSet = self.inputSet.get()
         selected_idx = np.loadtxt(self._getExtraPath("selected_idx.txt"))
+        consensus_latents = np.load(self._getExtraPath("consensus_latents.npy"))
 
         suffix = getOutputSuffix(self, SetOfParticlesFlex)
         partSet = self._createSetOfParticlesFlex(suffix, progName=inputSet.getFlexInfo().getProgName())
@@ -125,6 +155,7 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
             if idx in selected_idx:
                 outParticle = ParticleFlex(progName=inputSet.getFlexInfo().getProgName())
                 outParticle.copyInfo(particle)
+                outParticle.setZRed(consensus_latents[idx])
 
                 partSet.append(outParticle)
 
@@ -138,6 +169,12 @@ class TensorflowProtInteractiveFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         self._defineSourceRelation(self.inputSet, partSet)
 
     # --------------------------- UTILS functions --------------------------------------------
+    def autoDetectDimensionality(self):
+        data_path = self._getExtraPath("data")
+        d = np.inf
+        for file in glob(os.path.join(data_path, "*.txt")):
+            d = min(d, np.loadtxt(file).shape[1])
+        return d
 
     # ----------------------- VALIDATE functions ----------------------------------------
     def validate(self):
