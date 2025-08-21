@@ -39,7 +39,7 @@ class XmippFlexConsensusView(ProtocolViewer):
     _label = 'viewer FlexConsensus'
     _targets = [TensorflowProtInteractiveFlexConsensus]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
-    _choices = ["Mean matched", "Entropy matched"]
+    _choices = ["Consensus error", "Representation error"]
 
     def __init__(self, **kwargs):
         ProtocolViewer.__init__(self, **kwargs)
@@ -49,10 +49,9 @@ class XmippFlexConsensusView(ProtocolViewer):
         form.addParam('histChoice', params.EnumParam,
                       choices=self._choices, default=0,
                       label='Error histogram to display', display=params.EnumParam.DISPLAY_COMBO,
-                      help="\t Mean matched: Error distribution matched to the lowest error distribution " \
-                           "found by FlexConsensus\n" \
-                           "\t Entropy matched: Error distribution matched to the distribution with highest " \
-                           "entropy found by FlexConsensus")
+                      help="\t Consensus error: Error distribution computed directly in FlexConsensus space\n" \
+                           "\t Representation error: Error distribution computed when decoding FlexConsensus space "
+                           "towards the input spaces")
         form.addParam('doShowHist', params.LabelParam,
                       label="Display the selected histogram in interactive mode")
 
@@ -64,9 +63,9 @@ class XmippFlexConsensusView(ProtocolViewer):
     def _doShowHist(self, param=None):
         # Load data
         if self.chosen == self._choices[0]:
-            data = np.loadtxt(self.protocol._getExtraPath("error_matched_mean.txt"))
+            data = np.load(self.protocol._getExtraPath("consensus_error.npy"))
         elif self.chosen == self._choices[1]:
-            data = np.loadtxt(self.protocol._getExtraPath("error_matched_entropy.txt"))
+            data = np.load(self.protocol._getExtraPath("representation_error.npy"))
 
         # Interactive histogram
         hist = InteractiveHist(data, self.protocol)

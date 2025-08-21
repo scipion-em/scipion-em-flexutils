@@ -27,6 +27,7 @@
 
 import numpy as np
 import os
+import glob
 
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import makePath
@@ -57,8 +58,12 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         group.addParam('inputSets', params.MultiPointerParam,
                        label="Input particles", pointerClass='SetOfParticlesFlex')
         group = form.addGroup("Latent Space")
-        group.addParam('latDim', params.IntParam, default=10, label='Latent space dimension',
+        group.addParam('setManual', params.BooleanParam, default=False, label='Set manually latent space dimension?',
                        expertLevel=params.LEVEL_ADVANCED,
+                       help="If set to No, consensus space dimensions will be set automatically to the minimum dimension "
+                            "of all the input spaces.")
+        group.addParam('latDim', params.IntParam, default=10, label='Latent space dimension',
+                       expertLevel=params.LEVEL_ADVANCED, condition="setManual",
                        help="Dimension of the FlexConsensus bottleneck (latent space dimension)")
         form.addSection(label='Network')
         group = form.addGroup("Network hyperparameters")
@@ -137,7 +142,7 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         split_train = self.split_train.get()
         lr = self.lr.get()
         tensorboard = self.tensorboard.get()
-        lat_dim = self.latDim.get()
+        lat_dim = self.latDim.get() if self.setManual.get() else self.autoDetectDimensionality()
         args = "--data_path %s --out_path %s --lat_dim %d --batch_size %d " \
                "--shuffle --split_train %f --lr %f" \
                % (data_path, out_path, lat_dim, batch_size, split_train, lr)
@@ -164,6 +169,13 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         self.runJob(program, args, numberOfMpi=1)
 
     # --------------------------- UTILS functions --------------------------------------------
+    def autoDetectDimensionality(self):
+        data_path = self._getExtraPath("data")
+        d = np.inf
+        for file in glob.glob(os.path.join(data_path, "*.txt")):
+            d = min(d, np.loadtxt(file).shape[1])
+        return d
+
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
