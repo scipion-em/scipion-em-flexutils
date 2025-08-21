@@ -46,6 +46,7 @@ from pwem.objects import Volume, SetOfAverages, Transform, Class3D
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
+import xmippLib
 
 import flexutils
 from flexutils.utils import getXmippFileName
@@ -88,7 +89,8 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             'imgsFn': self._getExtraPath('input_particles.xmd'),
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
-            'fnOutDir': self._getExtraPath()
+            'fnOutDir': self._getExtraPath(),
+            'fnSymMatrices': self._getExtraPath("sym_matrices.npy")
         }
         self._updateFilenamesDict(myDict)
 
@@ -116,8 +118,15 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             ih.convert(getXmippFileName(inputVolume), fnVol)
             curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
             if curr_vol_dim != self.newXdim:
+                sr_vol = reconSirenProtocol.inputVolume.get().getSamplingRate()
+                freq = sr_vol / (2. * (Xdim / self.newXdim) * sr_vol)
+                params = "-i %s --fourier low_pass %f" % \
+                         (fnVol, freq)
+                self.runJob("xmipp_transform_filter", params, numberOfMpi=self.numberOfMpi.get(),
+                            env=xmipp3.Plugin.getEnviron())
+
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --fourier %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if reconSirenProtocol.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
@@ -132,31 +141,57 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         else:
             ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
 
-        writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_NONE)
+        if reconSirenProtocol.refinement.get():
+            writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_PROJ)
+        else:
+            writeSetOfParticles(inputParticles, imgsFn, alignType=ALIGN_NONE)
 
+        sr = inputParticles.getSamplingRate()
         if reconSirenProtocol.considerCTF.get():
             # Wiener filter
-            sr = inputParticles.getSamplingRate()
-            corrected_stk = self._getTmpPath('corrected_particles.mrcs')
-            args = "-i %s -o %s --save_metadata_stack --keep_input_columns --sampling_rate %f --wc -1.0" \
-                   % (imgsFn, corrected_stk, sr)
+            corrected_stk = self._getTmpPath('corrected_particles.xmd')
+            args = "-i %s -o %s --save_metadata_stack %s --keep_input_columns --sampling_rate %f --wc -1.0" \
+                   % (imgsFn, self._getTmpPath('corrected_particles.mrcs'), corrected_stk, sr)
             program = 'xmipp_ctf_correct_wiener2d'
             self.runJob(program, args, numberOfMpi=self.numberOfThreads.get(), env=xmipp3.Plugin.getEnviron())
+        else:
+            corrected_stk = imgsFn
 
         if self.newXdim != Xdim:
-            params = "-i %s -o %s --save_metadata_stack %s --keep_input_columns --fourier %d" % \
-                     (self._getTmpPath('corrected_particles.xmd'),
+            freq = sr / (2. * (Xdim / self.newXdim) * sr)
+            params = "-i %s -o %s --save_metadata_stack %s --keep_input_columns --fourier low_pass %f" % \
+                     (corrected_stk,
                       self._getTmpPath('scaled_particles.mrcs'),
                       self._getExtraPath('scaled_particles.xmd'),
+                      freq)
+            self.runJob("xmipp_transform_filter", params, numberOfMpi=self.numberOfMpi.get(),
+                        env=xmipp3.Plugin.getEnviron())
+
+            params = "-i %s --fourier %d" % \
+                     (self._getTmpPath('scaled_particles.mrcs'),
                       self.newXdim)
             if self.numberOfMpi.get() > 1:
                 params += " --mpi_job_size %d" % int(inputParticles.getSize() / self.numberOfMpi.get())
             self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
                         env=xmipp3.Plugin.getEnviron())
-            moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
 
-        # Removing Xmipp Phantom config file
-        self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
+            # Update shifts based on new scale
+            if reconSirenProtocol.refinement.get():
+                md = XmippMetaData(self._getExtraPath('scaled_particles.xmd'))
+                md[:, ["shiftX", "shiftY"]] *= (self.newXdim / Xdim)
+                md.write(self._getExtraPath('scaled_particles.xmd'), overwrite=True)
+
+            moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
+        elif reconSirenProtocol.considerCTF.get():
+            moveFile(self._getTmpPath('corrected_particles.xmd'), imgsFn)
+
+        # # Removing Xmipp Phantom config file
+        # self.runJob('rm', self._getTmpPath('corrected_particles.mrcs'))
+
+        # Symmetry
+        SL = xmippLib.SymList()
+        listSymmetryMatrices = np.asarray(SL.getSymmetryMatrices(reconSirenProtocol.symmetry.get()))
+        np.save(self._getFileName("fnSymMatrices"), listSymmetryMatrices)
 
     def predictStep(self):
         inputParticles = self.inputParticles.get()
@@ -171,10 +206,10 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         onlyPos = reconSirenProtocol.onlyPos.get() if not isinstance(inputParticles, SetOfAverages) else True
         nCandidates = reconSirenProtocol.nCandidates.get()
         args = "--md_file %s --weigths_file %s --pad 2 " \
-               "--sr %f --apply_ctf 0 --n_candidates %d" \
+               "--sr %f --n_candidates %d" \
                % (md_file, weigths_file, sr, nCandidates)
 
-        if reconSirenProtocol.inputVolume.get() and not reconSirenProtocol.refinement.get():
+        if reconSirenProtocol.inputVolume.get() and not reconSirenProtocol.refineMap.get():
             args += " --only_pose"
 
         if onlyPos:
@@ -218,7 +253,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
         shift_x = metadata[:, 'shiftX']
         shift_y = metadata[:, 'shiftY']
         loss_cons = metadata[:, "reproj_cons_error"]
-        if self.useHet.get():
+        if reconSirenProtocol.useHet.get():
             loss_het = metadata[:, "reproj_het_error"]
 
         inputSet = self.inputParticles.get()
@@ -234,7 +269,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
 
         idx = 0
         for particle in inputSet.iterItems():
-            shifts, angles = np.asarray([0, 0, 0]), np.asarray([0, 0, 0])
+            shifts, angles = np.asarray([0., 0., 0.]), np.asarray([0., 0., 0.])
 
             # Apply delta angles
             angles[0] = rot[idx]
@@ -252,7 +287,7 @@ class TensorflowProtPredictReconSiren(ProtAnalysis3D):
             particle.setTransform(tr)
 
             particle.reproj_cons_error = Float(loss_cons[idx])
-            if self.useHet.get():
+            if reconSirenProtocol.useHet.get():
                 particle.reproj_het_error = Float(loss_het[idx])
                 particle.class_agreement = Float(np.abs(loss_het[idx] - loss_cons[idx]) / loss_cons[idx])
 
