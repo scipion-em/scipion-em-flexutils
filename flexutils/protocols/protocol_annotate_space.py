@@ -75,16 +75,16 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                        help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Particles to annotate",
                       pointerClass='SetOfParticlesFlex', important=True,
-                      help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
+                      help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn, Opus-DSD...")
         form.addParam('priors', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumesFlex, VolumeFlex",
                       condition="particles and particles.getFlexInfo().getProgName() == 'Zernike3D'",
                       help='Volumes with Zernike3D coefficients associated (computed using '
-                           '"Refernce map" as reference) to add as prior information to the Zernike3D '
+                           '"Reference map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('boxSize', IntParam, label="Box size",
-                      condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN'",
-                      help="Volumes generated from the CryoDrgn network will be resampled to the "
+                      condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN' or 'Opus-DSD'",
+                      help="Volumes generated from the CryoDrgn/Opus-DSD network will be resampled to the "
                            "chosen box size (only for the visualization).")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
@@ -155,6 +155,19 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                             downsample=self.boxSize.get(), apix=particles.getSamplingRate())
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:03d}.mrc'.format(idx))),
+                                            save_volume_path.format(idx),
+                                            finalDimension=particles.getXDim(), overwrite=True)
+                representatives_paths.append(save_volume_path.format(idx))
+
+        elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
+            from opusdsd.utils import generateVolumes
+            representatives_paths = []
+            generateVolumes(z_rep, particles.getFlexInfo()._opusdsdWeights.get(),
+                            particles.getFlexInfo()._opusdsdConfig.get(), self._getExtraPath("Intermediate_results"),
+                            particles.getSamplingRate(), self.boxSize.get(), particles.getFlexInfo()._opusdsdDownFrac.get(),
+                            particles.getFlexInfo()._opusdsdZDim.get())
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:d}.mrc'.format(idx))),
                                             save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
                 representatives_paths.append(save_volume_path.format(idx))
@@ -273,6 +286,9 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                         representative.setLocation(representatives_paths[clInx - 1])
 
                     elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
                         representative.setLocation(representatives_paths[clInx - 1])
 
                     elif particles.getFlexInfo().getProgName() == const.HETSIREN:
@@ -447,6 +463,14 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                       particles.getFlexInfo()._cryodrgnConfig.get(), self.boxSize.get(),
                       cryodrgn.Plugin.getCryoDrgnEnvActivation().split(" ")[-1])
 
+        elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
+            import opusdsd
+            args += "--weights %s --config %s --boxsize %d --mode Opus-DSD --env_name %s --zDim %s --downFrac %s" \
+                   % (particles.getFlexInfo()._opusdsdWeights.get(),
+                      particles.getFlexInfo()._opusdsdConfig.get(), self.boxSize.get(),
+                      opusdsd.Plugin.getOpusDsdEnvActivation().split(" ")[-1],
+                      particles.getFlexInfo()._opusdsdZDim.get(), particles.getFlexInfo()._opusdsdDownFrac.get())
+
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
             args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow" \
                    % (particles.getFlexInfo().modelPath.get(),
@@ -566,10 +590,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                           "(Advanced parameter)")
 
         # Check CryoDRGN boxsize parameter is set as it is mandatory
-        if particles.getFlexInfo().getProgName() == 'CryoDRGN':
+        if particles.getFlexInfo().getProgName() == 'CryoDRGN' or particles.getFlexInfo().getProgName() == 'Opus-DSD':
             if self.boxSize.get() is None:
                 errors.append("Boxsize parameter needs to be set to an integer value smaller than or equal "
-                              "to the boxsize used internally to train the CryoDRGN network")
+                              "to the boxsize used internally to train the CryoDRGN/Opus-DSD network")
             elif self.boxSize.get() % 2 != 0:
                 errors.append("Boxsize parameter needs to be an even value")
 
