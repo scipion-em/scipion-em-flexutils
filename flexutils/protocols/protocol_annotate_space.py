@@ -164,7 +164,8 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             representatives_paths = []
             generateVolumes(z_rep, particles.getFlexInfo()._opusdsdWeights.get(),
                             particles.getFlexInfo()._opusdsdConfig.get(), self._getExtraPath("Intermediate_results"),
-                            particles.getSamplingRate(), self.boxSize.get(), particles.getFlexInfo()._opusdsdDownFrac.get(),
+                            particles.getSamplingRate(), self.boxSize.get(), particles.getFlexInfo()._opusdsdCropVolSize.get(),
+                            particles.getFlexInfo()._opusdsdWindowR.get(), particles.getFlexInfo()._opusdsdDownFrac.get(),
                             particles.getFlexInfo()._opusdsdZDim.get())
             for idx in range(z_rep.shape[0]):
                 ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:d}.mrc'.format(idx))),
@@ -465,10 +466,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
             import opusdsd
-            args += "--weights %s --config %s --boxsize %d --mode Opus-DSD --env_name %s --zDim %s --downFrac %s" \
+            args += ("--weights %s --config %s --boxsize %d --mode Opus-DSD --env_name %s --crop_vol_size %d --wr %f "
+                     "--zDim %d --downFrac %f ") \
                    % (particles.getFlexInfo()._opusdsdWeights.get(),
                       particles.getFlexInfo()._opusdsdConfig.get(), self.boxSize.get(),
                       opusdsd.Plugin.getOpusDsdEnvActivation().split(" ")[-1],
+                      particles.getFlexInfo()._opusdsdCropVolSize.get(),
+                      particles.getFlexInfo()._opusdsdWindowR.get(),
                       particles.getFlexInfo()._opusdsdZDim.get(), particles.getFlexInfo()._opusdsdDownFrac.get())
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
