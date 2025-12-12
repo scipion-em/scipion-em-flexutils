@@ -42,6 +42,7 @@ from scipion.utils import getScipionHome
 import flexutils
 from flexutils.constants import CONDA_YML
 
+from pyworkflow import FLEXIBILITY
 
 __version__ = "3.4.0"
 _logo = "icon.png"
@@ -49,6 +50,7 @@ _references = []
 
 
 class Plugin(pwplugin.Plugin):
+    _processingField = [FLEXIBILITY]
 
     @classmethod
     def getEnvActivation(cls):
