@@ -40,7 +40,10 @@ PRODY_SCRIPTS = os.path.join(os.path.dirname(flexutils.__file__), "protocols", "
 
 # Program labels
 ZERNIKE3D = "Zernike3D"
+FLEXSIREN = "FlexSIREN"
 HETSIREN = "HetSIREN"
 NMA = "NMA"
 CRYODRGN = "CryoDRGN"
 PRODY = "ProDy"
+CRYOSPARCFLEX = "cryoSPARC"
+OPUSDSD = "Opus-DSD"

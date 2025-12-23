@@ -38,15 +38,13 @@ from pyworkflow import VERSION_2_0
 from pyworkflow.utils import removeExt, moveFile, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 
-from pwem.protocols import ProtAnalysis3D
-from pwem.objects import SetOfVolumes, Volume
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import SetOfVolumes, Volume, VolumeFlex
 
 import xmipp3
 
 import flexutils.constants as const
 from flexutils.utils import readZernikeFile, getXmippFileName
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import VolumeFlex
 import flexutils
 
 
@@ -120,7 +118,7 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase)
         for input_file in input_files:
             output_file = self._getExtraPath(removeBaseExt(input_file) + "_aligned.mrc")
             args = "--i %s --r %s --o %s" % (input_file, reference_file, output_file)
-            program = os.path.join(const.XMIPP_SCRIPTS, "align_maps.py")
+            program = "align_maps.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args, numberOfMpi=1)
 
@@ -155,7 +153,7 @@ class XmippProtComputeHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase)
             output_file = self._getExtraPath("deformed_%d.mrc" % (idf + 1))
             args = "--i %s --r %s --o %s --l1 %d --l2 %d" \
                    % (reference_file, input_file, output_file, L1, L2)
-            program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_map.py")
+            program = "find_z_clnm_map.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args, numberOfMpi=1)
 

@@ -27,15 +27,15 @@
 
 import numpy as np
 import os
+import glob
 
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import makePath
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
 
 
 class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
@@ -58,18 +58,48 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
         group.addParam('inputSets', params.MultiPointerParam,
                        label="Input particles", pointerClass='SetOfParticlesFlex')
         group = form.addGroup("Latent Space")
-        group.addParam('latDim', params.IntParam, default=10, label='Latent space dimension',
+        group.addParam('setManual', params.BooleanParam, default=False, label='Set manually latent space dimension?',
                        expertLevel=params.LEVEL_ADVANCED,
+                       help="If set to No, consensus space dimensions will be set automatically to the minimum dimension "
+                            "of all the input spaces.")
+        group.addParam('latDim', params.IntParam, default=10, label='Latent space dimension',
+                       expertLevel=params.LEVEL_ADVANCED, condition="setManual",
                        help="Dimension of the FlexConsensus bottleneck (latent space dimension)")
         form.addSection(label='Network')
-        form.addParam('epochs', params.IntParam, default=100, label='Number of training epochs')
-        form.addParam('batch_size', params.IntParam, default=64, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=1, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=100, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
+        group.addParam('batch_size', params.IntParam, default=1024, label='Number of samples in batch',
+                      help="Number of samples that will be used simultaneously for every training step. "
                            "We do not recommend to change this value unless you experience memory errors. "
                            "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervise the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
                       help="This value (between 0 and 1) determines the fraction of images that will "
                            "be used to train the network.")
+        group = form.addGroup("Logger")
+        group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
+                       help="If you experience any error during the training execution, we recommend setting "
+                            "this parameter to True followed by a restart of this protocol to generate a more "
+                            "informative logging file.")
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
@@ -105,22 +135,47 @@ class TensorflowProtTrainFlexConsensus(ProtAnalysis3D, ProtFlexBase):
     def trainingStep(self):
         data_path = self._getExtraPath("data")
         out_path = self._getExtraPath()
+        network_path = self._getExtraPath("network")
+        if not os.path.isdir(network_path):
+            os.mkdir(network_path)
         batch_size = self.batch_size.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
-        lat_dim = self.latDim.get()
+        lr = self.lr.get()
+        tensorboard = self.tensorboard.get()
+        lat_dim = self.latDim.get() if self.setManual.get() else self.autoDetectDimensionality()
         args = "--data_path %s --out_path %s --lat_dim %d --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d" \
-               % (data_path, out_path, lat_dim, batch_size, split_train, epochs)
+               "--shuffle --split_train %f --lr %f" \
+               % (data_path, out_path, lat_dim, batch_size, split_train, lr)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = flexutils.Plugin.getTensorflowProgram("train_flex_consensus.py", python=False)
+        if self.debugMode.get():
+            log_level = 0
+        else:
+            log_level = 2
+
+        program = flexutils.Plugin.getTensorflowProgram("train_flex_consensus.py", python=False,
+                                                        log_level=log_level)
         self.runJob(program, args, numberOfMpi=1)
 
     # --------------------------- UTILS functions --------------------------------------------
+    def autoDetectDimensionality(self):
+        data_path = self._getExtraPath("data")
+        d = np.inf
+        for file in glob.glob(os.path.join(data_path, "*.txt")):
+            d = min(d, np.loadtxt(file).shape[1])
+        return d
+
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):

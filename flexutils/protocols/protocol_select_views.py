@@ -27,10 +27,12 @@
 
 import numpy as np
 from xmipp_metadata.image_handler import ImageHandler
+from PIL import Image
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
 import pyworkflow.utils as pwutils
+from pyworkflow.object import Boolean
 
 from pwem.viewers.showj import *
 from pwem.protocols import ProtAnalysis3D
@@ -50,7 +52,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
      a SetOfParticles """
 
     _label = 'select views'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'selectedParticles'
 
     # --------------------------- DEFINE param functions ----------------------
@@ -96,7 +98,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         # Define polygons based on selected borders
         polygons_file = self._getExtraPath("polygons.dat")
         args = "--input %s --angs %f --output %s" % (outFile, self.newAngSampling, polygons_file)
-        program = os.path.join(const.XMIPP_SCRIPTS, "polygon_from_vertexes.py")
+        program = "polygon_from_vertexes.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -104,6 +106,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         suffix = getOutputSuffix(self, SetOfParticles)
         output_particles = self._createSetOfParticles(suffix)
         output_particles.copyInfo(particles)
+        output_particles.setHasCTF(particles.hasCTF())
 
         # Loop particles and determine if the lie within the polygon delimited areas
         points_file = self._getExtraPath("point.txt")
@@ -120,7 +123,7 @@ class ProtFlexSelectViews(ProtAnalysis3D):
         np.savetxt(points_file, np.asarray(angles_vec))
 
         args = "--input %s --polygons %s --output %s" % (points_file, polygons_file, decision_file)
-        program = os.path.join(const.XMIPP_SCRIPTS, "check_inside_roi.py")
+        program = "check_inside_roi.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -209,11 +212,14 @@ class ProtFlexSelectViews(ProtAnalysis3D):
             combined_corr_image *= corr_image
 
         # Saved combined corr image
-        ih.write(combined_corr_image, self._getExtraPath("combined_corrImage.mrc"))
-
+        data = ih.read(combined_corr_image).getData()
+        data = (data - np.min(data)) / (np.max(data) - np.min(data))
+        data = (data * 255).astype(np.uint8)
+        pil_image = Image.fromarray(data)
+        pil_image.save(self._getExtraPath("combined_corrImage.png"))
 
     def launchIJGUIStep(self):
-        corrImageFile = self._getExtraPath("combined_corrImage.mrc")
+        corrImageFile = self._getExtraPath("combined_corrImage.png")
 
         path = self._getExtraPath()
         launchIJForSelection(path, corrImageFile)

@@ -26,23 +26,28 @@
 
 
 import os
+import re
+import shutil
+
 import numpy as np
+from glob import glob
 from sklearn.neighbors import KDTree
 from xmipp_metadata.image_handler import ImageHandler
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam, EnumParam
+from pyworkflow.protocol.params import (PointerParam, IntParam, MultiPointerParam, BooleanParam, StringParam,
+                                        USE_GPU, GPU_LIST)
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.object import Boolean, Integer
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import SetOfVolumesFlex, VolumeFlex
 
 import flexutils
 from flexutils.utils import getOutputSuffix, computeNormRows
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import SetOfVolumesFlex, VolumeFlex
 import flexutils.constants as const
 
 import xmipp3
@@ -52,34 +57,38 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     """ Interactive annotation of conformational spaces """
 
     _label = 'annotate space'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'flexible3DClasses'
+    OUTPUT_PREFIX_CLASSES = 'flexible3DClasses'
+    OUTPUT_PREFIX_VOLUMES = 'flexible3DVolumes'
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='General parameters')
+        form.addHidden(USE_GPU, BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                                     Select the one you want to use.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
         form.addParam('particles', PointerParam, label="Particles to annotate",
                       pointerClass='SetOfParticlesFlex', important=True,
-                      help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn...")
+                      help="Particles must have a flexibility information associated (Zernike3D, CryoDrgn, Opus-DSD...")
         form.addParam('priors', MultiPointerParam, label="Priors", allowsNull=True,
                       pointerClass="SetOfVolumesFlex, VolumeFlex",
                       condition="particles and particles.getFlexInfo().getProgName() == 'Zernike3D'",
                       help='Volumes with Zernike3D coefficients associated (computed using '
-                           '"Refernce map" as reference) to add as prior information to the Zernike3D '
+                           '"Reference map" as reference) to add as prior information to the Zernike3D '
                            'space')
         form.addParam('boxSize', IntParam, label="Box size",
-                      condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN'",
-                      help="Volumes generated from the CryoDrgn network will be resampled to the "
+                      condition="particles and particles.getFlexInfo().getProgName() == 'CryoDRGN' or 'Opus-DSD'",
+                      help="Volumes generated from the CryoDrgn/Opus-DSD network will be resampled to the "
                            "chosen box size (only for the visualization).")
-        form.addParam("viewer3D", EnumParam, label="Select viewing tool",
-                      condition="particles and particles.getFirstItem().getZRed().size == 3",
-                      choices=["Annotation 3D", "Annotation Hybrid"], default=0, display=EnumParam.DISPLAY_HLIST,
-                      help="* Annotation 3D provides a 3D intraface for the annotation of conformational "
-                           "landscapes based on point clouds\n"
-                           "* Annotation Hybrid provides a 2D+3D interface for annotation of conformational "
-                           "landscapes based on particle densities")
         form.addParam('neighbors', IntParam, label="Number of particles to associate to selections",
                       default=5000, expertLevel=LEVEL_ADVANCED)
+
 
 
     # --------------------------- INSERT steps functions ----------------------
@@ -97,105 +106,246 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
         # Get right imports
         if progName == const.NMA:
             createFn = self._createSetOfClassesStructFlex
-            from flexutils.objects import ClassStructFlex as Class
-            from flexutils.objects import AtomStructFlex as Rep
-            from flexutils.objects import SetOfClassesStructFlex as SetOfClasses
+            createFnSet = self._createSetOfAtomStructFlex
+            from pwem.objects import ClassStructFlex as Class
+            from pwem.objects import AtomStructFlex as Rep
+            from pwem.objects import SetOfClassesStructFlex as SetOfClasses
         else:
             createFn = self._createSetOfClassesFlex
-            from flexutils.objects import ClassFlex as Class
-            from flexutils.objects import VolumeFlex as Rep
-            from flexutils.objects import SetOfClassesFlex as SetOfClasses
-
-        # Read selected coefficients
-        z_space_vw = []
-        with open(self._getExtraPath('saved_selections.txt')) as f:
-            lines = f.readlines()
-            for line in lines:
-                z_space_vw.append(np.fromstring(line, dtype=float, sep=' '))
-        z_space_vw = np.asarray(z_space_vw[self.num_vol:])
-
-        # Read space
-        z_space = np.loadtxt(self._getExtraPath("z_space.txt"))
-
-        # Create KDTree
-        kdtree = KDTree(z_space)
+            createFnSet = self._createSetOfVolumesFlex
+            from pwem.objects import ClassFlex as Class
+            from pwem.objects import VolumeFlex as Rep
+            from pwem.objects import SetOfClassesFlex as SetOfClasses
 
         # Create SetOfFlexClasses
         suffix = getOutputSuffix(self, SetOfClasses)
-        flexClasses = createFn(particles, suffix, progName=progName)
+        flexClasses = createFn(self.particles, suffix, progName=progName)
+        flexSetVols = createFnSet(progName=progName, suffix=suffix)
+        flexSetVols.setSamplingRate(sr)
 
-        # Popoulate SetOfClasses3D with KMean particles
-        for clInx in range(z_space_vw.shape[0]):
-            _, currIds = kdtree.query(z_space_vw[clInx].reshape(1, -1), k=neighbors+10)
-            currIds = currIds[0]
+        # Folder to save decoded volumes
+        suffix_int = int(suffix)
+        save_volume_path = self._getExtraPath(os.path.join(f"Output_Volumes_{suffix_int}", "class_{:d}.mrc"))
+        if not os.path.isdir(self._getExtraPath(f"Output_Volumes_{suffix_int}")):
+            os.mkdir(self._getExtraPath(f"Output_Volumes_{suffix_int}"))
 
-            newClass = Class()
-            newClass.copyInfo(particles)
-            newClass.setAcquisition(particles.getAcquisition())
-            representative = Rep(progName=progName)
-            if hasattr(representative, "setSamplingRate"):
-                representative.setSamplingRate(sr)
+        # ****** Generate representative volumes *******
+        z_rep = []
+        for file in sorted(glob(self._getExtraPath(os.path.join("Intermediate_results", 'saved_selections*')))):
+            if "_cluster" in file:
+                with open(file) as f:
+                    line = f.readline()
+                    z_rep.append(np.fromstring(line, dtype=float, sep=' '))
+            else:
+                with open(file) as f:
+                    for line in f.readlines():
+                        z_rep.append(np.fromstring(line, dtype=float, sep=' '))
+        z_rep = np.stack(z_rep)
+        z_rep = z_rep if z_rep.ndim == 2 else z_rep[None, ...]
 
-            # ****** Fill representative information *******
-            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-                reference = particles.getFlexInfo().refMap.get()
+        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            reference = particles.getFlexInfo().refMap.get()
+            representatives_paths = [reference for _ in range(z_rep.shape[0])]
 
-                # Resize coefficients
-                factor = (ImageHandler().read(reference).getDimensions()[0] / 64)
-                z_space_vw[clInx] *= factor
-
-                representative.setLocation(reference)
-
-            elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-                from cryodrgn.utils import generateVolumes
-                generateVolumes(z_space_vw[clInx], particles.getFlexInfo()._cryodrgnWeights.get(),
-                                particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath(),
-                                downsample=self.boxSize.get(), apix=particles.getSamplingRate())
-                ImageHandler().scaleSplines(self._getExtraPath('vol_000.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx,
+        elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+            from cryodrgn.utils import generateVolumes
+            representatives_paths = []
+            generateVolumes(z_rep, particles.getFlexInfo()._cryodrgnWeights.get(),
+                            particles.getFlexInfo()._cryodrgnConfig.get(), self._getExtraPath("Intermediate_results"),
+                            downsample=self.boxSize.get(), apix=particles.getSamplingRate())
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:03d}.mrc'.format(idx))),
+                                            save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
-                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                representatives_paths.append(save_volume_path.format(idx))
 
-            elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-                from flexutils.utils import generateVolumesHetSIREN
-                generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_space_vw[clInx],
-                                        self._getExtraPath(), step=particles.getFlexInfo().coordStep.get())
-                ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_1.mrc'),
-                                            self._getExtraPath('class_%d.mrc') % clInx,
+        elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
+            from opusdsd.utils import generateVolumes
+            representatives_paths = []
+            generateVolumes(z_rep, particles.getFlexInfo()._opusdsdWeights.get(),
+                            particles.getFlexInfo()._opusdsdConfig.get(), self._getExtraPath("Intermediate_results"),
+                            particles.getSamplingRate(), self.boxSize.get(), particles.getFlexInfo()._opusdsdCropVolSize.get(),
+                            particles.getFlexInfo()._opusdsdWindowR.get(), particles.getFlexInfo()._opusdsdDownFrac.get(),
+                            particles.getFlexInfo()._opusdsdZDim.get())
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'vol_{:d}.mrc'.format(idx))),
+                                            save_volume_path.format(idx),
                                             finalDimension=particles.getXDim(), overwrite=True)
-                representative.setLocation(self._getExtraPath('class_%d.mrc') % clInx)
+                representatives_paths.append(save_volume_path.format(idx))
 
-            elif particles.getFlexInfo().getProgName() == const.NMA:
-                reference = particles.getFlexInfo().refStruct.get()
-                subset = particles.getFlexInfo().atomSubset
+        elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+            from flexutils.utils import generateVolumesHetSIREN
+            representatives_paths = []
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
+            generateVolumesHetSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
+                                    self._getExtraPath("Intermediate_results"), step=particles.getFlexInfo().coordStep.get(),
+                                    architecture=particles.getFlexInfo().architecture.get(),
+                                    disPose=particles.getFlexInfo().disPose.get(),
+                                    disCTF=particles.getFlexInfo().disCTF.get(),
+                                    refPose=particles.getFlexInfo().refPose.get(),
+                                    use_hyper_network=particles.getFlexInfo().use_hyper_network.get(), gpu=gpu_ids)
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'decoded_map_class_{:02d}.mrc'.format(idx + 1))),
+                                            save_volume_path.format(idx),
+                                            finalDimension=particles.getXDim(), overwrite=True)
+                representatives_paths.append(save_volume_path.format(idx))
 
-                representative.getFlexInfo().atomSubset = subset
-                representative.setLocation(reference)
+        elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+            from flexutils.utils import generateVolumesFlexSIREN
+            representatives_paths = []
+            gpu_ids = ','.join([str(elem) for elem in self.getGpuList()]) if self.usesGpu() else ''
+            generateVolumesFlexSIREN(particles.getFlexInfo().modelPath.get(), z_rep,
+                                     self._getExtraPath("Intermediate_results"), step=1,
+                                     architecture=particles.getFlexInfo().architecture.get(),
+                                     disPose=particles.getFlexInfo().disPose.get(),
+                                     disCTF=particles.getFlexInfo().disCTF.get(),
+                                     refPose=particles.getFlexInfo().refPose.get(), gpu=gpu_ids)
+            for idx in range(z_rep.shape[0]):
+                ImageHandler().scaleSplines(self._getExtraPath(os.path.join("Intermediate_results", 'decoded_map_class_{:02d}.mrc'.format(idx + 1))),
+                                            save_volume_path.format(idx),
+                                            finalDimension=particles.getXDim(), overwrite=True)
+                representatives_paths.append(save_volume_path.format(idx))
 
-            representative.setZFlex(z_space_vw[clInx])
-            representative.getFlexInfo().copyInfo(particles.getFlexInfo())
-            # ********************
+        elif particles.getFlexInfo().getProgName() == const.NMA:
+            reference = particles.getFlexInfo().refStruct.get()
+            subset = particles.getFlexInfo().atomSubset
+            representatives_paths = [reference for _ in range(z_rep.shape[0])]
 
-            newClass.setRepresentative(representative)
+        elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
+            import cryosparc2
+            from cryosparc2.utils import generateFlexVolumes
+            representatives_paths = []
+            csGPU = self.getGpuList()[0] if self.usesGpu() else 0
+            flexGeneratorJob = generateFlexVolumes(z_rep,
+                                                   particles.getFlexInfo().getAttr("projectId"),
+                                                   particles.getFlexInfo().getAttr("workSpaceId"),
+                                                   particles.getFlexInfo().getAttr("trainJobId"),
+                                                   gpu=csGPU)
+            flexGeneratorJob = str(flexGeneratorJob.get())
+            for idx in range(z_rep.shape[0]):
+                volume_path = os.path.join(particles.getFlexInfo().getAttr("projectPath"), flexGeneratorJob,
+                                           flexGeneratorJob + "_series_000",
+                                           flexGeneratorJob + "_series_000_frame_{:03d}.mrc".format(idx))
+                shutil.copyfile(volume_path, save_volume_path.format(idx))
+                ImageHandler().scaleSplines(save_volume_path.format(idx), save_volume_path.format(idx),
+                                            finalDimension=particles.getXDim(), overwrite=True)
+                representatives_paths.append(save_volume_path.format(idx))
 
-            flexClasses.append(newClass)
+        # Read selected coefficients
+        clInx = 1
+        newId = 1
+        for file in sorted(glob(self._getExtraPath(os.path.join("Intermediate_results", 'saved_selections*')))):
+            z_space_vw = []
+            with open(file) as f:
+                lines = f.readlines()
+                for line in lines:
+                    z_space_vw.append(np.fromstring(line, dtype=float, sep=' '))
+            z_space_vw = np.asarray(z_space_vw)
+            # z_space_vw = np.asarray(z_space_vw[self.num_vol:])
 
-            enabledClass = flexClasses[newClass.getObjId()]
-            enabledClass.enableAppend()
-            for idx in range(neighbors):
-                itemId = currIds[idx]
-                while itemId >= num_part:
-                    currIds = np.delete(currIds, idx)
-                    itemId = currIds[idx]
-                item = particles[partIds[itemId]]
-                enabledClass.append(item)
+            if z_space_vw.ndim < 2:
+                z_space_vw = z_space_vw[None, ...]
 
-            flexClasses.update(enabledClass)
+            if "_cluster" in file:
+                # Read space
+                z_space = z_space_vw[1:]
+                z_space_vw = z_space_vw[0][None, ...]
+            else:
+                # Read space
+                z_space = np.loadtxt(self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt")))
+
+            # Create KDTree
+            kdtree = KDTree(np.loadtxt(self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt"))))
+
+            # Populate SetOfClasses3D with KMean particles
+            for z_idx in range(z_space_vw.shape[0]):
+                if "_cluster" in file:
+                    if z_space.shape[0] > 0:
+                        _, currIds = kdtree.query(z_space, k=1)
+                        currIds = np.squeeze(np.asarray(currIds)).astype(int)
+                    else:
+                        currIds = np.array([])
+                else:
+                    _, currIds = kdtree.query(z_space_vw[z_idx].reshape(1, -1), k=neighbors + 10)
+                    currIds = currIds[0]
+
+                if currIds.ndim and currIds.size:
+                    newClass = Class()
+                    newClass.copyInfo(particles)
+                    newClass.setObjId(clInx)
+                    newClass.setHasCTF(particles.hasCTF())
+                    newClass.setAcquisition(particles.getAcquisition())
+                    representative = Rep(progName=progName)
+                    if hasattr(representative, "setSamplingRate"):
+                        representative.setSamplingRate(sr)
+
+                    # Set correct sampling rate in volume header
+                    ImageHandler().setSamplingRate(representatives_paths[clInx - 1], sr)
+
+                    # ****** Fill representative information *******
+                    if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.HETSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.NMA:
+                        representative.getFlexInfo().atomSubset = subset
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
+                        representative.setLocation(representatives_paths[clInx - 1])
+
+                    representative.setZFlex(z_space_vw[z_idx])
+                    representative.getFlexInfo().copyInfo(particles.getFlexInfo())
+                    # ********************
+
+                    newClass.setRepresentative(representative)
+                    flexSetVols.append(representative)
+
+                    flexClasses.append(newClass)
+
+                    enabledClass = flexClasses[newClass.getObjId()]
+                    enabledClass.enableAppend()
+
+
+                    if "_cluster" in file:
+                        for itemId in currIds:
+                            item = particles[partIds[itemId]]
+                            item._xmipp_subtomo_labels = Integer(clInx)
+                            item.setObjId(newId)
+                            enabledClass.append(item)
+                            newId += 1
+                    else:
+                        for idx in range(neighbors):
+                            itemId = currIds[idx]
+                            while itemId >= num_part:
+                                currIds = np.delete(currIds, idx)
+                                itemId = currIds[idx]
+                            item = particles[partIds[itemId]]
+                            item._xmipp_subtomo_labels = Integer(clInx)
+                            enabledClass.append(item)
+                            newId += 1
+
+                    flexClasses.update(enabledClass)
+                    clInx += 1
 
         # Save new output
-        name = self.OUTPUT_PREFIX + suffix
+        name_classes = self.OUTPUT_PREFIX_CLASSES + "_" + suffix
+        name_volumes = self.OUTPUT_PREFIX_VOLUMES + "_" + suffix
         args = {}
-        args[name] = flexClasses
+        args[name_classes] = flexClasses
+        args[name_volumes] = flexSetVols
+
         self._defineOutputs(**args)
         self._defineSourceRelation(particles, flexClasses)
 
@@ -203,6 +353,10 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     def launchVolumeSlicer(self):
         particles = self.particles.get()
         self.num_vol = 0
+
+        # Check whether intermediate results' folder has been created
+        if not os.path.isdir(self._getExtraPath("Intermediate_results")):
+            pwutils.makePath(self._getExtraPath("Intermediate_results"))
 
         # ********* Get Z space *********
         z_space = []
@@ -217,12 +371,12 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Copy original reference and mask to extra
             ih = ImageHandler()
-            ih.convert(reference, self._getExtraPath("reference_original.mrc"), overwrite=True)
-            ih.convert(mask, self._getExtraPath("mask_reference_original.mrc"), overwrite=True)
+            ih.convert(reference, self._getExtraPath(os.path.join("Intermediate_results", "reference_original.mrc")), overwrite=True)
+            ih.convert(mask, self._getExtraPath(os.path.join("Intermediate_results", "mask_reference_original.mrc")), overwrite=True)
 
             # Resize reference map to increase real time conformation inspection performance
             inputFile = reference
-            outFile = self._getExtraPath('reference.mrc')
+            outFile = self._getExtraPath(os.path.join("Intermediate_results", 'reference.mrc'))
             if not os.path.isfile(outFile):
                 if pwutils.getExt(inputFile) == ".mrc":
                     inputFile += ":mrc"
@@ -233,7 +387,7 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
             # Resize mask
             inputFile = mask
-            outFile = self._getExtraPath('mask.mrc')
+            outFile = self._getExtraPath(os.path.join("Intermediate_results", 'mask.mrc'))
             if not os.path.isfile(outFile):
                 if pwutils.getExt(inputFile) == ".mrc":
                     inputFile += ":mrc"
@@ -255,23 +409,20 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
                         for volume in item.iterItems():
                             z_space_vol.append(volume.getZFlex())
             z_space_vol = np.asarray(z_space_vol)
-
-            # Get useful parameters
-            self.num_vol = z_space_vol.shape[0]
-            if self.num_vol > 0:
-                z_space = np.vstack([z_space, z_space_vol])
+            file_z_vol = self._getExtraPath(os.path.join("Intermediate_results", "z_space_vol.txt"))
+            np.savetxt(file_z_vol, z_space_vol)
 
             # Resize coefficients
-            z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
+            # z_space = (64 / ImageHandler().read(reference).getDimensions()[0]) * z_space
         # ********************
 
         # Generate files to call command line
-        file_z_space = self._getExtraPath("z_space.txt")
-        file_interp_val = self._getExtraPath("interp_val.txt")
+        file_z_space = self._getExtraPath(os.path.join("Intermediate_results", "z_space.txt"))
+        file_interp_val = self._getExtraPath(os.path.join("Intermediate_results", "interp_val.txt"))
         np.savetxt(file_z_space, z_space)
 
         # Compute/Read UMAP or PCA
-        file_coords = self._getExtraPath("red_coords.txt")
+        file_coords = self._getExtraPath(os.path.join("Intermediate_results", "red_coords.txt"))
         red_space = []
         for particle in particles.iterItems():
             red_space.append(particle.getZRed())
@@ -287,59 +438,130 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
 
         # Generate files to call command line
         np.savetxt(file_interp_val, interp_val)
-        path = os.path.abspath(self._getExtraPath())
+        path = os.path.abspath(self._getExtraPath("Intermediate_results"))
 
         # ********* Run viewer *********
         needsPackages = None
 
+        args = "--data %s --z_space %s --interp_val %s --path %s --sr %f " \
+                %(file_coords, file_z_space, file_interp_val, path, particles.getSamplingRate())
+
+        if self.usesGpu():
+            args += "--useGPU %s " % (','.join([str(elem) for elem in self.getGpuList()]))
+
         if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
             L1 = particles.getFlexInfo().L1.get()
             L2 = particles.getFlexInfo().L2.get()
-            args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--L1 %d --L2 %d --n_vol %d --boxsize 64 --mode Zernike3D" \
-                   % (file_coords, file_z_space, file_interp_val, path,
-                      L1, L2, self.num_vol)
+            args += "--L1 %d --L2 %d --boxsize 64 --mode Zernike3D" \
+                   % (L1, L2)
+            if volumes:
+                args += "--z_space_vol %s" % file_z_vol
 
         elif particles.getFlexInfo().getProgName() == const.CRYODRGN:
-            needsPackages = [const.CRYODRGN, ]
-            args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --config %s --boxsize %d --sr %f --mode CryoDrgn" \
-                   % (file_coords, file_z_space, file_interp_val, path,
-                      particles.getFlexInfo()._cryodrgnWeights.get(),
+            import cryodrgn
+            args += "--weights %s --config %s --boxsize %d --mode CryoDrgn --env_name %s" \
+                   % (particles.getFlexInfo()._cryodrgnWeights.get(),
                       particles.getFlexInfo()._cryodrgnConfig.get(), self.boxSize.get(),
-                      particles.getSamplingRate())
+                      cryodrgn.Plugin.getCryoDrgnEnvActivation().split(" ")[-1])
+
+        elif particles.getFlexInfo().getProgName() == const.OPUSDSD:
+            import opusdsd
+            args += ("--weights %s --config %s --boxsize %d --mode Opus-DSD --env_name %s --crop_vol_size %d --wr %f "
+                     "--zDim %d --downFrac %f ") \
+                   % (particles.getFlexInfo()._opusdsdWeights.get(),
+                      particles.getFlexInfo()._opusdsdConfig.get(), self.boxSize.get(),
+                      opusdsd.Plugin.getOpusDsdEnvActivation().split(" ")[-1],
+                      particles.getFlexInfo()._opusdsdCropVolSize.get(),
+                      particles.getFlexInfo()._opusdsdWindowR.get(),
+                      particles.getFlexInfo()._opusdsdZDim.get(), particles.getFlexInfo()._opusdsdDownFrac.get())
 
         elif particles.getFlexInfo().getProgName() == const.HETSIREN:
-            args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --step %d --sr %f --mode HetSIREN" \
-                   % (file_coords, file_z_space, file_interp_val, path,
-                      particles.getFlexInfo().modelPath.get(),
+            args += "--weights %s --step %d --architecture %s --mode HetSIREN --env_name flexutils-tensorflow" \
+                   % (particles.getFlexInfo().modelPath.get(),
                       particles.getFlexInfo().coordStep.get(),
-                      particles.getSamplingRate())
+                      particles.getFlexInfo().architecture.get())
+
+            if particles.getFlexInfo().disPose.get():
+                args += " --pose_reg 1.0"
+            else:
+                args += " --pose_reg 0.0"
+
+            if particles.getFlexInfo().disCTF.get():
+                args += " --ctf_reg 1.0"
+            else:
+                args += " --ctf_reg 0.0"
+
+            if particles.getFlexInfo().refPose.get():
+                args += " --refine_pose 1"
+            else:
+                args += " --refine_pose 0"
+
+            if particles.getFlexInfo().use_hyper_network.get():
+                args += " --use_hyper_network 1.0"
+            else:
+                args += " --use_hyper_network 0.0"
+
+        elif particles.getFlexInfo().getProgName() == const.FLEXSIREN:
+            args += "--weights %s --architecture %s --mode FlexSIREN --env_name flexutils-tensorflow" \
+                   % (particles.getFlexInfo().modelPath.get(),
+                      particles.getFlexInfo().architecture.get())
+
+            if particles.getFlexInfo().disPose.get():
+                args += " --pose_reg 1.0"
+            else:
+                args += " --pose_reg 0.0"
+
+            if particles.getFlexInfo().disCTF.get():
+                args += " --ctf_reg 1.0"
+            else:
+                args += " --ctf_reg 0.0"
+
+            if particles.getFlexInfo().refPose.get():
+                args += " --refine_pose 1"
+            else:
+                args += " --refine_pose 0"
 
         elif particles.getFlexInfo().getProgName() == const.NMA:
-            args = "--data %s --z_space %s --interp_val %s --path %s " \
-                   "--weights %s --sr %f --mode NMA" \
-                   % (file_coords, file_z_space, file_interp_val, path,
-                      particles.getFlexInfo().modelPath.get(),
-                      particles.getSamplingRate())
+            args += "--weights %s --boxsize %d --mode NMA --env_name flexutils-tensorflow" \
+                   % (particles.getFlexInfo().modelPath.get(), particles.getXDim())
 
-        dimensions = red_space.shape[1]
-        if dimensions == 2:
-            program = os.path.join(const.VIEWERS, "annotation_2d_tools", "viewer_interactive_2d.py")
-        elif dimensions == 3:
-            if self.viewer3D.get() == 0:
-                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_3d.py")
-            elif self.viewer3D.get() == 1:
-                program = os.path.join(const.VIEWERS, "annotation_3d_tools", "viewer_interactive_2d_3d.py")
-        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages)
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        elif particles.getFlexInfo().getProgName() == const.CRYOSPARCFLEX:
+            args += ("--projectId %s --workSpaceId %s --trainJobId %s --projectPath %s --mode 3DFlex "
+                     "--env_name scipion3") \
+                   % (particles.getFlexInfo().getAttr("projectId"),
+                      particles.getFlexInfo().getAttr("workSpaceId"),
+                      particles.getFlexInfo().getAttr("trainJobId"),
+                      particles.getFlexInfo().getAttr("projectPath"))
+
+        if hasattr(particles.getFlexInfo(), "umap_weights"):
+            args += " --reduce umap --umap_weights %s" % particles.getFlexInfo().getAttr("umap_weights")
+        else:
+            args += " --reduce pca"
+
+        env = pwutils.Environ(os.environ)
+        env["CUDA_VISIBLE_DEVICES"] = ''
+        env["NAPARI_ASYNC"] = "1"
+
+        program = "viewer_interactive_3d.py"
+        program = flexutils.Plugin.getProgram(program, needsPackages=needsPackages, chimera=True)
+        self.runJob(program, args, env=env)
 
         # *********
 
-        if os.path.isfile(self._getExtraPath("saved_selections.txt")) and \
+        if len(glob(self._getExtraPath(os.path.join("Intermediate_results", "saved_selections*")))) > 0 and \
            askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
+
+    # --------------------------- OUTPUT functions -----------------------------
+    def deleteOutput(self, output):
+        attrName = self.findAttributeName(output)
+        output_id = attrName.split("_")[-1]
+        volumes_path = self._getExtraPath(f"Output_Volumes_{output_id}")
+        shutil.rmtree(volumes_path)
+        super().deleteOutput(output)
+
+    def allowsDelete(self, obj):
+        return True
 
     # --------------------------- INFO functions -----------------------------
     def _summary(self):
@@ -370,4 +592,13 @@ class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
             errors.append("Number of particles to be associated with each selected state is larger than the "
                           "total number of particles in the dataset. Please, provide a smaller value "
                           "(Advanced parameter)")
+
+        # Check CryoDRGN boxsize parameter is set as it is mandatory
+        if particles.getFlexInfo().getProgName() == 'CryoDRGN' or particles.getFlexInfo().getProgName() == 'Opus-DSD':
+            if self.boxSize.get() is None:
+                errors.append("Boxsize parameter needs to be set to an integer value smaller than or equal "
+                              "to the boxsize used internally to train the CryoDRGN/Opus-DSD network")
+            elif self.boxSize.get() % 2 != 0:
+                errors.append("Boxsize parameter needs to be an even value")
+
         return errors

@@ -30,7 +30,7 @@ import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as vi
 from pwem.viewers import DataViewer, MODE, MODE_MD
 
-import flexutils.objects
+import pwem.objects.data_flexhub as pwobj
 
 
 class FlexDataViewer(pwviewer.Viewer):
@@ -40,8 +40,8 @@ class FlexDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        flexutils.objects.SetOfClassesFlex,
-        flexutils.objects.SetOfClassesStructFlex
+        pwobj.SetOfClassesFlex,
+        pwobj.SetOfClassesStructFlex
     ]
 
     def __init__(self, **kwargs):
@@ -56,11 +56,11 @@ class FlexDataViewer(pwviewer.Viewer):
         views = []
         cls = type(obj)
 
-        if issubclass(cls, flexutils.objects.SetOfClassesFlex):
+        if issubclass(cls, pwobj.SetOfClassesFlex):
             views.append(vi.Classes3DView(self._project, obj.strId(),
                                           obj.getFileName()))
 
-        elif issubclass(cls, flexutils.objects.SetOfClassesStructFlex):
+        elif issubclass(cls, pwobj.SetOfClassesStructFlex):
             views.append(vi.Classes3DView(self._project, obj.strId(),
                                           obj.getFileName()))
 
@@ -69,9 +69,9 @@ class FlexDataViewer(pwviewer.Viewer):
 
 # Register specific sets in pwem dataviewer.
 if hasattr(DataViewer, "registerConfig"):
-    DataViewer.registerConfig(flexutils.objects.SetOfParticlesFlex,
+    DataViewer.registerConfig(pwobj.SetOfParticlesFlex,
                               config={MODE: MODE_MD})
-    DataViewer.registerConfig(flexutils.objects.SetOfVolumesFlex,
+    DataViewer.registerConfig(pwobj.SetOfVolumesFlex,
                               config={MODE: MODE_MD})
-    DataViewer.registerConfig(flexutils.objects.SetOfAtomStructFlex,
+    DataViewer.registerConfig(pwobj.SetOfAtomStructFlex,
                               config={MODE: MODE_MD})

@@ -29,7 +29,7 @@ import glob
 import numpy as np
 from xmipp_metadata.image_handler import ImageHandler
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, FloatParam
 import pyworkflow.utils as pwutils
 
@@ -41,7 +41,7 @@ class ProtFlexAutoReference(ProtAnalysis3D):
     """ Automatic selection of best reference volume for Zernike3D analysis """
 
     _label = 'auto reference'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'selectedReference'
 
     # --------------------------- DEFINE param functions ----------------------

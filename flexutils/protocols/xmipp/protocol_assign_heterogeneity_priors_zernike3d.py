@@ -32,23 +32,21 @@ from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import (writeSetOfParticles, createItemMatrix,
                             setXmippAttributes, matrixFromGeometry)
-from xmipp3.base import writeInfoField, readInfoField
 import xmipp3
 
 import flexutils.constants as const
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
@@ -135,13 +133,13 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = self.boxSize.get()
         correctionFactor = self.newXdim / Xdim
         newTs = inputParticles.getSamplingRate() / correctionFactor
-        writeInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE, newTs)
-        writeInfoField(self._getExtraPath(), "size", md.MDL_XSIZE, self.newXdim)
+        np.savetxt(self._getExtraPath("sampling.txt"), [newTs])
+        np.savetxt(self._getExtraPath("size.txt"), [self.newXdim])
         if self.newXdim != Xdim:
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --save_metadata_stack %s --fourier %d" %
                         (imgsFn,
-                         self._getExtraPath('scaled_particles.stk'),
+                         self._getTmpPath('scaled_particles.stk'),
                          self._getExtraPath('scaled_particles.xmd'),
                          self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
             moveFile(self._getExtraPath('scaled_particles.xmd'), imgsFn)
@@ -171,7 +169,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         fnVolMask = self._getFileName('fnVolMask')
         fnOutDir = self._getFileName('fnOutDir')
         fnPriors = self._getFileName('fnPriors')
-        Ts = readInfoField(self._getExtraPath(), "sampling", md.MDL_SAMPLINGRATE)
+        Ts = np.loadtxt(self._getExtraPath("sampling.txt"))
         maxResolution = self.maxResolution.get() if self.maxResolution.get() else Ts
 
         Xdim = inputParticles.getXDim()
@@ -197,7 +195,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         # Compute deformations
         def_file = self._getExtraPath("def_file.txt")
         args = "--i %s --z_clnm %s --o %s" % (fnVolMask, fnPriors, def_file)
-        program = os.path.join(const.XMIPP_SCRIPTS, "compute_z_clnm_deformation.py")
+        program = "compute_z_clnm_deformation.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args, numberOfMpi=1)
         deformations = np.loadtxt(def_file)
@@ -257,6 +255,7 @@ class XmippProtHeterogeneityPriorsZernike3D(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
 
         partSet.copyInfo(inputParticles)
+        partSet.setHasCTF(inputParticles.hasCTF())
         partSet.setAlignmentProj()
 
         inverseTransform = partSet.getAlignment() == ALIGN_PROJ

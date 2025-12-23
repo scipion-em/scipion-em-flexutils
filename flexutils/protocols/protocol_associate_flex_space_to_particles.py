@@ -25,34 +25,18 @@
 # **************************************************************************
 
 
-import os
-import numpy as np
-from sklearn.neighbors import KDTree
-from xmipp_metadata.image_handler import ImageHandler
+from pyworkflow import NEW
+from pyworkflow.protocol.params import PointerParam
+from pyworkflow.object import Boolean
 
-from pyworkflow import BETA
-from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam, MultiPointerParam, EnumParam
-import pyworkflow.utils as pwutils
-from pyworkflow.utils.properties import Message
-from pyworkflow.gui.dialog import askYesNo
-
-from pwem.protocols import ProtAnalysis3D
-
-import flexutils
-from flexutils.utils import getOutputSuffix, computeNormRows
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import SetOfVolumesFlex, VolumeFlex
-import flexutils.constants as const
-
-import xmipp3
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 
 
 class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):
     """ Associate flexible spaces and info to a different set of particles """
 
     _label = 'associate flex space to particles'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'flexParticles'
 
     # --------------------------- DEFINE param functions ----------------------
@@ -76,6 +60,7 @@ class ProtFlexAssociateSpace(ProtAnalysis3D, ProtFlexBase):
 
         outSet = self._createSetOfParticlesFlex()
         outSet.copyInfo(particlesFlex)
+        outSet.setHasCTF(particlesFlex.hasCTF())
 
         for particleFlex, particle in zip(particlesFlex.iterItems(), particles.iterItems()):
             particleFlex.setLocation(particle.getLocation())

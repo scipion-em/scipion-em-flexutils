@@ -28,6 +28,8 @@
 import os
 
 import numpy as np
+from xmipp_metadata.image_handler import ImageHandler
+
 from pwem.protocols import ProtAnalysis3D
 from pwem.objects import Volume
 
@@ -89,7 +91,7 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
                % (input, reference, output, l1, l2, self.match_method[self.matchMode.get()])
         if self.gsSteps.get():
             args += " --gs %d" % self.gsSteps.get()
-        program = os.path.join(const.XMIPP_SCRIPTS, "find_z_clnm_map.py")
+        program = "find_z_clnm_map.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -107,6 +109,11 @@ class XmippMatchDeformMapZernike3D(ProtAnalysis3D):
         outFile = self._getExtraPath("map_deformed.mrc")
         vol = Volume()
         vol.setLocation(outFile)
+
+        # Set correct sampling rate in volume header
+        ImageHandler().setSamplingRate(outFile,
+                                       self.input.get().getSamplingRate())
+
         vol.setSamplingRate(self.input.get().getSamplingRate())
         vol.L1 = L1
         vol.L2 = L2

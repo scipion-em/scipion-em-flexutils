@@ -28,34 +28,33 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer, CsvList
+from pyworkflow.object import String, Integer, CsvList, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
-from pwem.objects import Volume
+from pwem.objects import Volume, ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
 
 class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
     """ Protocol for angular alignment with heterogeneous reconstruction with the HetSIREN algorithm."""
-    _label = 'angular align - HetSIREN'
+    _label = 'flexible align - HetSIREN'
     _lastUpdateVersion = VERSION_2_0
 
     # --------------------------- DEFINE param functions -----------------------
@@ -76,7 +75,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="If provided, the HomoSIREN network will learn to refine with the new learned angles. "
                             "Otherwise, the network will learn the reconstruction of the map from scratch")
         group.addParam('inputVolumeMask', params.PointerParam,
-                       label="Reconsctruction mask", pointerClass='VolumeMask', allowsNull=True,
+                       label="Reconstruction mask", pointerClass='VolumeMask', allowsNull=True,
                        help="If provided, the pose refinement and reconstruction learned by HomoSIREN will be focused "
                             "in the region delimited by the mask. Otherise, a sphere inscribed in the volume box will "
                             "be used")
@@ -86,6 +85,20 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             'the estimation the deformation field for each particle. Note that output particles will '
                             'have the original box size, and Zernike3D coefficients will be modified to work with the '
                             'original size images')
+        group.addParam('outSize', params.IntParam, allowsNull=True,
+                       label='Decoded volume size', expertLevel=params.LEVEL_ADVANCED,
+                       help='Determines the box size of the volumes to be decoded by the network (i.e. the maximum '
+                            'resolution achievable). If empty, it will match the downsampled box size. Otherwise, '
+                            'it must be set to a value higher than or equal to the downsampled box size')
+        group.addParam('trainSize', params.IntParam, allowsNull=True,
+                       label='Image training size', expertLevel=params.LEVEL_ADVANCED,
+                       help='By default, the size of the images used to train the network will match the value '
+                            'specified for the downsampling parameter. However, in many cases it is useful to perform '
+                            'a multi-resolution training by presenting the network first a further downsampled version '
+                            'of the images to posteriorly perform a fine tuning on higher resolutions. This parameter '
+                            'controls the current resolution/box size the network will see during training. If empty, '
+                            'training image size will match the downsampling size. Otherwise, it must be set to a '
+                            'number smaller than or equal to the downsampled size')
         group = form.addGroup("Latent Space")
         group.addParam('hetDim', params.IntParam, default=10, label='Latent space dimension',
                        expertLevel=params.LEVEL_ADVANCED,
@@ -108,11 +121,6 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                             "the Fourier Transform of the images to increase the frequency "
                             "content")
         form.addSection(label='Network')
-        form.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
-                      expertLevel=params.LEVEL_ADVANCED,
-                      default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
-                      help="* *ConvNN*: convolutional neural network\n"
-                           "* *MLPNN*: multiperceptron neural network")
         form.addParam('fineTune', params.BooleanParam, default=False, label="Fine tune previous network?",
                       help="If True, a previously trained deepPose network will be fine tuned based on the "
                            "new input parameters. Note that when this option is set, the input particles "
@@ -120,29 +128,78 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "a **'angular align - deepPose'** protocol.")
         form.addParam('netProtocol', params.PointerParam, label="Previously trained network",
                       allowsNull=True,
-                      pointerClass='TensorflowProtAngularAlignmentHomoSiren',
+                      pointerClass='TensorflowProtAngularAlignmentHetSiren',
                       condition="fineTune")
-        form.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
-                      help="If True, the neural network will be also trained to refine the angular "
-                           "and shift assignation of the particles to make it more consistent with the "
-                           "heterogeneity estimation. Otherwise, only heterogeneity information will be "
-                           "estimated.")
-        form.addParam('epochs', params.IntParam, default=20, label='Number of training epochs',
-                      help="When training in refinenment mode, the number of epochs might be decreased to "
-                           "improve performance. For ab initio, we recommend around 25 - 50 epochs to reach "
-                           "a meaningful local minima.")
-        form.addParam('batch_size', params.IntParam, default=16, label='Number of images in batch',
-                      help="Number of images that will be used simultaneously for every training step. "
-                           "We do not recommend to change this value unless you experience memory errors. "
-                           "In this case, value should be decreased.")
-        form.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
-                      help="This value (between 0 and 1) determines the fraction of images that will "
-                           "be used to train the network.")
-        form.addParam('step', params.IntParam, default=1, label='Points step',
-                      help="How many points (voxels) to skip during the training computations. "
-                           "A value of 1 means that all point within the mask provided in the input "
-                           "will be used. A value of 2 implies that half of the point will be skipped "
-                           "to increase the performance.")
+        group = form.addGroup("Network hyperparameters")
+        group.addParam('architecture', params.EnumParam, choices=['ConvNN', 'MPLNN'],
+                       expertLevel=params.LEVEL_ADVANCED,
+                       default=0, label="Network architecture", display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *DeepConv*: a deep convolution neural architecture based on ResNet principles\n"
+                            "* *ConvNN*: convolutional neural network\n"
+                            "* *MLPNN*: multiperceptron neural network")
+        group.addParam('useHyperNetwork', params.BooleanParam, default=True, label="Use hyper network?",
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="Determine wether to use hyper network layers or standard layers")
+        group.addParam('stopType', params.EnumParam, choices=['Samples', 'Manual'],
+                       default=1, label="How to compute total epochs?",
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help="* *Samples*: Epochs will be obtained from the total number of samples "
+                            "the network will see\n"
+                            "* *Epochs*: Total number of epochs is provided manually")
+        group.addParam('epochs', params.IntParam, default=20, condition="stopType==1",
+                       label='Number of training epochs')
+        group.addParam('maxSamples', params.IntParam, default=1000000, condition="stopType==0",
+                       label="Samples",
+                       help='Maximum number of samples seen during network training')
+        group.addParam('batch_size', params.IntParam, default=8, label='Number of images in batch',
+                       help="Number of images that will be used simultaneously for every training step. "
+                            "We do not recommend to change this value unless you experience memory errors. "
+                            "In this case, value should be decreased.")
+        group.addParam('lr', params.FloatParam, default=1e-5, label='Learning rate',
+                       help="The learning rate determines how fast the network will train based on the "
+                            "seen samples. The larger the value, the faster the network although divergence "
+                            "might occur. We recommend decreasing the learning rate value if this happens.")
+        group.addParam('xla', params.BooleanParam, default=True, label="Allow XLA compilation?",
+                       help="When XLA compilation is allowed, extra optimizations are applied during neural network "
+                            "training increasing the training performance. However, XLA will only work with compatible "
+                            "GPUs. If any error is experienced, set to No.")
+        group.addParam('tensorboard', params.BooleanParam, default=True, label="Allow Tensorboard visualization?",
+                       help="Tensorboard visualization provides a complete real-time report to supervise the training "
+                            "of the neural network. However, for very large networks RAM requirements to save the "
+                            "Tensorboard logs might overflow. If your process unexpectedly finishes when saving the "
+                            "network callbacks, please, set this option to NO and restart the training.")
+        group = form.addGroup("Extra network parameters")
+        group.addParam('refinePose', params.BooleanParam, default=True, label="Refine pose?",
+                       help="If True, the neural network will be also trained to refine the angular "
+                            "and shift assignation of the particles to make it more consistent with the "
+                            "heterogeneity estimation. Otherwise, only heterogeneity information will be "
+                            "estimated.")
+        group.addParam('split_train', params.FloatParam, default=1.0, label='Traning dataset fraction',
+                       help="This value (between 0 and 1) determines the fraction of images that will "
+                            "be used to train the network.")
+        group.addParam('step', params.IntParam, default=1, label='Points step',
+                       help="How many points (voxels) to skip during the training computations. "
+                            "A value of 1 means that all point within the mask provided in the input "
+                            "will be used. A value of 2 implies that half of the point will be skipped "
+                            "to increase the performance.")
+        group = form.addGroup("Disentanglement")
+        group.addParam('disPose', params.BooleanParam, default=True, label='Pose disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the pose information "
+                            "from the conformational landscape.")
+        group.addParam('poseReg', params.FloatParam, default=0.001, label='Pose disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disPose",
+                       help="Pose disentanglement factor to be considered while computing the cost function")
+        group.addParam('disCTF', params.BooleanParam, default=True, label='CTF disentanglement?',
+                       help="If True, the neural network will be also trained to disentangle the CTF information "
+                            "from the conformational landscape.")
+        group.addParam('ctfReg', params.FloatParam, default=0.001, label='CTF disentanglement factor',
+                       expertLevel=params.LEVEL_ADVANCED, condition="disCTF",
+                       help="CTF disentanglement factor to be considered while computing the cost function")
+        group = form.addGroup("Logger")
+        group.addParam('debugMode', params.BooleanParam, default=False, label='Debugging mode',
+                       help="If you experience any error during the training execution, we recommend setting "
+                            "this parameter to True followed by a restart of this protocol to generate a more "
+                            "informative logging file.")
         form.addSection(label='Cost function')
         form.addParam('costFunction', params.EnumParam, choices=['MSE', 'Correlation', 'FPC'],
                       default=0, label="Cost function type", display=params.EnumParam.DISPLAY_HLIST,
@@ -155,28 +212,43 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
                            "If a volume is going to be refined, **Correlation** or **FPC** will provide more accurate "
                            "results")
         form.addParam('maskRadius', params.FloatParam, default=0.85, label="Mask radius (%)",
-                      condition="costFunction==1",
+                      condition="costFunction==2",
                       help="Determine the radius (in percentage) of the circular mask to be applied to the Fourier "
                            "Transform of the images. A value of 1 implies that the circular mask is inscribed to the "
                            "bounding box the Fourier Transform.")
         form.addParam("smoothMask", params.BooleanParam, default=True, label="Smooth mask?",
-                      condition="costFunction==1",
+                      condition="costFunction==2",
                       help="If True, the mask applied to the Fourier Transform of the particle images will have a smooth"
                            "vanishing transition.")
-        form.addParam("l1Reg", params.FloatParam, default=0.2, label="L1 loss regularization",
+        form.addParam("l1Reg", params.FloatParam, default=0.1, label="L1 loss regularization",
                       help="Determines the weight of the L1 map minimization in the cost function. L1 is moslty used to "
                            "decrease the amount of noise in the map learned by the network. We do not recommend to touch "
                            "this parameter")
+        form.addParam("tvReg", params.FloatParam, default=0.1, label="Total variation loss regularization",
+                      help="Determines the weight of the TV map minimization in the cost function. TV is moslty used to "
+                           "promote densitiy smoothness while focusing on the preservation of edges present in "
+                           "the CryoEM map.")
+        form.addParam("mseReg", params.FloatParam, default=0.1, label="MSE loss regularization",
+                      help="Determines the weight of the MSE variation map minimization in the cost function. "
+                           "MSE is moslty used to promote density smoothnes while focusing on ensuring a continuous "
+                           "transition of the density values")
+        form.addParam("multires", params.FloatParam, allowsNull=True, label="Multiresolution levels",
+                      help="Determines the number of multiresolution filter used to compare the reconstructed map and "
+                           "the experimental images at different resolutions. If empty, no multiresolution strategy is "
+                           "applied in the cost function. Multiresolution helps making the training more robust by "
+                           "sacrifying the resolution of the decoded maps.")
         form.addSection(label='Output')
-        form.addParam("filterDecoded", params.BooleanParam, default=False, label="Filter decoded map?",
+        form.addParam("filterDecoded", params.BooleanParam, default=True, label="Filter decoded map?",
                       help="If True, the maps decoded after training the network will be convoluted with a Gaussian filter. "
                            "In general, this postprocessing is not needed unless 'Points step' parameter is set to a value "
                            "greater than 1")
+        form.addParam("onlyPos", params.BooleanParam, default=False, label="Remove negative values?",
+                      help="If True, the negative values from map decoded after training the network will be removed.")
         form.addParam("numVol", params.IntParam, default=20, label="Number of decoded maps",
                       help="Determines in how many regions the trained latent space will be splitted by "
                            "KMeans, allowing to decode a state based on the representative of each cluster. "
                            "This provides and initial summary/exploration of the trained landscape")
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=0, mpi=4)
 
     def _createFilenameTemplates(self):
         """ Centralize how files are called """
@@ -201,37 +273,49 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         imgsFn = self._getFileName('imgsFn')
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
+        md_file = self._getFileName('imgsFn')
 
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
+        self.vol_mask_dim = self.outSize.get() if self.outSize.get() is not None else self.newXdim
 
         if self.inputVolume.get():  # Map reference
             ih = ImageHandler()
             inputVolume = self.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --fourier %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+            ih.setSamplingRate(fnVol, inputParticles.getSamplingRate())
 
         if self.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = self.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.vol_mask_dim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
+
+        # Write extra attributes (if needed)
+        md = XmippMetaData(md_file)
+        if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
+            labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
+            md[:, "subtomo_labels"] = labels
+        md.write(md_file, overwrite=True)
 
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
-                      self._getExtraPath('scaled_particles.stk'),
+                      self._getTmpPath('scaled_particles.stk'),
                       self._getExtraPath('scaled_particles.xmd'),
                       self.newXdim)
             if self.numberOfMpi.get() > 1:
@@ -245,22 +329,38 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         out_path = self._getExtraPath('network')
         if not os.path.isdir(out_path):
             os.mkdir(out_path)
+        inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         batch_size = self.batch_size.get()
         step = self.step.get()
         split_train = self.split_train.get()
-        epochs = self.epochs.get()
+        lr = self.lr.get()
         l1Reg = self.l1Reg.get()
+        tvReg = self.tvReg.get()
+        mseReg = self.mseReg.get()
         hetDim = self.hetDim.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         applyCTF = self.applyCTF.get()
+        xla = self.xla.get()
+        tensorboard = self.tensorboard.get()
         args = "--md_file %s --out_path %s --batch_size %d " \
-               "--shuffle --split_train %f --epochs %d --pad %d --refine_pose " \
-               "--sr %f --apply_ctf %d --step %d --l1_reg %f --het_dim %d" \
-               % (md_file, out_path, batch_size, split_train, epochs, pad, sr, applyCTF, step,
-                  l1Reg, hetDim)
+               "--shuffle --split_train %f --pad %d " \
+               "--sr %f --apply_ctf %d --step %d --l1_reg %f --tv_reg %f --mse_reg %f --het_dim %d --lr %f " \
+               "--trainSize %d --outSize %d" \
+               % (md_file, out_path, batch_size, split_train, pad, sr, applyCTF, step,
+                  l1Reg, tvReg, mseReg, hetDim, lr, trainSize, outSize)
+
+        if self.stopType.get() == 0:
+            args += " --max_samples_seen %d" % self.maxSamples.get()
+        else:
+            args += " --epochs %d" % self.epochs.get()
 
         if self.costFunction.get() == 0:
             args += " --cost mse"
@@ -276,6 +376,9 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if self.ctfType.get() == 0:
             args += " --ctf_type apply"
         elif self.ctfType.get() == 1:
@@ -284,31 +387,61 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         if self.refinePose.get():
             args += " --refine_pose"
 
+        if self.onlyPos.get():
+            args += " --only_pos"
+
+        if self.multires.get():
+            args += " --multires %d" % self.multires.get()
+
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
+
         if self.fineTune.get():
             netProtocol = self.netProtocol.get()
-            modelPath = netProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+            modelPath = glob(netProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
             args += " --weigths_file %s" % modelPath
+
+        if xla:
+            args += " --jit_compile"
+
+        if tensorboard:
+            args += " --tensorboard"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
             args += " --gpu %s" % gpu_list
 
-        program = flexutils.Plugin.getTensorflowProgram("train_het_siren.py", python=False)
+        if self.debugMode.get():
+            log_level = 0
+        else:
+            log_level = 2
+
+        program = flexutils.Plugin.getTensorflowProgram("train_het_siren.py", python=False,
+                                                        log_level=log_level)
         self.runJob(program, args, numberOfMpi=1)
 
     def predictStep(self):
         md_file = self._getFileName('imgsFn')
-        weigths_file = self._getExtraPath(os.path.join('network', 'het_siren_model'))
+        weigths_file = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
+        inputParticles = self.inputParticles.get()
         pad = self.pad.get()
         hetDim = self.hetDim.get()
         numVol = self.numVol.get()
         self.newXdim = self.boxSize.get()
         correctionFactor = self.inputParticles.get().getXDim() / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
         applyCTF = self.applyCTF.get()
-        args = "--md_file %s --weigths_file %s --pad %d --refine_pose --sr %f " \
-               "--apply_ctf %d --het_dim %d --num_vol %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol)
+        args = "--md_file %s --weigths_file %s --pad %d --sr %f " \
+               "--apply_ctf %d --het_dim %d --num_vol %d --trainSize %d --outSize %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, numVol, trainSize, outSize)
 
         if self.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -320,11 +453,23 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif self.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if self.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if self.refinePose.get():
             args += " --refine_pose"
 
+        if self.disPose.get():
+            args += " --pose_reg %f" % self.poseReg.get()
+
+        if self.disCTF.get():
+            args += " --ctf_reg %f" % self.ctfReg.get()
+
         if self.filterDecoded.get():
             args += " --apply_filter"
+
+        if self.onlyPos.get():
+            args += " --only_pos"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -337,7 +482,12 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         inputParticles = self.inputParticles.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = self.boxSize.get()
-        model_path = self._getExtraPath(os.path.join('network', 'het_siren_model'))
+        trainSize = self.trainSize.get() if self.trainSize.get() is not None else self.newXdim
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize.get()
+        else:
+            outSize = self.outSize.get() if self.outSize.get() is not None else self.newXdim
+        model_path = glob(self._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -352,6 +502,7 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
         partSet = self._createSetOfParticlesFlex(progName=const.HETSIREN)
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         correctionFactor = Xdim / self.newXdim
@@ -360,7 +511,6 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         idx = 0
         for particle in inputSet.iterItems():
-
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
 
@@ -388,17 +538,29 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(self.step.get())
+        partSet.getFlexInfo().outSize = Integer(outSize)
+        partSet.getFlexInfo().trainSize = Integer(trainSize)
+        partSet.getFlexInfo().disPose = Boolean(self.disPose.get())
+        partSet.getFlexInfo().disCTF = Boolean(self.disCTF.get())
+        partSet.getFlexInfo().refPose = Boolean(self.refinePose.get())
 
         if self.inputVolume.get():
-            inputMask = self.inputVolumeMask.get().getFileName()
             inputVolume = self.inputVolume.get().getFileName()
-            partSet.getFlexInfo().refMask = String(inputMask)
             partSet.getFlexInfo().refMap = String(inputVolume)
+
+        if self.inputVolumeMask.get():
+            inputMask = self.inputVolumeMask.get().getFileName()
+            partSet.refMask = String(inputMask)
 
         if self.architecture.get() == 0:
             partSet.getFlexInfo().architecture = String("convnn")
         elif self.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if self.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if self.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
@@ -413,11 +575,15 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
             outVol = Volume()
             outVol.setSamplingRate(inputParticles.getSamplingRate())
 
-            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
-                                        self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)),
+            ImageHandler().scaleSplines(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                        self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
                                         finalDimension=inputParticles.getXDim(), overwrite=True)
 
-            outVol.setLocation(self._getExtraPath('decoded_map_class_%d.mrc' % (idx + 1)))
+            # Set correct sampling rate in volume header
+            ImageHandler().setSamplingRate(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)),
+                                           inputParticles.getSamplingRate())
+
+            outVol.setLocation(self._getExtraPath('decoded_map_class_%02d.mrc' % (idx + 1)))
             outVols.append(outVol)
 
         self._defineOutputs(outputParticles=partSet)
@@ -473,4 +639,44 @@ class TensorflowProtAngularAlignmentHetSiren(ProtAnalysis3D, ProtFlexBase):
     def validate(self):
         """ Try to find errors on define params. """
         errors = []
+
+        inputParticles = self.inputParticles.get()
+        boxSize = self.boxSize.get()
+        trainSize = self.trainSize.get()
+        mask = self.inputVolumeMask.get()
+        if isinstance(inputParticles, SetOfParticlesFlex) and hasattr(inputParticles.getFlexInfo(), "outSize"):
+            outSize = inputParticles.getFlexInfo().outSize
+        else:
+            outSize = self.outSize.get()
+
+        if outSize is not None and outSize < boxSize:
+            errors.append("Decoded image size must be larger than or equal to the downsampled box"
+                          " size (currently set to %d)" % boxSize)
+
+        if trainSize is not None and trainSize > boxSize:
+            errors.append("Train image size must be smaller than or equal to the downsampled box"
+                          " size (currently set to %d)" % boxSize)
+
+        if mask is not None:
+            data = ImageHandler(mask.getFileName()).getData()
+            if not np.all(np.logical_and(data >= 0, data <= 1)):
+                errors.append("Mask provided is not binary. Please, provide a binary mask")
+
         return errors
+
+    def _warnings(self):
+        warnings = []
+
+        num_particles = self.inputParticles.get().getSize()
+        split_train = self.split_train.get()
+        num_particles_train = int(split_train * num_particles)
+
+        if num_particles_train > 500000:
+            warnings.append("The dataset you are using to train is quite large, which may lead to long training times. "
+                            "If this is intended, you may ignore this warning. Otherwise, it is recommended to modify "
+                            "the form parameter \"Traning dataset fraction\" to a lower value so that the number of "
+                            "particles to train is smaller than 500k. In this way, the network will learn faster and "
+                            "posteriorly the trained network will use the complete dataset in the prediction step to "
+                            "reduce execution times.")
+
+        return warnings

@@ -33,9 +33,9 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils import removeExt
 
 from pwem.viewers import ChimeraView
+from pwem import objects
 
 from flexutils.protocols.xmipp.protocol_apply_field_zernike3d import XmippApplyFieldZernike3D
-from flexutils import objects
 
 
 class XmippApplyFieldZernike3DView(ProtocolViewer):
@@ -54,12 +54,16 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
         if type(self.protocol).__name__ == XmippApplyFieldZernike3D.__name__:
             self.deformed = self.protocol.deformed
             self.have_set = isinstance(self.deformed, Set)
-            self.choices = list(self.deformed.getIdSet())
+            if self.have_set:
+                self.choices = list(self.deformed.getIdSet())
+            else:
+                self.choices = [0]
+                self.deformed = [self.deformed]
         else:
             self.have_set = False
             self.choices = None
 
-        if isinstance(self.deformed, objects.SetOfVolumesFlex) or isinstance(self.deformed, objects.VolumeFlex):
+        if isinstance(self.deformed, objects.SetOfVolumesFlex) or isinstance(self.deformed[0], objects.VolumeFlex):
             self.mode = "Map"
         else:
             self.mode = "Structure"
@@ -91,7 +95,7 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
             if self.have_set:
                 self.chosen = self.deformed[self.choices[self.idChoice.get()]]
             else:
-                self.chosen = self.deformed
+                self.chosen = self.deformed[0]
 
             if self.mode == "Map":
                 self.inputVol = self.protocol.inputVolume.get() if not self.have_set else \
@@ -100,8 +104,8 @@ class XmippApplyFieldZernike3DView(ProtocolViewer):
                           'fnOutVol': self.chosen.getFileName()}
 
                 self.protocol._updateFilenamesDict(myDict)
-                if not self.have_set:
-                    self.protocol._createFilenameTemplates()
+                # if not self.have_set:
+                #     self.protocol._createFilenameTemplates()
 
         if self.mode == "Map":
             return {'doShowStrain': self._doShowStrain,

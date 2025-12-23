@@ -43,3 +43,4 @@
 #                'tomo1': 'defocus_m2_tomo_10_bin1_WBP_CatBinned1.mrc',
 #                'tomo2': 'defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
 #         })
+from .test_flex import TestFlexHetSiren

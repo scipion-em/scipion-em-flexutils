@@ -31,25 +31,24 @@ import os
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, String, Float
+from pyworkflow.object import Integer, String, Float, Boolean
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, setXmippAttributes, createItemMatrix, \
     matrixFromGeometry
 
 import flexutils.constants as const
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
 class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
-    """ Assignation of heterogeneity priors based on the Zernike3D basis. """
+    """ Reassignation of reference for landscape based on the Zernike3D basis. """
     _label = 'reassign reference - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
 
@@ -62,10 +61,10 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         form.addParam('mask', params.PointerParam, label="Reference mask", pointerClass='VolumeMask',
                       help="Mask associated to the new reference map")
         form.addParam('L1', params.IntParam, label="Zernike degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=3,
+                      allowsNull=True,
                       help="Zernike polynomial degree for the new focused Zernike3D coefficients")
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=2,
+                      allowsNull=True,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
         form.addParallelSection(threads=4, mpi=0)
 
@@ -85,8 +84,8 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         newRefMap = self.inputVolume.get()
         newRefMask = self.mask.get().getFileName()
-        L1 = self.L1.get()
-        L2 = self.L2.get()
+        L1 = self.L1.get() if self.L1.get() else prevL1
+        L2 = self.L2.get() if self.L2.get() else prevL2
 
         z_clnm_vec = {}
         # deformation_vec = {}
@@ -110,7 +109,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         writeSetOfImages(particles, imgsFn, zernikeRow)
 
         # Write Zernike3D priors to file
-        file_zclnm_r = self._getExtraPath('z_clnm_r,txt')
+        file_zclnm_r = self._getExtraPath('z_clnm_r.txt')
         with open(file_zclnm_r, 'w') as f:
             f.write(' '.join(map(str, [L1, L2, newRefMap.getFlexInfo().Rmax.get()])) + "\n")
             z_clnm = newRefMap.getZFlex()
@@ -119,7 +118,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         args = "--i %s --maski %s --maskr %s --zclnm_r %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
                % (imgsFn, getXmippFileName(refMask), getXmippFileName(newRefMask),
                   file_zclnm_r, prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "reassign_reference.py")
+        program = "reassign_reference.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -129,6 +128,7 @@ class XmippProtReassignReferenceZernike3D(ProtAnalysis3D, ProtFlexBase):
         mdOut = XmippMetaData(self._getExtraPath("inputParticles_reassigned.xmd"))
 
         partSet.copyInfo(inputSet)
+        partSet.setHasCTF(inputSet.hasCTF())
         partSet.setAlignmentProj()
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])

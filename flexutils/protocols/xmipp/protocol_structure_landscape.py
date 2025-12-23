@@ -28,17 +28,16 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.object import CsvList
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, EnumParam, IntParam, BooleanParam, FloatParam, StringParam, \
                                        GPU_LIST, USE_GPU
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 import flexutils.constants as const
 
 
@@ -46,7 +45,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
     """ Reduced structure based conformational landscape """
 
     _label = 'structure landscape'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'outputParticles'
     DIMENSIONS = [2, 3]
     SAVE = ["structures", "residuals"]
@@ -191,7 +190,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                % (structure.getFileName(), file_z_space, self._getExtraPath(),
                   particles.getSamplingRate(), particles.getFirstItem().getXDim(),
                   l1, l2, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+        program = "structure_space.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -226,7 +225,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                       self.SAVE[self.save.get()])
             if self.densmap_umap.get():
                 args += " --densmap"
-            program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+            program = "structure_space.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 1:
@@ -236,7 +235,7 @@ class XmippProtStructureLanscapes(ProtAnalysis3D, ProtFlexBase):
                       particles.getSamplingRate(), particles.getFirstItem().getXDim(),
                       l1, l2, self.numberOfThreads.get(), self.DIMENSIONS[self.dimensions.get()],
                       self.SAVE[self.save.get()])
-            program = os.path.join(const.XMIPP_SCRIPTS, "structure_space.py")
+            program = "structure_space.py"
             program = flexutils.Plugin.getProgram(program)
             self.runJob(program, args)
         elif mode == 2:

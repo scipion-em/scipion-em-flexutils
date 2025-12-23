@@ -28,23 +28,22 @@
 import os
 import numpy as np
 
-from pyworkflow import BETA
+from pyworkflow import NEW
 from pyworkflow.protocol.params import PointerParam, FloatParam
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
+from pwem.objects import ClassStructFlex, AtomStructFlex, SetOfClassesStructFlex, SetOfParticlesFlex
 
 import flexutils
 import flexutils.constants as const
 from flexutils.utils import getOutputSuffix
-from flexutils.objects import ClassStructFlex, AtomStructFlex, SetOfClassesStructFlex, SetOfParticlesFlex
-from flexutils.protocols.protocol_base import ProtFlexBase
 
 
 class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
     """ Automatic clustering at atomic structure level based on a threshold distance """
 
     _label = 'structure clustering - Zernike3D'
-    _devStatus = BETA
+    _devStatus = NEW
     OUTPUT_PREFIX = 'clusteredStructures'
 
     # --------------------------- DEFINE param functions ----------------------
@@ -88,7 +87,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
         args = "--z_space % s --pdb %s --boxSize %f --sr %f --distThr %f " \
                "--L1 %d --L2 %d --odir %s" \
                % (z_space_file, structure, boxSize, sr, dist_thr, L1, L2, self._getExtraPath())
-        program = os.path.join(const.XMIPP_SCRIPTS, "structure_rmsd_clustering.py")
+        program = "structure_rmsd_clustering.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -109,6 +108,7 @@ class XmippProtClusterStructuresZernike3D(ProtAnalysis3D, ProtFlexBase):
 
             newClass = ClassStructFlex(progName=const.ZERNIKE3D)
             newClass.copyInfo(particles)
+            newClass.setHasCTF(particles.hasCTF())
             representative = AtomStructFlex(progName=const.ZERNIKE3D)
             representative.setFileName(os.path.join(rep_path, "cluster_%d.pdb" % clInx))
 

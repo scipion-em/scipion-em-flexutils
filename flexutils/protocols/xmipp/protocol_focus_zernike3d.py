@@ -31,25 +31,24 @@ import os
 from xmipp_metadata.metadata import XmippMetaData
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float
+from pyworkflow.object import Integer, Float, Boolean
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import writeSetOfImages, imageToRow, coordinateToRow, setXmippAttributes, createItemMatrix, \
     matrixFromGeometry
 
 import flexutils.constants as const
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex, SetOfParticlesFlex
 from flexutils.utils import getXmippFileName
 
 
 class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
-    """ Assignation of heterogeneity priors based on the Zernike3D basis. """
+    """ Focused heterogeneity analysis based on the Zernike3D basis. """
     _label = 'focused heterogeneity landscape - Zernike3D'
     _lastUpdateVersion = VERSION_2_0
 
@@ -60,10 +59,10 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
         form.addParam('refmask', params.PointerParam, label="Heterogeneity mask", pointerClass='VolumeMask',
                       help="Mask determining which regions of the molecule will be allowed to move")
         form.addParam('L1', params.IntParam, label="Zernike degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=7,
+                      allowsNull=True,
                       help="Zernike polynomial degree for the new focused Zernike3D coefficients")
         form.addParam('L2', params.IntParam, label="Spherical harmonic degree", expertLevel=params.LEVEL_ADVANCED,
-                      default=7,
+                      allowsNull=True,
                       help="Spherical harmonics degree for the new focused Zernike3D coefficients")
         form.addParallelSection(threads=4, mpi=0)
 
@@ -82,8 +81,8 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
         Rmax = particles.getFlexInfo().Rmax.get()
 
         roiMask = self.refmask.get().getFileName()
-        L1 = self.L1.get()
-        L2 = self.L2.get()
+        L1 = self.L1.get() if self.L1.get() else prevL1
+        L2 = self.L2.get() if self.L2.get() else prevL2
 
         z_clnm_vec = {}
         # deformation_vec = {}
@@ -109,7 +108,7 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
         args = "--i %s --maski %s --maskdf %s --prevl1 %d --prevl2 %d --l1 %d --l2 %d --rmax %f --thr %d" \
                % (imgsFn, getXmippFileName(refMask), getXmippFileName(roiMask),
                   prevL1, prevL2, L1, L2, Rmax, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "mask_deformation_field.py")
+        program = "mask_deformation_field.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args)
 
@@ -120,6 +119,7 @@ class XmippProtFocusZernike3D(ProtAnalysis3D, ProtFlexBase):
 
         partSet.copyInfo(inputSet)
         partSet.setAlignmentProj()
+        partSet.setHasCTF(inputSet.hasCTF())
 
         coeffs = np.asarray([np.fromstring(item, sep=',') for item in mdOut[:, "sphCoefficients"]])
         deformation = mdOut[:, "sphDeformation"]

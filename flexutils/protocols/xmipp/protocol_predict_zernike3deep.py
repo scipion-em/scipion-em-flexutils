@@ -28,17 +28,19 @@
 import os
 import numpy as np
 import re
+from glob import glob
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import Integer, Float, String, CsvList
+from pyworkflow.object import Integer, Float, String, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex, SetOfParticlesFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
@@ -46,9 +48,8 @@ import xmipp3
 
 import flexutils
 import flexutils.constants as const
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
 from flexutils.utils import getXmippFileName
+from flexutils.protocols.xmipp.utils.pdb_parser import AtomicModelParser
 
 
 class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
@@ -91,6 +92,9 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             'fnVol': self._getExtraPath('volume.mrc'),
             'fnVolMask': self._getExtraPath('mask.mrc'),
             'fnStruct': self._getExtraPath('structure.txt'),
+            'fnBond': self._getExtraPath("bonds.txt"),
+            'fnDihedral': self._getExtraPath("dihedrals.txt"),
+            'fnCA': self._getExtraPath("ca_indices.txt"),
             'fnOutDir': self._getExtraPath()
         }
         self._updateFilenamesDict(myDict)
@@ -110,6 +114,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         fnVol = self._getFileName('fnVol')
         fnVolMask = self._getFileName('fnVolMask')
         structure = self._getFileName('fnStruct')
+        md_file = self._getFileName('imgsFn')
 
         inputParticles = self.inputParticles.get()
         zernikeProtocol = self.zernikeProtocol.get()
@@ -117,32 +122,63 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         self.newXdim = zernikeProtocol.boxSize.get()
         i_sr = 1. / inputParticles.getSamplingRate()
 
-        if zernikeProtocol.referenceType.get() == 0:
-            ih = ImageHandler()
-            inputVolume = zernikeProtocol.inputVolume.get().getFileName()
-            ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
-                self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+        ih = ImageHandler()
+        inputVolume = zernikeProtocol.inputVolume.get().getFileName()
+        ih.convert(getXmippFileName(inputVolume), fnVol)
+        curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+        if curr_vol_dim != self.newXdim:
+            self.runJob("xmipp_image_resize",
+                        "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
-            inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
-            if inputMask:
-                ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
-                    self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
-                                env=xmipp3.Plugin.getEnviron())
-        else:
-            pdb_lines = self.readPDB(zernikeProtocol.inputStruct.get().getFileName())
-            pdb_coordinates = i_sr * np.array(self.PDB2List(pdb_lines))
-            np.savetxt(structure, pdb_coordinates)
+        inputMask = zernikeProtocol.inputVolumeMask.get().getFileName()
+        if inputMask:
+            ih.convert(getXmippFileName(inputMask), fnVolMask)
+            curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+            if curr_mask_dim != self.newXdim:
+                self.runJob("xmipp_image_resize",
+                            "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                            env=xmipp3.Plugin.getEnviron())
+
+        if zernikeProtocol.referenceType.get() == 1:  # Structure reference
+            inputVolume = self.inputVolume.get().getFileName()
+            structure_file = self._getFileName('fnStruct')
+            bonds_file = self._getFileName('fnBond')
+            dihedrals_file = self._getFileName('fnDihedral')
+            ca_file = self._getFileName('fnCA')
+            parser = AtomicModelParser(self.inputStruct.get().getFileName(), self._subset[self.atomSubset.get()])
+            pdb_coordinates = parser.get_atom_coordinates()
+            covalent = parser.get_covalent_bonds()
+            dihedrals = parser.get_dihedral_angles()
+            ca_indices = parser.get_ca_indices()
+            pdb_coordinates *= i_sr
+            ih = ImageHandler(getXmippFileName(inputVolume))
+            vol = ih.getData()
+            factor = 0.5 * ih.getDimensions()[-1]
+            pdb_indices = np.round(pdb_coordinates + factor).astype(int)
+            values = vol[pdb_indices[:, 2], pdb_indices[:, 1], pdb_indices[:, 0]]
+            pdb_coordinates = np.c_[pdb_coordinates, values]
+            np.savetxt(structure_file, pdb_coordinates)
+            np.savetxt(bonds_file, covalent)
+            np.savetxt(dihedrals_file, dihedrals)
+            np.savetxt(ca_file, ca_indices)
 
         writeSetOfParticles(inputParticles, imgsFn)
+
+        # Write extra attributes (if needed)
+        md = XmippMetaData(md_file)
+        if isinstance(inputParticles, SetOfParticlesFlex) and \
+                inputParticles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+            z_space = np.asarray([particle.getZFlex() for particle in inputParticles.iterItems()])
+            md[:, "zernikeCoefficients"] = (Xdim / self.newXdim) * z_space
+        if hasattr(inputParticles.getFirstItem(), "_xmipp_subtomo_labels"):
+            labels = np.asarray([int(particle._xmipp_subtomo_labels) for particle in inputParticles.iterItems()])
+            md[:, "subtomo_labels"] = labels
+        md.write(md_file, overwrite=True)
 
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
-                      self._getExtraPath('scaled_particles.stk'),
+                      self._getTmpPath('scaled_particles.stk'),
                       self._getExtraPath('scaled_particles.xmd'),
                       self.newXdim)
             if self.numberOfMpi.get() > 1:
@@ -154,13 +190,15 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         zernikeProtocol = self.zernikeProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        weigths_file = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         L1 = zernikeProtocol.l1.get()
         L2 = zernikeProtocol.l2.get()
         pad = zernikeProtocol.pad.get()
         correctionFactor = self.inputParticles.get().getXDim() / zernikeProtocol.boxSize.get()
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = zernikeProtocol.ctfType.get()
+        applyCTF = zernikeProtocol.applyCTF.get()
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
         args = "--md_file %s --weigths_file %s --L1 %d --L2 %d " \
                "--pad %d --sr %f --apply_ctf %d" \
                % (md_file, weigths_file, L1, L2, pad, sr, applyCTF)
@@ -177,6 +215,12 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
             args += " --architecture convnn"
         elif zernikeProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -208,7 +252,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         # Update deformation field
         args = "--md_file %s --mask_reg %s --mask_bin %s --boxsize %d --l1 %d --l2 %d --thr %d" \
                % (md_file, maskReg, maskBin, boxsize, L1, L2, self.numberOfThreads.get())
-        program = os.path.join(const.XMIPP_SCRIPTS, "field_regions_to_binary_zernike3d.py")
+        program = "field_regions_to_binary_zernike3d.py"
         program = flexutils.Plugin.getProgram(program)
         self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
@@ -217,7 +261,9 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         zernikeProtocol = self.zernikeProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = zernikeProtocol.boxSize.get()
-        model_path = zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model'))
+        disPose = zernikeProtocol.disPose.get()
+        disCTF = zernikeProtocol.disCTF.get()
+        model_path = glob(zernikeProtocol._getExtraPath(os.path.join('network', 'zernike3deep_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -234,6 +280,7 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
 
         inputSet = self.inputParticles.get()
         partSet = self._createSetOfParticlesFlex(progName=const.ZERNIKE3D)
+        partSet.setHasCTF(inputSet.hasCTF())
 
         partSet.copyInfo(inputSet)
         partSet.getFlexInfo().setProgName(const.ZERNIKE3D)
@@ -279,6 +326,8 @@ class TensorflowProtPredictZernike3Deep(ProtAnalysis3D, ProtFlexBase):
         partSet.getFlexInfo().L2 = Integer(zernikeProtocol.l2.get())
         partSet.getFlexInfo().Rmax = Float(Xdim / 2)
         partSet.getFlexInfo().modelPath = String(model_path)
+        partSet.getFlexInfo().disPose = Boolean(disPose)
+        partSet.getFlexInfo().disCTF = Boolean(disCTF)
 
         inputMask = self._getExtraPath("binary_mask_ori.mrc") if self.convertBinary.get() \
             else zernikeProtocol.inputVolumeMask.get().getFileName()

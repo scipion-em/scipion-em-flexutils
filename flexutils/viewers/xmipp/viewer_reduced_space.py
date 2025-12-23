@@ -27,10 +27,11 @@
 
 import numpy as np
 import os
+from pathos.multiprocessing import ProcessingPool as Pool
+import subprocess
 
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
-import pyworkflow.protocol.params as params
-from pyworkflow.utils.process import runJob
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, Viewer
+from pyworkflow.utils.process import buildRunCommand
 
 from flexutils.protocols.xmipp.protocol_structure_landscape import XmippProtStructureLanscapes
 from flexutils.protocols.protocol_dimred import ProtFlexDimRedSpace
@@ -40,14 +41,14 @@ from flexutils.utils import computeNormRows
 import flexutils
 
 
-class XmippReducedSpaceViewer(ProtocolViewer):
+class XmippReducedSpaceViewer(Viewer):
     """ Visualize reduced conformational space """
-    _label = 'viewer reduced space - Zernike3D'
+    _label = 'viewer reduced space'
     _targets = [XmippProtStructureLanscapes, ProtFlexDimRedSpace]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **kwargs):
-        ProtocolViewer.__init__(self, **kwargs)
+        Viewer.__init__(self, **kwargs)
         self._data = None
 
     def getData(self):
@@ -55,44 +56,54 @@ class XmippReducedSpaceViewer(ProtocolViewer):
             self._data = self.loadData()
         return self._data
 
-
-    def _defineParams(self, form):
-        form.addSection(label='Show reduced conformational space')
-        form.addParam('doShowSpace', params.LabelParam,
-                      label="Display the reduced conformational space")
-
-    def _getVisualizeDict(self):
-        # self.protocol._createFilenameTemplates()
-        return {'doShowSpace': self._doShowSpace}
-
-    def _doShowSpace(self, param=None):
-        red_space = []
-        z_clnm = []
-        particles = self.protocol.outputParticles
-        for particle in particles.iterItems():
-            z_clnm.append(particle.getZFlex())
-            red_space.append(particle.getZRed())
-        z_clnm = np.asarray(z_clnm)
-        red_space = np.asarray(red_space)
-        if red_space.shape[1] < 3:
-            raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
-
-        # Generate files to call command line
+    def _visualize(self, obj, **kwargs):
         file_red_space = self.protocol._getExtraPath("red_coords.txt")
-        file_deformation = self.protocol._getExtraPath("deformation.txt")
-        np.savetxt(file_red_space, red_space)
+        file_z_space = self.protocol._getExtraPath("z_space.txt")
+        file_interp = self.protocol._getExtraPath("interp_values.txt")
+        particles = self.protocol.outputParticles
 
-        if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
-            deformation = computeNormRows(z_clnm)
-        else:
-            deformation = np.zeros(z_clnm.shape)
+        def launchViewerNonBlocking(args):
+            (particles, file_red_space, file_z_space, file_interp) = args
+            red_space = []
+            z_clnm = []
+            for particle in particles.iterItems():
+                z_clnm.append(particle.getZFlex())
+                red_space.append(particle.getZRed())
+            z_clnm = np.asarray(z_clnm)
+            red_space = np.asarray(red_space)
+            if red_space.shape[1] < 3:
+                raise Exception("Visualization of spaces with dimension smaller than 3 is not yet implemented. Exiting...")
 
-        # Generate files to call command line
-        np.savetxt(file_deformation, deformation)
+            # Generate files to call command line
+            np.savetxt(file_red_space, red_space)
+            # np.savetxt(file_z_space, z_clnm)
 
-        # Run slicer
-        args = "--coords %s --deformation %s" \
-               % (file_red_space, file_deformation)
-        program = os.path.join(const.VIEWERS, "point_cloud_viewers", "viewer_point_cloud.py")
-        program = flexutils.Plugin.getProgram(program)
-        runJob(None, program, args)
+            if particles.getFlexInfo().getProgName() == const.ZERNIKE3D:
+                deformation = computeNormRows(z_clnm)
+            else:
+                deformation = np.zeros(z_clnm.shape)
+
+            # Generate files to call command line
+            np.savetxt(file_interp, deformation)
+
+            # Run slicer
+            args = "--data %s --z_space %s --interp_val %s --onlyView" \
+                   % (file_red_space, file_z_space, file_interp)
+            if hasattr(particles.getFlexInfo(), "umap_weights"):
+                args += " --reduce umap --umap_weights %s" % particles.getFlexInfo().getAttr("umap_weights")
+            else:
+                args += " --reduce pca"
+            program = "viewer_interactive_3d.py"
+            program = flexutils.Plugin.getProgram(program)
+
+            command = buildRunCommand(program, args, 1)
+            subprocess.Popen(command, shell=True)
+
+        # Launch with Pathos
+        p = Pool()
+        # p.restart()
+        p.apipe(launchViewerNonBlocking, args=(particles, file_red_space, file_z_space, file_interp))
+        # p.join()
+        # p.close()
+
+        return []

@@ -28,21 +28,29 @@
 
 import os
 
+import re
+
 import importlib
 
 import pyworkflow.plugin as pwplugin
 import pyworkflow.utils as pwutils
 
+from pwem import Config as emConfig
+
+from scipion.utils import getScipionHome
+
 import flexutils
 from flexutils.constants import CONDA_YML
 
+from pyworkflow import FLEXIBILITY
 
-__version__ = "3.0.2"
+__version__ = "3.4.0"
 _logo = "icon.png"
 _references = []
 
 
 class Plugin(pwplugin.Plugin):
+    _processingField = [FLEXIBILITY]
 
     @classmethod
     def getEnvActivation(cls):
@@ -53,7 +61,11 @@ class Plugin(pwplugin.Plugin):
         return "conda activate flexutils-tensorflow"
 
     @classmethod
-    def getProgram(cls, program, python=True, cuda=False, needsPackages=None):
+    def getScipionActivation(cls):
+        return "conda activate scipion3"
+
+    @classmethod
+    def getProgram(cls, program, python=False, cuda=False, chimera=False, needsPackages=None, activateScipion=False):
         """ Return the program binary that will be used. """
         scipion_packages = []
         env_variables = ""
@@ -71,16 +83,22 @@ class Plugin(pwplugin.Plugin):
                     if package_name.lower() in item.lower():
                         env_variables += " {}='{}'".format(item, value)
         scipion_packages = ":".join(scipion_packages)
-        cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEnvActivation())
+        if activateScipion:
+            cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getScipionActivation(),
+                                                 os.path.join(getScipionHome(), "scipion3"))
+        else:
+            cmd = '%s %s && SCIPION_HOME=%s ' % (cls.getCondaActivationCmd(), cls.getEnvActivation(),
+                                                 os.path.join(getScipionHome(), "scipion3"))
 
         if cuda:
             cmd += 'LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH '
 
-        if python:
+        if chimera:
             with pwutils.weakImport("chimera"):
                 from chimera import Plugin as chimeraPlugin
                 cmd += "CHIMERA_HOME=%s " % chimeraPlugin.getHome()
 
+        if python:
             if needsPackages is not None:
                 cmd += "PYTHONPATH=$PYTHONPATH:%s %s python " % (scipion_packages, env_variables)
             else:
@@ -88,7 +106,7 @@ class Plugin(pwplugin.Plugin):
         return cmd + '%(program)s ' % locals()
 
     @classmethod
-    def getTensorflowProgram(cls, program, python=True):
+    def getTensorflowProgram(cls, program, python=True, log_level=2):
         cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getTensorflowActivation())
         if python:
             # import pyworkflow, pwem, xmipp3
@@ -96,37 +114,83 @@ class Plugin(pwplugin.Plugin):
             # pywem_path = os.path.join(pwem.__path__[0], "..")
             # xmipp3_path = os.path.join(xmipp3.__path__[0], "..")
             # paths = [os.path.join(flexutils.__path__[0], ".."), pyworkflow_path, pywem_path, xmipp3_path]
-            cmd += "TF_FORCE_GPU_ALLOW_GROWTH=true python "
-        return cmd + 'LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/ %(program)s ' % locals()
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d python %(program)s ' % locals()
+        else:
+            return cmd + ' TF_CPP_MIN_LOG_LEVEL=%(log_level)d %(program)s ' % locals()
 
     @classmethod
     def getCommand(cls, program, args, python=True):
         return cls.getProgram(program, python) + args
 
-    @classmethod
     def defineBinaries(cls, env):
         def getCondaInstallationFlexutils():
-            installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda env remove -n flexutils && conda env create -f ' + CONDA_YML + " && "
-            installationCmd += "conda activate flexutils && "
-            installationCmd += "pip install -e %s --no-dependencies && " % (os.path.join(flexutils.__path__[0], ".."))
-            installationCmd += "touch flexutils_installed"
+            conda_init = cls.getCondaActivationCmd()
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
+            installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
+            installationCmd += ' if [ ! -d "Flexutils-Scripts" ]; then git clone -b devel https://github.com/I2PC/Flexutils-Scripts.git; fi && '
+            installationCmd += "cd Flexutils-Scripts && git pull && "
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                installationCmd += f"bash install.sh --condaBin {conda_bin} && touch flexutils_installed && cd .."
+            else:
+                installationCmd += "bash install.sh && touch flexutils_installed && cd .."
             return installationCmd
 
         def getCondaInstallationTensorflow():
             conda_init = cls.getCondaActivationCmd()
-            installationCmd = f"{conda_init} conda activate flexutils && " \
-                              f"pip install -e " \
-                              f"git+https://github.com/I2PC/Flexutils-Toolkit.git@install_new_name#egg=flexutils-toolkit" \
-                              f" -v && "
-            installationCmd += "touch flexutils_tensorflow_installed"
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
+            branch = "devel" if cls.inDevelMode() else "master"
+            installationCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
+            installationCmd += f"{conda_init} conda activate flexutils && "
+            installationCmd += f' if [ ! -d "Flexutils-Toolkit" ]; then git clone -b {branch} https://github.com/I2PC/Flexutils-Toolkit.git; fi && '
+            installationCmd += f"cd Flexutils-Toolkit && git pull && "
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                installationCmd += f"bash install.sh --condaBin {conda_bin} && touch flexutils_tensorflow_installed && cd .."
+            else:
+                installationCmd += f"bash install.sh && touch flexutils_tensorflow_installed && cd .."
             return installationCmd
 
+        def getUpdateCommands():
+            conda_init = cls.getCondaActivationCmd()
+            conda_bin = re.search(r'\$\((/[^ ]+/conda)', conda_init)
+            updateCmd = f'if [ $(basename "$PWD") = flexutils-{__version__} ]; then cd ..; fi && '
+            updateCmd += f"{conda_init} conda activate flexutils && "
+            updateCmd += "echo '###### Updating scripts.... ######' && "
+            updateCmd += "cd Flexutils-Scripts && "
+            updateCmd += "git pull && "
+            updateCmd += "pip install -e . && "
+            updateCmd += "cd .. && "
+            updateCmd += "echo '###### Script updated succesfully! ######' && "
+
+            updateCmd += "echo '###### Updating NN binaries.... ######' && "
+            updateCmd += "cd Flexutils-Toolkit && "
+            updateCmd += "git pull && "
+            if conda_bin:
+                conda_bin = conda_bin.group(1)
+                updateCmd += f"bash install.sh --condaBin {conda_bin} && "
+            else:
+                updateCmd += "bash install.sh && "
+            updateCmd += "cd .. && "
+            updateCmd += "echo '###### Binaries updated succesfully! ######' && "
+            updateCmd += f"cd flexutils-{__version__} && "
+            updateCmd += "touch flexutils_updated"
+            return updateCmd
+
+        binary_path = os.path.join(emConfig.EM_ROOT, f'flexutils-{__version__}')
         commands = []
-        installationEnv = getCondaInstallationFlexutils()
-        installationTensorflow = getCondaInstallationTensorflow()
-        commands.append((installationEnv, ["flexutils_installed"]))
-        commands.append((installationTensorflow, ["flexutils_tensorflow_installed"]))
+
+        if not os.path.isfile(os.path.join(binary_path, os.path.join("..", "Flexutils-Scripts", "flexutils_installed"))):
+            installationEnv = getCondaInstallationFlexutils()
+            commands.append((installationEnv, [os.path.join("..", "Flexutils-Scripts", "flexutils_installed")]))
+
+        if not os.path.isfile(os.path.join(binary_path, os.path.join("..", "Flexutils-Toolkit", "flexutils_tensorflow_installed"))):
+            installationTensorflow = getCondaInstallationTensorflow()
+            commands.append((installationTensorflow, [os.path.join("..", "Flexutils-Toolkit", "flexutils_tensorflow_installed")]))
+
+        if os.path.isfile(os.path.join(binary_path, "flexutils_tensorflow_updated")):
+            os.remove(os.path.join(binary_path, "flexutils_tensorflow_updated"))
+        commands.append((getUpdateCommands(), ["flexutils_updated"]))
 
         env.addPackage('flexutils', version=__version__,
                        commands=commands,

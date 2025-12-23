@@ -28,27 +28,27 @@
 import os
 import re
 import numpy as np
+from glob import glob
 
 from xmipp_metadata.metadata import XmippMetaData
 from xmipp_metadata.image_handler import ImageHandler
 
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, Integer
+from pyworkflow.object import String, Integer, Boolean
 from pyworkflow.utils.path import moveFile
 from pyworkflow import VERSION_2_0
 import pyworkflow.utils as pwutils
 
-from pwem.protocols import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D, ProtFlexBase
 import pwem.emlib.metadata as md
 from pwem.constants import ALIGN_PROJ
+from pwem.objects import ParticleFlex
 
 from xmipp3.convert import createItemMatrix, setXmippAttributes, writeSetOfParticles, \
     geometryFromMatrix, matrixFromGeometry
 import xmipp3
 
 import flexutils
-from flexutils.protocols import ProtFlexBase
-from flexutils.objects import ParticleFlex
 import flexutils.constants as const
 from flexutils.utils import getXmippFileName
 
@@ -77,6 +77,9 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
                        help="Previously executed 'angular align - HetSIREN'. "
                             "This will allow to load the network trained in that protocol to be used during "
                             "the prediction")
+        group.addParam('addCTF', params.BooleanParam, label="Predict with CTF corruption?",
+                       default=False,
+                       help="Determines wether the predicted projections will be CTF corrupted or not.")
         form.addParallelSection(threads=4, mpi=0)
 
     def _createFilenameTemplates(self):
@@ -106,33 +109,36 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
+        self.vol_mask_dim = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() is not None else self.newXdim
 
         if hetSirenProtocol.inputVolume.get():  # Map reference
             ih = ImageHandler()
             inputVolume = hetSirenProtocol.inputVolume.get().getFileName()
             ih.convert(getXmippFileName(inputVolume), fnVol)
-            if Xdim != self.newXdim:
+            curr_vol_dim = ImageHandler(getXmippFileName(inputVolume)).getDimensions()[-1]
+            if curr_vol_dim != self.vol_mask_dim:
                 self.runJob("xmipp_image_resize",
-                            "-i %s --dim %d " % (fnVol, self.newXdim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
+                            "-i %s --dim %d " % (fnVol, self.vol_mask_dim), numberOfMpi=1, env=xmipp3.Plugin.getEnviron())
 
         if hetSirenProtocol.inputVolumeMask.get():  # Mask reference
             ih = ImageHandler()
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
             if inputMask:
                 ih.convert(getXmippFileName(inputMask), fnVolMask)
-                if Xdim != self.newXdim:
+                curr_mask_dim = ImageHandler(getXmippFileName(inputMask)).getDimensions()[-1]
+                if curr_mask_dim != self.vol_mask_dim:
                     self.runJob("xmipp_image_resize",
-                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.newXdim), numberOfMpi=1,
+                                "-i %s --dim %d --interp nearest" % (fnVolMask, self.vol_mask_dim), numberOfMpi=1,
                                 env=xmipp3.Plugin.getEnviron())
         else:
-            ImageHandler().createCircularMask(fnVolMask, boxSize=self.newXdim, is3D=True)
+            ImageHandler().createCircularMask(fnVolMask, boxSize=self.vol_mask_dim, is3D=True)
 
         writeSetOfParticles(inputParticles, imgsFn)
 
         if self.newXdim != Xdim:
             params = "-i %s -o %s --save_metadata_stack %s --fourier %d" % \
                      (imgsFn,
-                      self._getExtraPath('scaled_particles.stk'),
+                      self._getTmpPath('scaled_particles.stk'),
                       self._getExtraPath('scaled_particles.xmd'),
                       self.newXdim)
             if self.numberOfMpi.get() > 1:
@@ -144,17 +150,22 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
     def predictStep(self):
         hetSirenProtocol = self.hetSirenProtocol.get()
         md_file = self._getFileName('imgsFn')
-        weigths_file = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        weigths_file = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         pad = hetSirenProtocol.pad.get()
         self.newXdim = hetSirenProtocol.boxSize.get()
         Xdim = self.inputParticles.get().getXDim()
         correctionFactor = Xdim / self.newXdim
         sr = correctionFactor * self.inputParticles.get().getSamplingRate()
-        applyCTF = hetSirenProtocol.ctfType.get()
+        applyCTF = hetSirenProtocol.applyCTF.get()
         hetDim = hetSirenProtocol.hetDim.get()
+        trainSize = hetSirenProtocol.trainSize.get() if hetSirenProtocol.trainSize.get() else self.newXdim
+        outSize = hetSirenProtocol.outSize.get() if hetSirenProtocol.outSize.get() else self.newXdim
+        disPose = hetSirenProtocol.disPose.get()
+        disCTF = hetSirenProtocol.disCTF.get()
+        addCTF = self.addCTF.get()
         args = "--md_file %s --weigths_file %s --pad %d " \
-               "--sr %f --apply_ctf %d --het_dim %d" \
-               % (md_file, weigths_file, pad, sr, applyCTF, hetDim)
+               "--sr %f --apply_ctf %d --het_dim %d --trainSize %d --outSize %d" \
+               % (md_file, weigths_file, pad, sr, applyCTF, hetDim, trainSize, outSize)
 
         if hetSirenProtocol.ctfType.get() == 0:
             args += " --ctf_type apply"
@@ -166,8 +177,20 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         elif hetSirenProtocol.architecture.get() == 1:
             args += " --architecture mlpnn"
 
+        if hetSirenProtocol.useHyperNetwork.get():
+            args += " --use_hyper_network"
+
         if hetSirenProtocol.refinePose.get():
             args += " --refine_pose"
+
+        if disPose:
+            args += " --pose_reg 1.0"
+
+        if disCTF:
+            args += " --ctf_reg 1.0"
+
+        if addCTF:
+            args += " --addCTF"
 
         if self.useGpu.get():
             gpu_list = ','.join([str(elem) for elem in self.getGpuList()])
@@ -177,20 +200,18 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
         self.runJob(program, args, numberOfMpi=1)
 
         # Scale particles
-        params = "-i %s -o %s --fourier %d" % \
-                 (self._getExtraPath('decoded_particles.mrcs:mrcs'),
-                  self._getExtraPath('aux.mrcs'),
-                  Xdim)
-        self.runJob("xmipp_image_resize", params, numberOfMpi=self.numberOfMpi.get(),
-                    env=xmipp3.Plugin.getEnviron())
-        pwutils.moveFile(self._getExtraPath('aux.mrcs'), self._getExtraPath('decoded_particles.mrcs'))
+        ImageHandler().scaleSplines(self._getExtraPath('decoded_particles.mrcs'),
+                                    self._getExtraPath('decoded_particles.mrcs'),
+                                    finalDimension=Xdim, overwrite=True, isStack=True)
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
         hetSirenProtocol = self.hetSirenProtocol.get()
         Xdim = inputParticles.getXDim()
         self.newXdim = hetSirenProtocol.boxSize.get()
-        model_path = hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model'))
+        trainSize = hetSirenProtocol.trainSize.get()
+        outSize = hetSirenProtocol.outSize.get()
+        model_path = glob(hetSirenProtocol._getExtraPath(os.path.join('network', 'het_siren_model*')))[0]
         md_file = self._getFileName('imgsFn')
 
         metadata = XmippMetaData(md_file)
@@ -217,8 +238,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             outParticle = ParticleFlex(progName=const.HETSIREN)
             outParticle.copyInfo(particle)
 
-            index, filename = denoised_images_path[idx].split("@")
-            outParticle.setLocation((int(index), filename))
+            # index, _ = denoised_images_path[idx].split("@")
+            outParticle.setLocation((idx, self._getExtraPath("decoded_particles.mrcs")))
 
             outParticle.setZFlex(latent_space[idx])
 
@@ -263,6 +284,8 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
 
         partSet.getFlexInfo().modelPath = String(model_path)
         partSet.getFlexInfo().coordStep = Integer(hetSirenProtocol.step.get())
+        partSet.getFlexInfo().outSize = Integer(outSize)
+        partSet.getFlexInfo().trainSize = Integer(trainSize)
 
         if hetSirenProtocol.inputVolume.get():
             inputMask = hetSirenProtocol.inputVolumeMask.get().getFileName()
@@ -274,6 +297,11 @@ class TensorflowProtDenoiseParticlesHetSiren(ProtAnalysis3D, ProtFlexBase):
             partSet.getFlexInfo().architecture = String("convnn")
         elif hetSirenProtocol.architecture.get() == 1:
             partSet.getFlexInfo().architecture = String("mlpnn")
+
+        if hetSirenProtocol.useHyperNetwork.get():
+            partSet.getFlexInfo().use_hyper_network = Boolean(True)
+        else:
+            partSet.getFlexInfo().use_hyper_network = Boolean(False)
 
         if hetSirenProtocol.ctfType.get() == 0:
             partSet.getFlexInfo().ctfType = String("apply")
