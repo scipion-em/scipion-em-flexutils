@@ -41,7 +41,57 @@ import flexutils
 
 class ProtFlexOrderVolumes(ProtAnalysis3D, ProtFlexBase):
     """ Order a series of volumes along the shortest path represneted by their landscape representation """
+    """
+       
+            The ProtFlexOrderVolumes protocol determines an ordered sequence
+            of volumes based on their conformational landscape representation.
+            Its main purpose is to identify the smoothest structural trajectory
+            connecting multiple conformational states by finding the shortest
+            path across the flexibility space.
 
+            Inputs and General Workflow
+
+            The protocol requires a set of volumes containing associated
+            flexibility coordinates. These coordinates represent the position
+            of each volume within a conformational landscape generated from
+            previous flexibility analysis methods.
+
+            During execution, the protocol extracts the flexibility space
+            associated with all input volumes and identifies candidate border
+            points located at the extremes of the conformational landscape.
+            Several reordered configurations are then generated using these
+            border points as alternative starting positions.
+
+            For each configuration, the protocol applies a traveling salesman
+            optimization strategy to estimate the shortest path connecting all
+            conformational states. The total path distance is evaluated for
+            every tested solution, and the ordering producing the minimum
+            distance is selected as the optimal structural trajectory.
+
+            Outputs and Interpretation
+
+            After execution, the protocol generates a reordered set of volumes
+            following the detected conformational path. The output preserves
+            the original structural information while arranging the volumes
+            according to their most continuous progression across the flexibility
+            landscape.
+
+            Biological Perspective
+
+            Ordering conformational states is particularly useful for studying
+            continuous molecular motions and structural transitions in cryo-EM
+            datasets. By organizing volumes along the shortest conformational
+            trajectory, this protocol facilitates the interpretation of gradual
+            domain movements, functional rearrangements, and dynamic biological
+            processes.
+
+            Final Perspective
+
+            ProtFlexOrderVolumes provides an automated strategy for reconstructing
+            continuous conformational pathways from flexibility landscapes. This
+            improves the visualization and interpretation of structural transitions
+            in heterogeneous cryo-EM datasets.
+        """
     _label = 'find volumes order'
     _devStatus = NEW
     OUTPUT_PREFIX = 'orderedVolumes'

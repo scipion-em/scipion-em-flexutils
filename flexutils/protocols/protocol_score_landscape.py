@@ -44,6 +44,72 @@ class ProtFlexScoreLandscape(ProtAnalysis3D, ProtFlexBase):
     Scoring and (optional) filtering of landscape samples based on neighbour distance
     """
 
+    """
+            The ProtFlexScoreLandscape protocol evaluates conformational
+            landscapes by measuring the local neighbourhood consistency of
+            each particle within the flexibility space. Its main purpose is
+            to identify samples that behave as structural outliers and, if
+            desired, remove them from the dataset to improve the quality and
+            interpretability of downstream flexibility analyses.
+
+            Inputs and General Workflow
+
+            The protocol requires a set of particles associated with a
+            flexibility landscape representation. Each particle contains a
+            conformational descriptor that defines its position in the latent
+            or flexibility space. During execution, the protocol extracts the
+            landscape coordinates from all particles and computes neighbour-
+            based Z-scores that estimate how isolated or atypical each sample
+            is relative to its surrounding conformational environment.
+
+            Users can control the number of neighbours considered during the
+            analysis. Smaller neighbourhood values emphasize highly local
+            structural variations, whereas larger neighbourhoods capture more
+            global conformational organization. The protocol also provides an
+            optional approximate nearest-neighbour strategy that accelerates
+            computation for large datasets while slightly reducing neighbour
+            search precision.
+
+            The protocol supports two operation modes. In score mode, all
+            particles are preserved and assigned an outlier score describing
+            their relative distance within the landscape. In filter mode,
+            particles with Z-scores above a user-defined threshold are
+            discarded, generating a cleaned conformational landscape with
+            reduced influence from isolated or noisy samples.
+
+            Outputs and Interpretation
+
+            After execution, the protocol produces a new set of particles
+            containing the computed outlier scores. When filtering is enabled,
+            only particles satisfying the selected Z-score threshold are kept
+            in the output dataset. The resulting landscape can then be used
+            for downstream dimensionality reduction, clustering, trajectory
+            analysis, or conformational interpretation.
+
+            Biological Perspective
+
+            In cryo-EM flexibility analysis, conformational landscapes may
+            contain noisy particles, reconstruction artefacts, or rare
+            structural states that distort the global organization of the
+            embedding space. By identifying samples with abnormal neighbour
+            distributions, this protocol helps improve the robustness and
+            biological consistency of downstream analyses.
+
+            From a biological perspective, filtering should be applied with
+            caution because highly isolated samples may represent either
+            reconstruction noise or genuinely rare conformational states.
+            Conservative thresholds are generally recommended when studying
+            subtle structural heterogeneity or transient motions.
+
+            Final Perspective
+
+            ProtFlexScoreLandscape provides an efficient strategy for scoring
+            and refining conformational landscapes based on neighbour-distance
+            statistics. By detecting anomalous samples and optionally removing
+            them, the protocol improves the stability, clarity, and biological
+            interpretability of cryo-EM flexibility analysis workflows.
+        """
+
     _label = 'score/filter landscape'
     _devStatus = NEW
 

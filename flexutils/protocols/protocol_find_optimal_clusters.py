@@ -41,6 +41,63 @@ import flexutils
 class ProtFlexOptimalClusters(ProtAnalysis3D):
     """ Optimal cluster number analysis for flexibility spaces """
 
+    """
+            The ProtFlexOptimalClusters protocol estimates the most suitable
+            number of clusters within a conformational flexibility space.
+            Its main purpose is to analyze the structural distribution of
+            particles in a latent or flexibility space and identify the
+            cluster configuration that best represents the underlying
+            conformational heterogeneity of the dataset.
+
+            Inputs and General Workflow
+
+            The protocol requires a set of particles containing flexibility
+            information, such as latent coordinates obtained from methods
+            like Zernike3D, HetSIREN, or CryoDRGN. Users can define the
+            maximum number of clusters to evaluate as well as the clustering
+            strategy to be used during the analysis.
+
+            During execution, the protocol extracts the flexibility coordinates
+            associated with all particles and stores them as a numerical
+            conformational space. The protocol then performs an automatic
+            clustering analysis using the selected clustering method and
+            evaluates multiple cluster configurations up to the user-defined
+            maximum value.
+
+            Several statistical metrics are computed to estimate the optimal
+            number of clusters, including methods such as Gap Statistic,
+            Elbow analysis, Silhouette score, Calinski-Harabasz index, and
+            Davies-Bouldin score. These metrics help determine the clustering
+            configuration that best captures the structural organization of
+            the flexibility landscape.
+
+            Outputs and Interpretation
+
+            After execution, the protocol generates clustering analysis
+            results containing the estimated optimal number of clusters
+            according to the evaluated statistical criteria. These results
+            provide guidance for downstream conformational classification
+            and structural interpretation workflows.
+
+            Biological Perspective
+
+            Determining the appropriate number of conformational states is
+            a fundamental step in cryo-EM flexibility analysis. An incorrect
+            number of clusters may artificially merge distinct conformations
+            or fragment biologically related states. By automatically
+            evaluating multiple clustering criteria, this protocol helps
+            identify meaningful structural subdivisions within heterogeneous
+            datasets.
+
+            Final Perspective
+
+            ProtFlexOptimalClusters provides an automated strategy for
+            exploring conformational heterogeneity and estimating the most
+            representative number of structural states in flexibility spaces.
+            This improves the robustness and interpretability of downstream
+            cryo-EM conformational analysis workflows.
+        """
+
     _label = 'find optimal clusters'
     _devStatus = NEW
     OUTPUT_PREFIX = 'selectedReference'
