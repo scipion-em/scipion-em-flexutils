@@ -56,6 +56,63 @@ import xmipp3
 class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
     """ Interactive annotation of conformational spaces """
 
+    class ProtFlexAnnotateSpace(ProtAnalysis3D, ProtFlexBase):
+        """
+        The ProtFlexAnnotateSpace protocol provides an interactive framework
+        for exploring and annotating conformational landscapes generated from
+        flexible cryo EM analysis methods. The protocol allows users to inspect
+        reduced dimensionality latent spaces, select biologically meaningful
+        regions, and generate representative conformational classes linked to
+        particles and reconstructed volumes.
+
+        Biological Context
+
+        Continuous conformational variability is common in cryo EM datasets.
+        Methods such as Zernike3D, CryoDRGN, Opus DSD, HetSIREN, FlexSIREN,
+        CryoSPARC 3DFlex, and NMA describe this variability through latent
+        spaces. This protocol enables interactive interpretation of these
+        conformational distributions and facilitates identification of relevant
+        structural states.
+
+        Inputs and Workflow
+
+        The protocol requires particles containing flexibility information and
+        dimensionality reduced coordinates. Depending on the selected framework,
+        additional information such as prior volumes or neural network models
+        may also be required.
+
+        The workflow extracts latent coordinates, launches an interactive
+        visualization environment, and allows users to define conformational
+        selections or clusters. Representative conformations are then generated
+        and neighboring particles are associated to each selected state using
+        nearest neighbor searches in latent space.
+
+        Supported Frameworks
+
+        The protocol supports multiple flexibility analysis methods including
+        Zernike3D, CryoDRGN, Opus DSD, HetSIREN, FlexSIREN, CryoSPARC 3DFlex,
+        and NMA. Representative maps or structures are generated according to
+        the reconstruction strategy of each framework.
+
+        Outputs and Interpretation
+
+        The protocol produces annotated conformational classes together with
+        representative volumes or structures. Each class preserves flexibility
+        metadata and contains the particles associated with the selected
+        conformational region.
+
+        These outputs provide a biologically interpretable description of
+        conformational variability and can be used for visualization,
+        structural comparison, heterogeneity analysis, and downstream cryo EM
+        workflows.
+
+        Final Perspective
+
+        ProtFlexAnnotateSpace integrates visualization, conformational
+        exploration, representative reconstruction, and particle classification
+        into a unified workflow for the study of continuous molecular dynamics
+        in cryo EM datasets.
+        """
     _label = 'annotate space'
     _devStatus = NEW
     OUTPUT_PREFIX = 'flexible3DClasses'

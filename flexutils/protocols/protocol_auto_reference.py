@@ -40,6 +40,52 @@ import xmipp3
 class ProtFlexAutoReference(ProtAnalysis3D):
     """ Automatic selection of best reference volume for Zernike3D analysis """
 
+    """
+        Automatic Reference Selection (ProtFlexAutoReference) — User Manual
+
+            Overview
+
+            The ProtFlexAutoReference protocol automatically selects the most suitable
+            reference volume for Zernike3D flexibility analysis. Its main purpose is to
+            identify the map that provides the best structural consistency within a set
+            of candidate volumes, improving the stability and biological relevance of
+            downstream conformational analyses.
+
+            Inputs and General Workflow
+
+            The protocol requires a set of 3D volumes that will be compared against each
+            other. Users can define a target resolution and an angular sampling value,
+            which control the resizing of the maps and the angular precision used during
+            volume comparison. All input maps are rescaled to a common dimension and
+            sampling rate to ensure consistent analysis conditions.
+
+            During execution, the protocol performs pairwise density comparisons between
+            consecutive volumes using Xmipp comparison methods. The resulting similarity
+            measurements are stored in a decision matrix that evaluates the relative
+            consistency of each map within the dataset. The protocol then identifies the
+            volume with the strongest overall agreement as the optimal reference.
+
+            Outputs and Interpretation
+
+            After execution, the protocol produces a single reference volume selected
+            automatically from the input set. This output volume can then be used as the
+            reference map for Zernike3D analysis or other cryo-EM flexibility workflows.
+
+            Biological Perspective
+
+            Selecting an appropriate reference is essential in conformational analysis
+            because the reference strongly influences the interpretation of structural
+            variability. By automatically identifying the most representative volume,
+            this protocol helps reduce user bias and improves the robustness of downstream
+            flexibility studies.
+
+            Final Perspective
+
+            ProtFlexAutoReference provides an automated and efficient strategy for choosing
+            biologically meaningful reference maps from multiple candidate volumes. This
+            simplifies workflow preparation and improves consistency in cryo-EM
+            conformational analysis pipelines.
+        """
     _label = 'auto reference'
     _devStatus = NEW
     OUTPUT_PREFIX = 'selectedReference'

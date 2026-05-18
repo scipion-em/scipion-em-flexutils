@@ -51,6 +51,49 @@ class ProtFlexSelectViews(ProtAnalysis3D):
     """ Compare different (rot,tilt) views of different maps and interactively select regions to filter/score
      a SetOfParticles """
 
+    """
+            The ProtFlexSelectViews protocol compares projection views from
+            multiple 3D maps and allows interactive selection of angular
+            regions associated with relevant conformational views. Its main
+            purpose is to identify orientations that best capture structural
+            variability and use them to score or filter particle datasets.
+
+            Inputs and General Workflow
+
+            The protocol requires a reference volume, one or more comparison
+            volumes, and a set of particles to be analyzed. During execution,
+            the protocol computes correlation maps between projection views
+            of the reference and comparison maps across different rotational
+            and tilt angles. These correlation maps are combined into a
+            single angular similarity landscape.
+
+            An interactive ImageJ interface allows users to define regions
+            of interest directly on the angular landscape. Particles are then
+            evaluated according to whether their projection orientations fall
+            inside or outside the selected regions.
+
+            Outputs and Interpretation
+
+            The protocol produces a new particle set containing either the
+            filtered particles or the complete scored dataset depending on
+            the selected operation mode. In score mode, particles outside
+            the selected regions are disabled, whereas in filter mode only
+            particles inside the selected regions are preserved.
+
+            Biological Perspective
+
+            Different projection orientations may reveal conformational
+            changes with different levels of clarity. By selecting the most
+            informative angular regions, this protocol helps focus analyses
+            on particle views that better capture structural variability and
+            biologically relevant motions.
+
+            Final Perspective
+
+            ProtFlexSelectViews provides an interactive strategy for selecting
+            informative projection views and refining particle datasets for
+            downstream cryo-EM flexibility analysis.
+        """
     _label = 'select views'
     _devStatus = NEW
     OUTPUT_PREFIX = 'selectedParticles'
